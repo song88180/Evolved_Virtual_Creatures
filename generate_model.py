@@ -167,7 +167,8 @@ class PhenotypeBuilder:
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
-        self.actuator_xml = None
+        self.mujoco_xml: Optional[ET.Element] = None
+        self.actuator_xml: Optional[ET.Element] = None
         self.actuator_controllers: List[ActuatorController] = []
 
     def new_body_name(self, node_name: str) -> str:
@@ -184,12 +185,12 @@ class PhenotypeBuilder:
 
     def build(self) -> str:
         self.actuator_controllers = []
-        mujoco_xml = ET.Element("mujoco", model="genotype_creature")
-        self.configure_model(mujoco_xml)
+        self.mujoco_xml = ET.Element("mujoco", model="genotype_creature")
+        self.configure_model()
 
-        worldbody = ET.SubElement(mujoco_xml, "worldbody")
+        worldbody = ET.SubElement(self.mujoco_xml, "worldbody")
         self.add_world_elements(worldbody)
-        self.actuator_xml = ET.SubElement(mujoco_xml, "actuator")
+        self.actuator_xml = ET.SubElement(self.mujoco_xml, "actuator")
 
         root_node = self.genotype.nodes[self.genotype.root]
         root_body = self.create_body(worldbody, root_node, "0 0 0.6")
@@ -201,22 +202,28 @@ class PhenotypeBuilder:
             current_depths={},
         )
 
-        ET.indent(mujoco_xml, space="  ")
-        return ET.tostring(mujoco_xml, encoding="unicode")
+        ET.indent(self.mujoco_xml, space="  ")
+        return ET.tostring(self.mujoco_xml, encoding="unicode")
 
-    def configure_model(self, mujoco_xml: ET.Element):
-        compiler = ET.SubElement(mujoco_xml, "compiler")
+    def configure_model(self):
+        if self.mujoco_xml is None:
+            raise RuntimeError("mujoco_xml must be initialized before configuring the model")
+
+        compiler = ET.SubElement(self.mujoco_xml, "compiler")
         compiler.set("angle", "degree")
 
-        option = ET.SubElement(mujoco_xml, "option")
+        option = ET.SubElement(self.mujoco_xml, "option")
         option.set("gravity", "0 0 0")
         option.set("density", "1000")
         option.set("viscosity", "0.001")
 
-        self.add_defaults(mujoco_xml)
+        self.add_defaults()
 
-    def add_defaults(self, mujoco_xml: ET.Element):
-        default = ET.SubElement(mujoco_xml, "default")
+    def add_defaults(self):
+        if self.mujoco_xml is None:
+            raise RuntimeError("mujoco_xml must be initialized before adding defaults")
+
+        default = ET.SubElement(self.mujoco_xml, "default")
 
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
@@ -310,6 +317,9 @@ class PhenotypeBuilder:
         incoming_conn: Optional[ConnectionGene],
         node_depth: int,
     ):
+        if self.actuator_xml is None:
+            raise RuntimeError("actuator_xml must be initialized before adding motors")
+
         motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
