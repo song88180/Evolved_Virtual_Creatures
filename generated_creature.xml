@@ -4,7 +4,7 @@
   <default>
     <geom type="box" density="500" friction="1.0 0.5 0.5" contype="0" conaffinity="0" />
     <joint limited="true" range="-45 45" damping="2.0" />
-    <motor gear="10" ctrllimited="true" ctrlrange="-1 1" />
+    <motor ctrllimited="true" />
   </default>
   <worldbody>
     <geom name="floor" type="plane" size="5 5 0.1" pos="0 0 -0.05" />
@@ -135,35 +135,35 @@
     </body>
   </worldbody>
   <actuator>
-    <motor name="segment_joint_2_motor_1" joint="segment_joint_2" />
-    <motor name="segment_joint_3_motor_2" joint="segment_joint_3" />
-    <motor name="segment_joint_4_motor_3" joint="segment_joint_4" />
-    <motor name="segment_joint_5_motor_4" joint="segment_joint_5" />
-    <motor name="segment_joint_6_motor_5" joint="segment_joint_6" />
-    <motor name="segment_joint_7_motor_6" joint="segment_joint_7" />
-    <motor name="segment_joint_8_motor_7" joint="segment_joint_8" />
-    <motor name="segment_joint_9_motor_8" joint="segment_joint_9" />
-    <motor name="segment_joint_10_motor_9" joint="segment_joint_10" />
-    <motor name="segment_joint_11_motor_10" joint="segment_joint_11" />
-    <motor name="limb_joint_12_motor_11" joint="limb_joint_12" />
-    <motor name="limb_joint_13_motor_12" joint="limb_joint_13" />
-    <motor name="limb_joint_14_motor_13" joint="limb_joint_14" />
-    <motor name="limb_joint_15_motor_14" joint="limb_joint_15" />
-    <motor name="limb_joint_16_motor_15" joint="limb_joint_16" />
-    <motor name="limb_joint_17_motor_16" joint="limb_joint_17" />
-    <motor name="limb_joint_18_motor_17" joint="limb_joint_18" />
-    <motor name="limb_joint_19_motor_18" joint="limb_joint_19" />
-    <motor name="limb_joint_20_motor_19" joint="limb_joint_20" />
-    <motor name="limb_joint_21_motor_20" joint="limb_joint_21" />
-    <motor name="limb_joint_22_motor_21" joint="limb_joint_22" />
-    <motor name="limb_joint_23_motor_22" joint="limb_joint_23" />
-    <motor name="limb_joint_24_motor_23" joint="limb_joint_24" />
-    <motor name="limb_joint_25_motor_24" joint="limb_joint_25" />
-    <motor name="limb_joint_26_motor_25" joint="limb_joint_26" />
-    <motor name="limb_joint_27_motor_26" joint="limb_joint_27" />
-    <motor name="limb_joint_28_motor_27" joint="limb_joint_28" />
-    <motor name="limb_joint_29_motor_28" joint="limb_joint_29" />
-    <motor name="limb_joint_30_motor_29" joint="limb_joint_30" />
-    <motor name="limb_joint_31_motor_30" joint="limb_joint_31" />
+    <motor name="segment_joint_2_motor_1" joint="segment_joint_2" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_3_motor_2" joint="segment_joint_3" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_4_motor_3" joint="segment_joint_4" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_5_motor_4" joint="segment_joint_5" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_6_motor_5" joint="segment_joint_6" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_7_motor_6" joint="segment_joint_7" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_8_motor_7" joint="segment_joint_8" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_9_motor_8" joint="segment_joint_9" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_10_motor_9" joint="segment_joint_10" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="segment_joint_11_motor_10" joint="segment_joint_11" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_12_motor_11" joint="limb_joint_12" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_13_motor_12" joint="limb_joint_13" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_14_motor_13" joint="limb_joint_14" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_15_motor_14" joint="limb_joint_15" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_16_motor_15" joint="limb_joint_16" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_17_motor_16" joint="limb_joint_17" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_18_motor_17" joint="limb_joint_18" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_19_motor_18" joint="limb_joint_19" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_20_motor_19" joint="limb_joint_20" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_21_motor_20" joint="limb_joint_21" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_22_motor_21" joint="limb_joint_22" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_23_motor_22" joint="limb_joint_23" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_24_motor_23" joint="limb_joint_24" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_25_motor_24" joint="limb_joint_25" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_26_motor_25" joint="limb_joint_26" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_27_motor_26" joint="limb_joint_27" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_28_motor_27" joint="limb_joint_28" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_29_motor_28" joint="limb_joint_29" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_30_motor_29" joint="limb_joint_30" gear="2.0" ctrlrange="-1.0 1.0" />
+    <motor name="limb_joint_31_motor_30" joint="limb_joint_31" gear="2.0" ctrlrange="-1.0 1.0" />
   </actuator>
 </mujoco>
