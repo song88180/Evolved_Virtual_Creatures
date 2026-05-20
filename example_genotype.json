@@ -1,0 +1,52 @@
+{
+  "root": "body",
+  "nodes": {
+    "body": {
+      "size": [0.25, 0.15, 0.1],
+      "joint_type": "free",
+      "recursive_limit": 1,
+      "children": [
+        {
+          "child": "segment",
+          "pos": [0.28, 0.0, 0.0],
+          "axis": [0, 1, 0],
+          "control_phase": 0.0
+        }
+      ]
+    },
+    "segment": {
+      "size": [0.18, 0.08, 0.08],
+      "joint_type": "hinge",
+      "joint_axis": [0, 1, 0],
+      "recursive_limit": 10,
+      "children": [
+        {
+          "child": "segment",
+          "pos": [0.22, 0.0, 0.0],
+          "axis": [0, 1, 0],
+          "control_phase_depth_scale": 1.0471666666666666
+        },
+        {
+          "child": "limb",
+          "pos": [0.0, 0.14, 0.0],
+          "axis": [1, 0, 0],
+          "control_phase": 1.4,
+          "motor_enabled": true
+        },
+        {
+          "child": "limb",
+          "pos": [0.0, -0.14, 0.0],
+          "axis": [1, 0, 0],
+          "control_phase": -1.4,
+          "motor_enabled": true
+        }
+      ]
+    },
+    "limb": {
+      "size": [0.06, 0.08, 0.06],
+      "joint_type": "hinge",
+      "joint_axis": [1, 0, 0],
+      "recursive_limit": 1
+    }
+  }
+}

@@ -12,8 +12,10 @@ and opens it in the MuJoCo viewer.
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 import xml.etree.ElementTree as ET
+import json
 import math
 import mujoco
 import mujoco.viewer
@@ -72,6 +74,7 @@ class ActuatorController:
 
 
 GenotypeSpec = Mapping[str, Mapping[str, Any]]
+DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("example_genotype.json")
 
 
 def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
@@ -107,76 +110,19 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
     return Genotype(root=root, nodes=nodes)
 
 
-# -----------------------------
-# 2. Example genotype
-# -----------------------------
+def load_genotype_from_json(path: str | Path) -> Genotype:
+    """Load a recursive genotype recipe from a JSON file."""
+    with Path(path).open() as f:
+        genotype_data = json.load(f)
 
-def make_example_genotype() -> Genotype:
-    """
-    A simple recursive genotype:
-
-        body -> segment -> segment -> segment
-                      |
-                    limb
-
-    The segment node points to itself, so it generates a repeated chain.
-    """
-
-    genotype_spec = {
-        "body": {
-            "size": (0.25, 0.15, 0.10),
-            "joint_type": "free",
-            "recursive_limit": 1,
-            "children": [
-                {
-                    "child": "segment",
-                    "pos": (0.28, 0.0, 0.0),
-                    "axis": (0, 1, 0),
-                    "control_phase": 0.0,
-                },
-            ],
-        },
-        "segment": {
-            "size": (0.18, 0.08, 0.08),
-            "joint_type": "hinge",
-            "joint_axis": (0, 1, 0),
-            "recursive_limit": 10,
-            "children": [
-                {
-                    "child": "segment",
-                    "pos": (0.22, 0.0, 0.0),
-                    "axis": (0, 1, 0),
-                    "control_phase_depth_scale": 3.1415 / 3,
-                },
-                {
-                    "child": "limb",
-                    "pos": (0.0, 0.14, 0.0),
-                    "axis": (1, 0, 0),
-                    "control_phase": 1.4,
-                    "motor_enabled": True,
-                },
-                {
-                    "child": "limb",
-                    "pos": (0.0, -0.14, 0.0),
-                    "axis": (1, 0, 0),
-                    "control_phase": -1.4,
-                    "motor_enabled": True,
-                },
-            ],
-        },
-        "limb": {
-            "size": (0.06, 0.08, 0.06),
-            "joint_type": "hinge",
-            "joint_axis": (1, 0, 0),
-            "recursive_limit": 1,
-        },
-    }
-
-    return build_genotype(root="body", spec=genotype_spec)
+    return build_genotype(
+        root=genotype_data["root"],
+        spec=genotype_data["nodes"],
+    )
 
 
 # -----------------------------
-# 3. Genotype -> MJCF phenotype
+# 2. Genotype -> MJCF phenotype
 # -----------------------------
 
 class PhenotypeBuilder:
@@ -419,11 +365,11 @@ def vec_to_str(v):
 
 
 # -----------------------------
-# 4. Show phenotype in MuJoCo
+# 3. Show phenotype in MuJoCo
 # -----------------------------
 
 def main():
-    genotype = make_example_genotype()
+    genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
 
     builder = PhenotypeBuilder(genotype)
     mjcf = builder.build()

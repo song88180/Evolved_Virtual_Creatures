@@ -97,7 +97,7 @@ class Genotype:
 
 ## Example Genotype
 
-The `make_example_genotype()` function builds a simple creature recipe:
+The `example_genotype.json` file stores a simple creature recipe:
 
 ```text
 body -> segment -> segment -> ... -> segment
@@ -105,7 +105,10 @@ body -> segment -> segment -> ... -> segment
             limbs      limbs          limbs
 ```
 
-The function creates three node types:
+JSON arrays are used for vector values such as `size`, `pos`, `axis`, and
+`joint_axis`.
+
+The file defines three node types:
 
 - `body`: the root body, using a free joint so the whole creature can move in space.
 - `segment`: a repeated hinge-connected body segment.
@@ -113,14 +116,12 @@ The function creates three node types:
 
 The key recursive detail is this connection:
 
-```python
-segment.children.append(
-    ConnectionGene(
-        child="segment",
-        pos=(0.22, 0.0, 0.0),
-        axis=(0, 1, 0),
-    )
-)
+```json
+{
+  "child": "segment",
+  "pos": [0.22, 0.0, 0.0],
+  "axis": [0, 1, 0]
+}
 ```
 
 Because `segment` connects to another `segment`, the genotype can expand into a chain. The `recursive_limit=10` on the `segment` node prevents that self-connection from expanding forever, producing up to ten segment bodies along that branch.
@@ -302,12 +303,12 @@ MuJoCo XML expects vectors as space-separated strings, such as `"0.25 0.15 0.1"`
 The `main()` function runs the full pipeline:
 
 ```python
-genotype = make_example_genotype()
+genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
 builder = PhenotypeBuilder(genotype)
 mjcf = builder.build()
 ```
 
-It creates the genotype, builds the MJCF XML, and stores the XML string in `mjcf`.
+It loads the genotype from JSON, builds the MJCF XML, and stores the XML string in `mjcf`.
 
 Then it writes the XML to disk:
 
