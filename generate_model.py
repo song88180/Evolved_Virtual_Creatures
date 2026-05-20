@@ -12,7 +12,7 @@ and opens it in the MuJoCo viewer.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 import xml.etree.ElementTree as ET
 import math
 import mujoco
@@ -71,6 +71,42 @@ class ActuatorController:
     phase: float
 
 
+GenotypeSpec = Mapping[str, Mapping[str, Any]]
+
+
+def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
+    """
+    Build a concrete genotype from a compact declarative recipe.
+
+    Each spec entry describes one reusable node type. The optional "children"
+    list contains connection dictionaries that are passed to ConnectionGene.
+    """
+    nodes: Dict[str, NodeGene] = {}
+
+    for node_name, node_spec in spec.items():
+        node_kwargs = {
+            key: value
+            for key, value in node_spec.items()
+            if key != "children"
+        }
+        nodes[node_name] = NodeGene(name=node_name, **node_kwargs)
+
+    if root not in nodes:
+        raise KeyError(f"Unknown genotype root: {root}")
+
+    for node_name, node_spec in spec.items():
+        children = node_spec.get("children", [])
+        for connection_spec in children:
+            child_name = connection_spec["child"]
+            if child_name not in nodes:
+                raise KeyError(
+                    f"Node '{node_name}' connects to unknown child '{child_name}'"
+                )
+            nodes[node_name].children.append(ConnectionGene(**connection_spec))
+
+    return Genotype(root=root, nodes=nodes)
+
+
 # -----------------------------
 # 2. Example genotype
 # -----------------------------
@@ -86,75 +122,57 @@ def make_example_genotype() -> Genotype:
     The segment node points to itself, so it generates a repeated chain.
     """
 
-    body = NodeGene(
-        name="body",
-        size=(0.25, 0.15, 0.10),
-        joint_type="free",
-        recursive_limit=1,
-    )
-
-    segment = NodeGene(
-        name="segment",
-        size=(0.18, 0.08, 0.08),
-        joint_type="hinge",
-        joint_axis=(0, 1, 0),
-        recursive_limit=10,
-    )
-
-    limb = NodeGene(
-        name="limb",
-        size=(0.06, 0.08, 0.06),
-        joint_type="hinge",
-        joint_axis=(1, 0, 0),
-        recursive_limit=1,
-    )
-
-    body.children.append(
-        ConnectionGene(
-            child="segment",
-            pos=(0.28, 0.0, 0.0),
-            axis=(0, 1, 0),
-            control_phase=0.0,
-        )
-    )
-
-    segment.children.append(
-        ConnectionGene(
-            child="segment",
-            pos=(0.22, 0.0, 0.0),
-            axis=(0, 1, 0),
-            control_phase_depth_scale=3.1415/3,
-        )
-    )
-
-    segment.children.append(
-        ConnectionGene(
-            child="limb",
-            pos=(0.0, 0.14, 0.0),
-            axis=(1, 0, 0),
-            control_phase=1.4,
-            motor_enabled=True,
-        )
-    )
-
-    segment.children.append(
-        ConnectionGene(
-            child="limb",
-            pos=(0.0, -0.14, 0.0),
-            axis=(1, 0, 0),
-            control_phase=-1.4,
-            motor_enabled=True,
-        )
-    )
-
-    return Genotype(
-        root="body",
-        nodes={
-            "body": body,
-            "segment": segment,
-            "limb": limb,
+    genotype_spec = {
+        "body": {
+            "size": (0.25, 0.15, 0.10),
+            "joint_type": "free",
+            "recursive_limit": 1,
+            "children": [
+                {
+                    "child": "segment",
+                    "pos": (0.28, 0.0, 0.0),
+                    "axis": (0, 1, 0),
+                    "control_phase": 0.0,
+                },
+            ],
         },
-    )
+        "segment": {
+            "size": (0.18, 0.08, 0.08),
+            "joint_type": "hinge",
+            "joint_axis": (0, 1, 0),
+            "recursive_limit": 10,
+            "children": [
+                {
+                    "child": "segment",
+                    "pos": (0.22, 0.0, 0.0),
+                    "axis": (0, 1, 0),
+                    "control_phase_depth_scale": 3.1415 / 3,
+                },
+                {
+                    "child": "limb",
+                    "pos": (0.0, 0.14, 0.0),
+                    "axis": (1, 0, 0),
+                    "control_phase": 1.4,
+                    "motor_enabled": True,
+                },
+                {
+                    "child": "limb",
+                    "pos": (0.0, -0.14, 0.0),
+                    "axis": (1, 0, 0),
+                    "control_phase": -1.4,
+                    "motor_enabled": True,
+                },
+            ],
+        },
+        "limb": {
+            "size": (0.06, 0.08, 0.06),
+            "joint_type": "hinge",
+            "joint_axis": (1, 0, 0),
+            "recursive_limit": 1,
+        },
+    }
+
+    return build_genotype(root="body", spec=genotype_spec)
 
 
 # -----------------------------
