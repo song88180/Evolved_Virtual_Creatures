@@ -100,9 +100,9 @@ class Genotype:
 The `make_example_genotype()` function builds a simple creature recipe:
 
 ```text
-body -> segment -> segment -> segment -> segment
-              |          |          |          |
-            limbs      limbs      limbs      limbs
+body -> segment -> segment -> ... -> segment
+              |          |              |
+            limbs      limbs          limbs
 ```
 
 The function creates three node types:
@@ -123,7 +123,7 @@ segment.children.append(
 )
 ```
 
-Because `segment` connects to another `segment`, the genotype can expand into a chain. The `recursive_limit=4` on the `segment` node prevents that self-connection from expanding forever.
+Because `segment` connects to another `segment`, the genotype can expand into a chain. The `recursive_limit=10` on the `segment` node prevents that self-connection from expanding forever, producing up to ten segment bodies along that branch.
 
 Each segment also creates two limbs, one at positive Y and one at negative Y:
 
@@ -143,9 +143,10 @@ class PhenotypeBuilder:
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
+        self.actuator_xml = None
 ```
 
-The counters ensure that generated bodies, joints, and motors get unique names. This matters because MuJoCo expects named elements to be unique.
+The counters ensure that generated bodies, joints, and motors get unique names. This matters because MuJoCo expects named elements to be unique. `actuator_xml` stores the generated `<actuator>` element so recursive body-generation calls can add motors to the same actuator section.
 
 ### Name Helpers
 
@@ -168,12 +169,12 @@ mujoco_xml = ET.Element("mujoco", model="genotype_creature")
 It then adds standard MuJoCo sections:
 
 - `<compiler>`: sets angles to degrees.
-- `<option>`: sets gravity to Earth-like gravity.
+- `<option>`: sets simulation options, including zero gravity plus density and viscosity values.
 - `<default>`: defines default geometry, joint, and motor properties.
 - `<worldbody>`: contains the floor, light, and creature bodies.
 - `<actuator>`: contains motors for hinge joints.
 
-The floor and light are added directly to the world:
+The default geometry settings make body parts box-shaped, moderately dense, and frictional. They also set `contype` and `conaffinity` to `0`, which disables contacts for geoms that inherit these defaults. The floor and light are added directly to the world:
 
 ```python
 floor = ET.SubElement(worldbody, "geom")
@@ -224,7 +225,7 @@ elif node.joint_type == "hinge":
     joint.set("name", joint_name)
     joint.set("axis", vec_to_str(node.joint_axis))
 
-    motor = ET.SubElement(actuator_xml, "motor")
+    motor = ET.SubElement(self.actuator_xml, "motor")
     motor.set("name", self.new_motor_name(joint_name))
     motor.set("joint", joint_name)
 ```
@@ -263,7 +264,7 @@ if child_depth >= child_node.recursive_limit:
     continue
 ```
 
-For the self-recursive `segment` node, this check stops expansion after four segments.
+For the self-recursive `segment` node, this check stops expansion after ten segments.
 
 ### Adding Children
 
@@ -282,7 +283,6 @@ self.add_node_to_body(
     parent_xml=child_body,
     node=child_node,
     current_depths=current_depths,
-    actuator_xml=actuator_xml,
 )
 ```
 
@@ -351,7 +351,7 @@ viewer.sync()
 Running the script produces `generated_creature.xml`. That file contains:
 
 - One root body with a free joint.
-- Four generated segment bodies.
+- Ten generated segment bodies.
 - Two limb bodies attached to each segment.
 - One motor for every hinge joint.
 - A floor plane and a light.
@@ -368,7 +368,6 @@ The current script is intentionally minimal, but it leaves several natural place
 - Add mutation and crossover operations to evolve genotypes.
 - Add a fitness function, such as forward distance traveled.
 - Replace the open-loop sine controller with an evolved or learned controller.
-- Pretty-print the generated XML for easier reading.
 
 ## Summary
 
