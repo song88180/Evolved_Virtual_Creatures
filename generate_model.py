@@ -12,8 +12,9 @@ and opens it in the MuJoCo viewer.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 import xml.etree.ElementTree as ET
+import math
 import mujoco
 import mujoco.viewer
 
@@ -29,6 +30,21 @@ class ConnectionGene:
     axis: Tuple[float, float, float]
     scale: float = 1.0
     terminal_only: bool = False
+    motor_enabled: bool = True
+    motor_gear: float = 10.0
+    ctrlrange: Tuple[float, float] = (-1.0, 1.0)
+    control_amp: float = 0.5
+    control_freq: float = 4.0
+    control_phase: float = 0.0
+    control_phase_depth_scale: float = 0.0
+    control_phase_order_scale: float = 0.0
+
+    def phase_for(self, depth: int, order: int) -> float:
+        return (
+            self.control_phase
+            + self.control_phase_depth_scale * (depth - 1)
+            + self.control_phase_order_scale * order
+        )
 
 
 @dataclass
@@ -45,6 +61,14 @@ class NodeGene:
 class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
+
+
+@dataclass
+class ActuatorController:
+    motor_name: str
+    amp: float
+    freq: float
+    phase: float
 
 
 # -----------------------------
@@ -90,6 +114,7 @@ def make_example_genotype() -> Genotype:
             child="segment",
             pos=(0.28, 0.0, 0.0),
             axis=(0, 1, 0),
+            control_phase=0.0,
         )
     )
 
@@ -98,6 +123,7 @@ def make_example_genotype() -> Genotype:
             child="segment",
             pos=(0.22, 0.0, 0.0),
             axis=(0, 1, 0),
+            control_phase_depth_scale=0.7,
         )
     )
 
@@ -106,6 +132,7 @@ def make_example_genotype() -> Genotype:
             child="limb",
             pos=(0.0, 0.14, 0.0),
             axis=(1, 0, 0),
+            control_phase=1.4,
         )
     )
 
@@ -114,6 +141,7 @@ def make_example_genotype() -> Genotype:
             child="limb",
             pos=(0.0, -0.14, 0.0),
             axis=(1, 0, 0),
+            control_phase=-1.4,
         )
     )
 
@@ -138,6 +166,7 @@ class PhenotypeBuilder:
         self.joint_counter = 0
         self.motor_counter = 0
         self.actuator_xml = None
+        self.actuator_controllers: List[ActuatorController] = []
 
     def new_body_name(self, node_name: str) -> str:
         self.body_counter += 1
@@ -152,6 +181,7 @@ class PhenotypeBuilder:
         return f"{joint_name}_motor_{self.motor_counter}"
 
     def build(self) -> str:
+        self.actuator_controllers = []
         mujoco_xml = ET.Element("mujoco", model="genotype_creature")
 
         compiler = ET.SubElement(mujoco_xml, "compiler")
@@ -177,9 +207,7 @@ class PhenotypeBuilder:
         joint_default.set("damping", "2.0")
 
         motor_default = ET.SubElement(default, "motor")
-        motor_default.set("gear", "10")
         motor_default.set("ctrllimited", "true")
-        motor_default.set("ctrlrange", "-1 1")
 
         worldbody = ET.SubElement(mujoco_xml, "worldbody")
 
@@ -203,6 +231,7 @@ class PhenotypeBuilder:
         self.add_node_to_body(
             parent_xml=root_body,
             node=root_node,
+            incoming_conn=None,
             current_depths={},
         )
 
@@ -213,12 +242,14 @@ class PhenotypeBuilder:
         self,
         parent_xml: ET.Element,
         node: NodeGene,
+        incoming_conn: Optional[ConnectionGene],
         current_depths: Dict[str, int],
     ):
         """
         Add one phenotype body part from one genotype node.
         Then recursively add children according to connections.
         """
+        node_depth = current_depths.get(node.name, 0) + 1
 
         # Add joint
         if node.joint_type == "free":
@@ -230,11 +261,36 @@ class PhenotypeBuilder:
             joint = ET.SubElement(parent_xml, "joint")
             joint.set("type", "hinge")
             joint.set("name", joint_name)
-            joint.set("axis", vec_to_str(node.joint_axis))
+            joint_axis = incoming_conn.axis if incoming_conn else node.joint_axis
+            joint.set("axis", vec_to_str(joint_axis))
 
-            motor = ET.SubElement(self.actuator_xml, "motor")
-            motor.set("name", self.new_motor_name(joint_name))
-            motor.set("joint", joint_name)
+            if incoming_conn is None or incoming_conn.motor_enabled:
+                motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
+                ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
+                control_amp = incoming_conn.control_amp if incoming_conn else 0.5
+                control_freq = incoming_conn.control_freq if incoming_conn else 4.0
+                control_order = len(self.actuator_controllers)
+                control_phase = (
+                    incoming_conn.phase_for(node_depth, control_order)
+                    if incoming_conn
+                    else 0.0
+                )
+
+                motor_name = self.new_motor_name(joint_name)
+                motor = ET.SubElement(self.actuator_xml, "motor")
+                motor.set("name", motor_name)
+                motor.set("joint", joint_name)
+                motor.set("gear", str(motor_gear))
+                motor.set("ctrlrange", vec_to_str(ctrlrange))
+
+                self.actuator_controllers.append(
+                    ActuatorController(
+                        motor_name=motor_name,
+                        amp=control_amp,
+                        freq=control_freq,
+                        phase=control_phase,
+                    )
+                )
 
         # Add body geometry
         geom = ET.SubElement(parent_xml, "geom")
@@ -244,7 +300,7 @@ class PhenotypeBuilder:
 
         # Track recursion depth for this genotype node
         current_depths = dict(current_depths)
-        current_depths[node.name] = current_depths.get(node.name, 0) + 1
+        current_depths[node.name] = node_depth
 
         for conn in node.children:
             child_node = self.genotype.nodes[conn.child]
@@ -261,6 +317,7 @@ class PhenotypeBuilder:
             self.add_node_to_body(
                 parent_xml=child_body,
                 node=child_node,
+                incoming_conn=conn,
                 current_depths=current_depths,
             )
 
@@ -286,14 +343,27 @@ def main():
 
     model = mujoco.MjModel.from_xml_string(mjcf)
     data = mujoco.MjData(model)
+    actuator_ids = [
+        mujoco.mj_name2id(
+            model,
+            mujoco.mjtObj.mjOBJ_ACTUATOR,
+            controller.motor_name,
+        )
+        for controller in builder.actuator_controllers
+    ]
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         while viewer.is_running():
             # Simple open-loop controller:
-            # drive all hinge motors with sinusoidal control.
+            # drive each motor with its connection gene's control rule.
             t = data.time
-            for i in range(model.nu):
-                data.ctrl[i] = 0.5 * __import__("math").sin(4 * t + i)
+            for actuator_id, controller in zip(
+                actuator_ids,
+                builder.actuator_controllers,
+            ):
+                data.ctrl[actuator_id] = controller.amp * math.sin(
+                    controller.freq * t + controller.phase
+                )
 
             mujoco.mj_step(model, data)
             viewer.sync()
