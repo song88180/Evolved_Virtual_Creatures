@@ -13,10 +13,11 @@ and opens it in the MuJoCo viewer.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Tuple
 import xml.etree.ElementTree as ET
 import json
 import math
+import random
 import mujoco
 import mujoco.viewer
 
@@ -60,9 +61,273 @@ class NodeGene:
 
 
 @dataclass
+class _MutableParameter:
+    name: str
+    mutate: Callable[[random.Random], None]
+
+
+@dataclass
 class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
+
+    POS_MUTATION_RANGE: ClassVar[float] = 0.05
+    AXIS_MUTATION_RANGE: ClassVar[float] = 0.1
+    PHASE_MUTATION_RANGE: ClassVar[float] = 0.25
+    CTRLRANGE_MUTATION_RANGE: ClassVar[float] = 0.1
+    MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
+
+    def mutation(
+        self,
+        num_mutations: int = 1,
+        mutation_rate: Optional[float] = None,
+        rng: Optional[random.Random] = None,
+    ) -> "Genotype":
+        """
+        Randomly mutate mutable genotype parameters in place.
+
+        If mutation_rate is provided, every mutable parameter is independently
+        mutated with that probability and num_mutations is ignored. Otherwise,
+        num_mutations distinct mutable parameters are chosen uniformly.
+        """
+        random_source = rng if rng is not None else random
+        mutable_parameters = self._collect_mutable_parameters()
+        if not mutable_parameters:
+            return self
+
+        if mutation_rate is not None:
+            if not 0.0 <= mutation_rate <= 1.0:
+                raise ValueError("mutation_rate must be between 0 and 1")
+            selected_parameters = [
+                parameter
+                for parameter in mutable_parameters
+                if random_source.random() < mutation_rate
+            ]
+        else:
+            if num_mutations < 0:
+                raise ValueError("num_mutations must be non-negative")
+            selected_parameters = random_source.sample(
+                mutable_parameters,
+                k=min(num_mutations, len(mutable_parameters)),
+            )
+
+        for parameter in selected_parameters:
+            parameter.mutate(random_source)
+
+        return self
+
+    def _collect_mutable_parameters(self) -> List[_MutableParameter]:
+        mutable_parameters: List[_MutableParameter] = []
+
+        for node_name, node in self.nodes.items():
+            self._add_positive_tuple_parameters(
+                mutable_parameters,
+                owner=node,
+                field_name="size",
+                path=f"nodes.{node_name}.size",
+            )
+            self._add_relative_tuple_parameters(
+                mutable_parameters,
+                owner=node,
+                field_name="joint_axis",
+                path=f"nodes.{node_name}.joint_axis",
+                mutation_range=self.AXIS_MUTATION_RANGE,
+            )
+            self._add_positive_scalar_parameter(
+                mutable_parameters,
+                owner=node,
+                field_name="recursive_limit",
+                path=f"nodes.{node_name}.recursive_limit",
+            )
+
+            for child_index, connection in enumerate(node.children):
+                child_path = f"nodes.{node_name}.children[{child_index}]"
+                self._add_relative_tuple_parameters(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="pos",
+                    path=f"{child_path}.pos",
+                    mutation_range=self.POS_MUTATION_RANGE,
+                )
+                self._add_relative_tuple_parameters(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="axis",
+                    path=f"{child_path}.axis",
+                    mutation_range=self.AXIS_MUTATION_RANGE,
+                )
+                self._add_positive_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="scale",
+                    path=f"{child_path}.scale",
+                )
+                self._add_bool_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="terminal_only",
+                    path=f"{child_path}.terminal_only",
+                )
+                self._add_bool_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="motor_enabled",
+                    path=f"{child_path}.motor_enabled",
+                )
+                self._add_positive_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="motor_gear",
+                    path=f"{child_path}.motor_gear",
+                )
+                self._add_ctrlrange_parameters(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="ctrlrange",
+                    path=f"{child_path}.ctrlrange",
+                )
+                self._add_positive_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="control_amp",
+                    path=f"{child_path}.control_amp",
+                )
+                self._add_positive_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="control_freq",
+                    path=f"{child_path}.control_freq",
+                )
+                self._add_relative_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="control_phase",
+                    path=f"{child_path}.control_phase",
+                    mutation_range=self.PHASE_MUTATION_RANGE,
+                )
+                self._add_relative_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="control_phase_depth_scale",
+                    path=f"{child_path}.control_phase_depth_scale",
+                    mutation_range=self.PHASE_MUTATION_RANGE,
+                )
+                self._add_relative_scalar_parameter(
+                    mutable_parameters,
+                    owner=connection,
+                    field_name="control_phase_order_scale",
+                    path=f"{child_path}.control_phase_order_scale",
+                    mutation_range=self.PHASE_MUTATION_RANGE,
+                )
+
+        return mutable_parameters
+
+    def _add_positive_scalar_parameter(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+    ):
+        def mutate(random_source: random.Random):
+            original_value = getattr(owner, field_name)
+            mutated_value = self._mutate_positive_value(original_value, random_source)
+            setattr(owner, field_name, mutated_value)
+
+        mutable_parameters.append(_MutableParameter(path, mutate))
+
+    def _add_relative_scalar_parameter(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+        mutation_range: float,
+    ):
+        def mutate(random_source: random.Random):
+            original_value = getattr(owner, field_name)
+            delta = random_source.uniform(-mutation_range, mutation_range)
+            setattr(owner, field_name, original_value + delta)
+
+        mutable_parameters.append(_MutableParameter(path, mutate))
+
+    def _add_bool_parameter(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+    ):
+        def mutate(random_source: random.Random):
+            del random_source
+            setattr(owner, field_name, not getattr(owner, field_name))
+
+        mutable_parameters.append(_MutableParameter(path, mutate))
+
+    def _add_positive_tuple_parameters(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+    ):
+        for index in range(len(getattr(owner, field_name))):
+            def mutate(random_source: random.Random, index: int = index):
+                values = list(getattr(owner, field_name))
+                values[index] = self._mutate_positive_value(values[index], random_source)
+                setattr(owner, field_name, tuple(values))
+
+            mutable_parameters.append(_MutableParameter(f"{path}[{index}]", mutate))
+
+    def _add_relative_tuple_parameters(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+        mutation_range: float,
+    ):
+        for index in range(len(getattr(owner, field_name))):
+            def mutate(random_source: random.Random, index: int = index):
+                values = list(getattr(owner, field_name))
+                delta = random_source.uniform(-mutation_range, mutation_range)
+                values[index] += delta
+                setattr(owner, field_name, tuple(values))
+
+            mutable_parameters.append(_MutableParameter(f"{path}[{index}]", mutate))
+
+    def _add_ctrlrange_parameters(
+        self,
+        mutable_parameters: List[_MutableParameter],
+        owner: Any,
+        field_name: str,
+        path: str,
+    ):
+        for index in range(len(getattr(owner, field_name))):
+            def mutate(random_source: random.Random, index: int = index):
+                values = list(getattr(owner, field_name))
+                delta = random_source.uniform(
+                    -self.CTRLRANGE_MUTATION_RANGE,
+                    self.CTRLRANGE_MUTATION_RANGE,
+                )
+                values[index] += delta
+                values = sorted(values)
+                if values[0] == values[1]:
+                    values[0] -= self.CTRLRANGE_MUTATION_RANGE
+                    values[1] += self.CTRLRANGE_MUTATION_RANGE
+                setattr(owner, field_name, tuple(values))
+
+            mutable_parameters.append(_MutableParameter(f"{path}[{index}]", mutate))
+
+    def _mutate_positive_value(self, value: Any, random_source: random.Random) -> Any:
+        value_as_float = float(value)
+        delta_range = abs(value_as_float) * 0.05
+        delta = random_source.uniform(-delta_range, delta_range)
+        mutated_value = max(self.MIN_POSITIVE_VALUE, value_as_float + delta)
+
+        if isinstance(value, int):
+            return max(1, int(round(mutated_value)))
+        return mutated_value
 
 
 @dataclass
