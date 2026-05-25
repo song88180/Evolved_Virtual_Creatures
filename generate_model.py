@@ -589,6 +589,8 @@ def vec_to_str(v):
 
 def main():
     genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
+    genotype.mutation(num_mutations=1)
+    print("Applied 1 random genotype mutation before building the organism.")
 
     builder = PhenotypeBuilder(genotype)
     mjcf = builder.build()
