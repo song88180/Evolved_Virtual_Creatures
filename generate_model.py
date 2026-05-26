@@ -105,8 +105,13 @@ class Genotype:
                 k=min(num_mutations, len(mutable_parameters)),
             )
 
+        print(f"Applying {len(selected_parameters)} genotype mutation(s):")
         for parameter_path in selected_parameters:
-            self._mutate_parameter_path(parameter_path, random_source)
+            mutation_description = self._mutate_parameter_path(
+                parameter_path,
+                random_source,
+            )
+            print(f"  - {mutation_description}")
 
         return self
 
@@ -169,11 +174,12 @@ class Genotype:
         self,
         parameter_path: Tuple[Any, ...],
         random_source: random.Random,
-    ):
+    ) -> str:
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         mutation_kind, mutation_range, keep_ordered_pair = self._mutation_spec(
             field_name,
         )
+        target = self._describe_parameter_target(parameter_path)
 
         if index is None:
             value = getattr(owner, field_name)
@@ -184,16 +190,18 @@ class Genotype:
                 mutation_range,
             )
             setattr(owner, field_name, mutated_value)
-            return
+            return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
 
         original_values = getattr(owner, field_name)
         values = list(original_values)
+        old_value = values[index]
         values[index] = self._mutate_value(
             values[index],
             random_source,
             mutation_kind,
             mutation_range,
         )
+        mutated_value = values[index]
 
         if keep_ordered_pair:
             values = sorted(values)
@@ -201,7 +209,30 @@ class Genotype:
                 values[0] -= self.CTRLRANGE_MUTATION_RANGE
                 values[1] += self.CTRLRANGE_MUTATION_RANGE
 
-        setattr(owner, field_name, type(original_values)(values))
+        final_values = type(original_values)(values)
+        setattr(owner, field_name, final_values)
+
+        return (
+            f"{target}.{field_name}[{index}]: {old_value!r} -> {mutated_value!r}"
+            f" (final {field_name}: {final_values!r})"
+        )
+
+    def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
+        parameter_type = parameter_path[0]
+
+        if parameter_type == "node":
+            _, node_name, *_ = parameter_path
+            return f"node '{node_name}'"
+
+        if parameter_type == "connection":
+            _, node_name, child_index, *_ = parameter_path
+            connection = self.nodes[node_name].children[child_index]
+            return (
+                f"connection '{node_name}' -> '{connection.child}'"
+                f" #{child_index}"
+            )
+
+        raise ValueError(f"Unknown mutable parameter path type: {parameter_type}")
 
     def _resolve_parameter_path(
         self,
@@ -590,7 +621,7 @@ def vec_to_str(v):
 def main():
     genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
     genotype.mutation(num_mutations=1)
-    print("Applied 1 random genotype mutation before building the organism.")
+    print("Building MuJoCo organism from mutated genotype.")
 
     builder = PhenotypeBuilder(genotype)
     mjcf = builder.build()
