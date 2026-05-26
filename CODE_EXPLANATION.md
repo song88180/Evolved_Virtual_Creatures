@@ -1,6 +1,6 @@
 # Python Code Explanation
 
-This project contains a single Python script, `generate_model.py`, that turns a small graph-like genotype into a MuJoCo creature model. It writes the generated MJCF XML to `generated_creature.xml`, loads that XML into MuJoCo, and opens a viewer where the creature is animated with a simple sinusoidal controller.
+This project contains a single Python script, `generate_model.py`, that turns a small graph-like genotype into a MuJoCo creature model. It loads the genotype, applies a random mutation, writes the generated MJCF XML to `generated_creature.xml`, loads that XML into MuJoCo, and opens a viewer where the creature is animated with a simple sinusoidal controller.
 
 The script header currently says to run `python genotype_to_mujoco.py`, but the file in this repository is named `generate_model.py`. The correct command is:
 
@@ -21,8 +21,12 @@ This mirrors evolutionary robotics terminology. The genotype is the recipe, and 
 
 ```python
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 import xml.etree.ElementTree as ET
+import json
+import math
+import random
 import mujoco
 import mujoco.viewer
 ```
@@ -30,8 +34,11 @@ import mujoco.viewer
 The script uses:
 
 - `dataclasses` to define lightweight data containers for genotype information.
+- `pathlib.Path` and `json` to load the genotype recipe from `example_genotype.json`.
 - `typing` to make the expected shapes of dictionaries, lists, and tuples clear.
 - `xml.etree.ElementTree` to build MuJoCo XML programmatically.
+- `random` to select and perturb genotype parameters during mutation.
+- `math` to compute the sinusoidal motor controls.
 - `mujoco` and `mujoco.viewer` to load, simulate, and display the generated creature.
 
 ## Genotype Data Structures
@@ -48,17 +55,28 @@ class ConnectionGene:
     axis: Tuple[float, float, float]
     scale: float = 1.0
     terminal_only: bool = False
+    motor_enabled: bool = True
+    motor_gear: float = 2.0
+    ctrlrange: Tuple[float, float] = (-1.0, 1.0)
+    control_amp: float = 0.1
+    control_freq: float = 0.1
+    control_phase: float = 0.0
+    control_phase_depth_scale: float = 0.0
+    control_phase_order_scale: float = 0.0
 ```
 
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
 
 - `child`: the name of the child node to attach.
 - `pos`: the child body's position relative to its parent.
-- `axis`: an intended connection or joint axis.
+- `axis`: the hinge axis used when this connection creates a hinge joint.
 - `scale`: a future extension point for resizing child parts.
 - `terminal_only`: a future extension point for only adding a child at the end of a recursive chain.
+- `motor_enabled`: whether a hinge on this connection gets a motor.
+- `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
+- `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters.
 
-In the current script, `child` and `pos` are actively used. `axis`, `scale`, and `terminal_only` are stored but not yet used during XML generation.
+The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe.
 
 ### `NodeGene`
 
@@ -94,6 +112,31 @@ class Genotype:
 ```
 
 `Genotype` wraps the full creature recipe. `root` names the starting node, and `nodes` maps node names to their `NodeGene` definitions.
+
+### Genotype Mutation
+
+`Genotype.mutation()` randomly changes mutable genotype parameters in place before the phenotype is built. It supports two modes:
+
+- `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
+- `mutation_rate`: independently mutate each mutable parameter with the given probability.
+
+Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `pos`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
+
+The method prints the mutation details as it applies them:
+
+```text
+Applying 2 genotype mutation(s):
+  - connection 'segment' -> 'limb' #1.control_phase_order_scale: 0.0 -> -0.1330023623471946
+  - connection 'segment' -> 'segment' #0.motor_gear: 2.0 -> 2.0837977275654938
+```
+
+For tuple or list fields, the output names the mutated element and also shows the final full field value:
+
+```text
+connection 'segment' -> 'segment' #0.pos[0]: 0.22 -> 0.2028811290482366 (final pos: [0.2028811290482366, 0.0, 0.0])
+```
+
+Positive numeric fields are nudged by a small relative amount and clamped above zero. Boolean fields are flipped. Relative fields, such as positions, axes, phases, and control ranges, receive a random additive perturbation.
 
 ## Example Genotype
 
@@ -304,11 +347,13 @@ The `main()` function runs the full pipeline:
 
 ```python
 genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
+genotype.mutation(num_mutations=1)
+print("Building MuJoCo organism from mutated genotype.")
 builder = PhenotypeBuilder(genotype)
 mjcf = builder.build()
 ```
 
-It loads the genotype from JSON, builds the MJCF XML, and stores the XML string in `mjcf`.
+It loads the genotype from JSON, applies one random mutation, builds the MJCF XML from the mutated genotype, and stores the XML string in `mjcf`. Because `Genotype.mutation()` prints the mutation report itself, each run shows which genotype parameter changed before the MuJoCo organism is built.
 
 Then it writes the XML to disk:
 
@@ -334,11 +379,13 @@ Inside the viewer loop, the script drives every actuator with a sine wave:
 
 ```python
 t = data.time
-for i in range(model.nu):
-    data.ctrl[i] = 0.5 * __import__("math").sin(4 * t + i)
+for actuator_id, controller in zip(actuator_ids, builder.actuator_controllers):
+    data.ctrl[actuator_id] = controller.amp * math.sin(
+        controller.freq * t + controller.phase
+    )
 ```
 
-`model.nu` is the number of control inputs, which matches the number of motors. Each motor gets a phase offset based on `i`, causing the joints to move in a wave-like open-loop pattern.
+`builder.actuator_controllers` stores the controller recipe for each generated motor. Each motor gets its own amplitude, frequency, and phase based on the connection gene that created it. This makes the controller part of the genotype, so mutation can affect both body shape and motion.
 
 Then the simulation advances one step and synchronizes the viewer:
 
@@ -352,24 +399,25 @@ viewer.sync()
 Running the script produces `generated_creature.xml`. That file contains:
 
 - One root body with a free joint.
-- Ten generated segment bodies.
+- A mutated recursive body plan generated from `example_genotype.json`.
 - Two limb bodies attached to each segment.
-- One motor for every hinge joint.
+- One motor for every motor-enabled hinge joint.
 - A floor plane and a light.
 
-The resulting creature is not controlled by a learned policy. It simply uses a deterministic sinusoidal controller to demonstrate that the generated joints and motors work.
+The exact XML can differ from run to run because the genotype is randomly mutated before expansion. The resulting creature is not controlled by a learned policy. It uses deterministic sinusoidal controllers whose parameters may also be affected by mutation.
 
 ## Extension Points
 
 The current script is intentionally minimal, but it leaves several natural places to grow:
 
 - Use `ConnectionGene.scale` to resize child body parts.
-- Use `ConnectionGene.axis` to influence child orientation or joint axes.
+- Use `ConnectionGene.axis` to influence child orientation, not just joint axes.
 - Implement `terminal_only` so some children appear only at the end of recursive chains.
-- Add mutation and crossover operations to evolve genotypes.
+- Add crossover operations to combine two genotypes.
+- Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
 - Add a fitness function, such as forward distance traveled.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary
 
-`generate_model.py` demonstrates the core loop of genotype-to-phenotype generation for an evolutionary MuJoCo creature. A small recursive graph describes reusable body parts, `PhenotypeBuilder` expands that graph into MJCF XML, and MuJoCo loads the result for simulation. The script is a compact starting point for evolving virtual creatures because the genotype is easy to mutate while the generated phenotype is directly runnable in MuJoCo.
+`generate_model.py` demonstrates the core loop of genotype mutation, genotype-to-phenotype generation, and MuJoCo simulation for an evolutionary virtual creature. A small recursive graph describes reusable body parts and controller parameters, `Genotype.mutation()` randomly perturbs that recipe while printing what changed, `PhenotypeBuilder` expands the mutated graph into MJCF XML, and MuJoCo loads the result for simulation.
