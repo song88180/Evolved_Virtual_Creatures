@@ -263,7 +263,7 @@ class Genotype:
         field_specs = {
             "size": ("positive", None, False),
             "joint_axis": ("relative", self.AXIS_MUTATION_RANGE, False),
-            "recursive_limit": ("positive", None, False),
+            "recursive_limit": ("positive_integer", None, False),
             "pos": ("relative", self.POS_MUTATION_RANGE, False),
             "axis": ("relative", self.AXIS_MUTATION_RANGE, False),
             "scale": ("positive", None, False),
@@ -294,17 +294,34 @@ class Genotype:
         mutation_kind: str,
         mutation_range: Optional[float],
     ) -> Any:
+        mutation_kind = mutation_kind.lower()
+
         if mutation_kind == "boolean":
             return not value
+
+        if mutation_kind in {"integer", "positive_integer"}:
+            value_as_int = int(value)
+            delta_range = max(1, int(round(abs(value_as_int) * 0.05)))
+            delta_options = [
+                delta
+                for delta in range(-delta_range, delta_range + 1)
+                if delta != 0
+            ]
+
+            if mutation_kind == "positive_integer":
+                delta_options = [
+                    delta
+                    for delta in delta_options
+                    if value_as_int + delta >= 1
+                ] or [1]
+
+            return value_as_int + random_source.choice(delta_options)
 
         if mutation_kind == "positive":
             value_as_float = float(value)
             delta_range = abs(value_as_float) * 0.05
             delta = random_source.uniform(-delta_range, delta_range)
             mutated_value = max(self.MIN_POSITIVE_VALUE, value_as_float + delta)
-
-            if isinstance(value, int):
-                return max(1, int(round(mutated_value)))
             return mutated_value
 
         if mutation_kind == "relative":
