@@ -65,10 +65,17 @@ class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
 
-    POS_MUTATION_RANGE: ClassVar[float] = 0.05
-    AXIS_MUTATION_RANGE: ClassVar[float] = 0.1
-    PHASE_MUTATION_RANGE: ClassVar[float] = 0.25
-    CTRLRANGE_MUTATION_RANGE: ClassVar[float] = 0.1
+    MUTATION_STD_FRACTION: ClassVar[float] = 0.05
+    MIN_SIZE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_AXIS_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_INTEGER_MUTATION_STD: ClassVar[float] = 1.0
+    MIN_POS_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_SCALE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_MOTOR_GEAR_MUTATION_STD: ClassVar[float] = 0.1
+    MIN_CTRLRANGE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_CONTROL_AMP_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
     MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
 
     def mutation(
@@ -176,7 +183,7 @@ class Genotype:
         random_source: random.Random,
     ) -> str:
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
-        mutation_kind, mutation_range, keep_ordered_pair = self._mutation_spec(
+        mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
             field_name,
         )
         target = self._describe_parameter_target(parameter_path)
@@ -187,7 +194,7 @@ class Genotype:
                 value,
                 random_source,
                 mutation_kind,
-                mutation_range,
+                min_mutation_std,
             )
             setattr(owner, field_name, mutated_value)
             return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
@@ -199,15 +206,15 @@ class Genotype:
             values[index],
             random_source,
             mutation_kind,
-            mutation_range,
+            min_mutation_std,
         )
         mutated_value = values[index]
 
         if keep_ordered_pair:
             values = sorted(values)
             if values[0] == values[1]:
-                values[0] -= self.CTRLRANGE_MUTATION_RANGE
-                values[1] += self.CTRLRANGE_MUTATION_RANGE
+                values[0] -= min_mutation_std
+                values[1] += min_mutation_std
 
         final_values = type(original_values)(values)
         setattr(owner, field_name, final_values)
@@ -259,29 +266,33 @@ class Genotype:
     def _mutation_spec(
         self,
         field_name: str,
-    ) -> Tuple[str, Optional[float], bool]:
+    ) -> Tuple[str, float, bool]:
         field_specs = {
-            "size": ("positive", None, False),
-            "joint_axis": ("relative", self.AXIS_MUTATION_RANGE, False),
-            "recursive_limit": ("positive_integer", None, False),
-            "pos": ("relative", self.POS_MUTATION_RANGE, False),
-            "axis": ("relative", self.AXIS_MUTATION_RANGE, False),
-            "scale": ("positive", None, False),
-            "terminal_only": ("boolean", None, False),
-            "motor_enabled": ("boolean", None, False),
-            "motor_gear": ("positive", None, False),
-            "ctrlrange": ("relative", self.CTRLRANGE_MUTATION_RANGE, True),
-            "control_amp": ("positive", None, False),
-            "control_freq": ("positive", None, False),
-            "control_phase": ("relative", self.PHASE_MUTATION_RANGE, False),
+            "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
+            "joint_axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
+            "recursive_limit": (
+                "positive_integer",
+                self.MIN_INTEGER_MUTATION_STD,
+                False,
+            ),
+            "pos": ("relative", self.MIN_POS_MUTATION_STD, False),
+            "axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
+            "scale": ("positive", self.MIN_SCALE_MUTATION_STD, False),
+            "terminal_only": ("boolean", 0.0, False),
+            "motor_enabled": ("boolean", 0.0, False),
+            "motor_gear": ("positive", self.MIN_MOTOR_GEAR_MUTATION_STD, False),
+            "ctrlrange": ("relative", self.MIN_CTRLRANGE_MUTATION_STD, True),
+            "control_amp": ("positive", self.MIN_CONTROL_AMP_MUTATION_STD, False),
+            "control_freq": ("positive", self.MIN_CONTROL_FREQ_MUTATION_STD, False),
+            "control_phase": ("relative", self.MIN_PHASE_MUTATION_STD, False),
             "control_phase_depth_scale": (
                 "relative",
-                self.PHASE_MUTATION_RANGE,
+                self.MIN_PHASE_MUTATION_STD,
                 False,
             ),
             "control_phase_order_scale": (
                 "relative",
-                self.PHASE_MUTATION_RANGE,
+                self.MIN_PHASE_MUTATION_STD,
                 False,
             ),
         }
@@ -292,7 +303,7 @@ class Genotype:
         value: Any,
         random_source: random.Random,
         mutation_kind: str,
-        mutation_range: Optional[float],
+        min_mutation_std: float,
     ) -> Any:
         mutation_kind = mutation_kind.lower()
 
@@ -301,35 +312,56 @@ class Genotype:
 
         if mutation_kind in {"integer", "positive_integer"}:
             value_as_int = int(value)
-            delta_range = max(1, int(round(abs(value_as_int) * 0.05)))
-            delta_options = [
-                delta
-                for delta in range(-delta_range, delta_range + 1)
-                if delta != 0
-            ]
+            delta = int(round(
+                self._normal_mutation_delta(
+                    value_as_int,
+                    min_mutation_std,
+                    random_source,
+                )
+            ))
+            if delta == 0:
+                delta = random_source.choice((-1, 1))
 
-            if mutation_kind == "positive_integer":
-                delta_options = [
-                    delta
-                    for delta in delta_options
-                    if value_as_int + delta >= 1
-                ] or [1]
-
-            return value_as_int + random_source.choice(delta_options)
+            mutated_value = value_as_int + delta
+            if mutation_kind == "positive_integer" and mutated_value < 1:
+                mutated_value = value_as_int + abs(delta)
+            return mutated_value
 
         if mutation_kind == "positive":
             value_as_float = float(value)
-            delta_range = abs(value_as_float) * 0.05
-            delta = random_source.uniform(-delta_range, delta_range)
+            delta = self._normal_mutation_delta(
+                value_as_float,
+                min_mutation_std,
+                random_source,
+            )
             mutated_value = max(self.MIN_POSITIVE_VALUE, value_as_float + delta)
+            if mutated_value == value_as_float:
+                mutated_value = value_as_float + abs(delta)
             return mutated_value
 
         if mutation_kind == "relative":
-            if mutation_range is None:
-                raise ValueError("relative mutations require mutation_range")
-            return value + random_source.uniform(-mutation_range, mutation_range)
+            return value + self._normal_mutation_delta(
+                value,
+                min_mutation_std,
+                random_source,
+            )
 
         raise ValueError(f"Unknown mutation kind: {mutation_kind}")
+
+    def _normal_mutation_delta(
+        self,
+        value: float,
+        min_mutation_std: float,
+        random_source: random.Random,
+    ) -> float:
+        mutation_std = max(
+            abs(float(value)) * self.MUTATION_STD_FRACTION,
+            min_mutation_std,
+        )
+        delta = random_source.gauss(0.0, mutation_std)
+        if delta == 0.0:
+            return mutation_std
+        return delta
 
 
 @dataclass
