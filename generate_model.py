@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 import xml.etree.ElementTree as ET
+import copy
 import json
 import math
 import random
@@ -64,6 +65,7 @@ class NodeGene:
 class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
+    archived_connections: List[ConnectionGene] = field(default_factory=list)
 
     MUTATION_STD_FRACTION: ClassVar[float] = 0.05
     MIN_SIZE_MUTATION_STD: ClassVar[float] = 0.01
@@ -156,6 +158,7 @@ class Genotype:
                 mutable_parameters.append(("connection_origin", connection))
                 mutable_parameters.append(("connection_destination", connection))
                 mutable_parameters.append(("connection_type", connection))
+                mutable_parameters.append(("connection_replacement", connection))
                 for field_name in connection_mutation_specs:
                     self._add_mutable_parameter_paths(
                         mutable_parameters,
@@ -186,12 +189,33 @@ class Genotype:
         random_source: random.Random,
     ) -> str:
         parameter_type = parameter_path[0]
+        if (
+            parameter_type
+            in {
+                "connection",
+                "connection_origin",
+                "connection_destination",
+                "connection_type",
+                "connection_replacement",
+            }
+            and not self._is_active_connection(parameter_path[1])
+        ):
+            return (
+                f"{self._describe_connection_source(parameter_path[1])}: "
+                "unchanged; connection is archived"
+            )
+
         if parameter_type == "connection_origin":
             return self._mutate_connection_origin(parameter_path[1], random_source)
         if parameter_type == "connection_destination":
             return self._mutate_connection_destination(parameter_path[1], random_source)
         if parameter_type == "connection_type":
             return self._mutate_connection_type(parameter_path[1], random_source)
+        if parameter_type == "connection_replacement":
+            return self._mutate_connection_replacement(
+                parameter_path[1],
+                random_source,
+            )
 
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
@@ -254,6 +278,7 @@ class Genotype:
             "connection_origin",
             "connection_destination",
             "connection_type",
+            "connection_replacement",
         }:
             _, connection = parameter_path
             node_name, child_index = self._find_connection_owner(connection)
@@ -448,8 +473,7 @@ class Genotype:
         origin, child_index = self._find_connection_owner(connection)
         possible_connections = [
             candidate
-            for node in self.nodes.values()
-            for candidate in node.children
+            for candidate in self._connection_coding_pool()
             if candidate is not connection
         ]
         if not possible_connections:
@@ -459,7 +483,7 @@ class Genotype:
             )
 
         source_connection = random_source.choice(possible_connections)
-        source_origin, source_index = self._find_connection_owner(source_connection)
+        source_label = self._describe_connection_source(source_connection)
         destination = connection.child
         connection_fields = (
             "pos",
@@ -493,10 +517,88 @@ class Genotype:
 
         return (
             f"connection type for '{origin}' -> '{destination}' #{child_index}: "
-            f"copied from connection '{source_origin}' -> "
-            f"'{source_connection.child}' #{source_index}"
+            f"copied from {source_label}"
             f" (changed fields: {changed_field_list})"
         )
+
+    def _mutate_connection_replacement(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        old_connection = connection
+        new_connection = copy.deepcopy(old_connection)
+
+        self.archived_connections.append(old_connection)
+        self.nodes[origin].children[child_index] = new_connection
+
+        mutation_description = self._mutate_new_connection(new_connection, random_source)
+
+        return (
+            f"connection replacement for '{origin}' -> '{new_connection.child}'"
+            f" #{child_index}: created new connection and archived old connection"
+            f" #{len(self.archived_connections) - 1}; {mutation_description}"
+        )
+
+    def _mutate_new_connection(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        mutable_fields = (
+            "pos",
+            "axis",
+            "scale",
+            "terminal_only",
+            "motor_enabled",
+            "motor_gear",
+            "ctrlrange",
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        )
+        field_name = random_source.choice(mutable_fields)
+        base_path = ("connection", connection, field_name)
+        value = getattr(connection, field_name)
+
+        if isinstance(value, (list, tuple)):
+            base_path = (*base_path, random_source.randrange(len(value)))
+
+        return self._mutate_parameter_path(base_path, random_source)
+
+    def _connection_coding_pool(self) -> List[ConnectionGene]:
+        active_connections = [
+            connection
+            for node in self.nodes.values()
+            for connection in node.children
+        ]
+        return active_connections + self.archived_connections
+
+    def _describe_connection_source(self, connection: ConnectionGene) -> str:
+        try:
+            origin, child_index = self._find_connection_owner(connection)
+            return f"connection '{origin}' -> '{connection.child}' #{child_index}"
+        except ValueError:
+            archive_index = self._archived_connection_index(connection)
+            return f"archived connection '{connection.child}' #{archive_index}"
+
+    def _is_active_connection(self, connection: ConnectionGene) -> bool:
+        for node in self.nodes.values():
+            for candidate in node.children:
+                if candidate is connection:
+                    return True
+
+        return False
+
+    def _archived_connection_index(self, connection: ConnectionGene) -> int:
+        for archive_index, archived_connection in enumerate(self.archived_connections):
+            if archived_connection is connection:
+                return archive_index
+
+        raise ValueError("Connection is not archived")
 
     def _find_connection_owner(self, connection: ConnectionGene) -> Tuple[str, int]:
         for node_name, node in self.nodes.items():
