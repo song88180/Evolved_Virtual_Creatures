@@ -591,24 +591,9 @@ class Genotype:
         destination_source = random_source.choice(possible_destinations)
         origin_node = self._activate_node_gene(origin_source)
         destination_node = self._activate_node_gene(destination_source)
-        source_connection = self._random_connection_template(random_source)
-
-        if source_connection is None:
-            new_connection = ConnectionGene(
-                child=destination_node.name,
-                pos=(0.1, 0.0, 0.0),
-                axis=(0.0, 1.0, 0.0),
-            )
-            source_label = "default connection coding"
-        else:
-            new_connection = copy.deepcopy(source_connection)
-            new_connection.child = destination_node.name
-            source_label = self._describe_connection_source(source_connection)
-
-        origin_node.children.append(new_connection)
-        new_index = len(origin_node.children) - 1
-        mutation_description = self._mutate_new_connection(
-            new_connection,
+        new_index, source_label, mutation_description = self._add_new_connection(
+            origin_node,
+            destination_node,
             random_source,
         )
 
@@ -637,24 +622,9 @@ class Genotype:
         new_node.children = []
         mutated_node_field = self._mutate_new_node(new_node, random_source)
         self.nodes[new_node.name] = new_node
-        source_connection = self._random_connection_template(random_source)
-
-        if source_connection is None:
-            new_connection = ConnectionGene(
-                child=new_node.name,
-                pos=(0.1, 0.0, 0.0),
-                axis=(0.0, 1.0, 0.0),
-            )
-            source_label = "default connection coding"
-        else:
-            new_connection = copy.deepcopy(source_connection)
-            new_connection.child = new_node.name
-            source_label = self._describe_connection_source(source_connection)
-
-        origin_node.children.append(new_connection)
-        new_index = len(origin_node.children) - 1
-        mutated_connection_description = self._mutate_new_connection(
-            new_connection,
+        new_index, source_label, mutated_connection_description = self._add_new_connection(
+            origin_node,
+            new_node,
             random_source,
         )
 
@@ -664,6 +634,35 @@ class Genotype:
             f"created connection '{origin_node.name}' -> '{new_node.name}' "
             f"#{new_index} from {source_label}; {mutated_connection_description}"
         )
+
+    def _add_new_connection(
+        self,
+        origin_node: NodeGene,
+        destination_node: NodeGene,
+        random_source: random.Random,
+    ) -> Tuple[int, str, str]:
+        source_connection = self._random_connection_template(random_source)
+
+        if source_connection is None:
+            new_connection = ConnectionGene(
+                child=destination_node.name,
+                pos=(0.1, 0.0, 0.0),
+                axis=(0.0, 1.0, 0.0),
+            )
+            source_label = "default connection coding"
+        else:
+            new_connection = copy.deepcopy(source_connection)
+            new_connection.child = destination_node.name
+            source_label = self._describe_connection_source(source_connection)
+
+        origin_node.children.append(new_connection)
+        new_index = len(origin_node.children) - 1
+        mutation_description = self._mutate_new_connection(
+            new_connection,
+            random_source,
+        )
+
+        return new_index, source_label, mutation_description
 
     def _mutate_connection_removal(
         self,
