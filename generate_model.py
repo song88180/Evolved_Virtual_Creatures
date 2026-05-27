@@ -4,12 +4,13 @@ from pathlib import Path
 
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.graph_analysis import PhenotypeBuildAbort
-from evol_virtual_creature.phenotype import MAX_N_NODES, PhenotypeBuilder
+from evol_virtual_creature.phenotype import PhenotypeBuilder
 from evol_virtual_creature.viewer import launch_viewer
 
 
 DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("example_genotype.json")
 OUTPUT_XML_PATH = Path(__file__).with_name("generated_creature.xml")
+MAX_N_NODES = 500
 
 
 def main():

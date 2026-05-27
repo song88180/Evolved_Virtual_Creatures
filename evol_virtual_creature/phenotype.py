@@ -11,9 +11,6 @@ from .graph_analysis import (
 )
 
 
-MAX_N_NODES = 500
-
-
 @dataclass
 class ActuatorController:
     motor_name: str
@@ -27,7 +24,7 @@ class ActuatorController:
 # -----------------------------
 
 class PhenotypeBuilder:
-    def __init__(self, genotype: Genotype, max_node: int = MAX_N_NODES):
+    def __init__(self, genotype: Genotype, max_node: int):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
 
@@ -274,4 +271,3 @@ class PhenotypeBuilder:
 
 def vec_to_str(v):
     return " ".join(str(x) for x in v)
-
