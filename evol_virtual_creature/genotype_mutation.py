@@ -1,0 +1,906 @@
+from __future__ import annotations
+
+from typing import Any, ClassVar, List, Optional, Tuple
+import copy
+import random
+
+from .genes import ConnectionGene, NodeGene
+
+
+class GenotypeMutationMixin:
+    MUTATION_STD_FRACTION: ClassVar[float] = 0.05
+    MIN_SIZE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_AXIS_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_INTEGER_MUTATION_STD: ClassVar[float] = 1.0
+    MIN_POS_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_SCALE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_MOTOR_GEAR_MUTATION_STD: ClassVar[float] = 0.1
+    MIN_CTRLRANGE_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_CONTROL_AMP_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
+    MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
+
+    def mutation(
+        self,
+        num_mutations: int = 1,
+        mutation_rate: Optional[float] = None,
+        rng: Optional[random.Random] = None,
+    ) -> "Genotype":
+        """
+        Randomly mutate mutable genotype parameters in place.
+
+        If mutation_rate is provided, every mutable parameter is independently
+        mutated with that probability and num_mutations is ignored. Otherwise,
+        num_mutations distinct mutable parameters are chosen uniformly.
+        """
+        random_source = rng if rng is not None else random
+        mutable_parameters = self._collect_mutable_parameters()
+        if not mutable_parameters:
+            return self
+
+        if mutation_rate is not None:
+            if not 0.0 <= mutation_rate <= 1.0:
+                raise ValueError("mutation_rate must be between 0 and 1")
+            selected_parameters = [
+                parameter
+                for parameter in mutable_parameters
+                if random_source.random() < mutation_rate
+            ]
+        else:
+            if num_mutations < 0:
+                raise ValueError("num_mutations must be non-negative")
+            selected_parameters = random_source.sample(
+                mutable_parameters,
+                k=min(num_mutations, len(mutable_parameters)),
+            )
+
+        print(f"Applying {len(selected_parameters)} genotype mutation(s):")
+        for parameter_path in selected_parameters:
+            mutation_description = self._mutate_parameter_path(
+                parameter_path,
+                random_source,
+            )
+            print(f"  - {mutation_description}")
+
+        prune_description = self._prune_disconnected_nodes()
+        if prune_description:
+            print(f"  - {prune_description}")
+
+        return self
+
+    def _collect_mutable_parameters(self) -> List[Tuple[Any, ...]]:
+        mutable_parameters: List[Tuple[Any, ...]] = [
+            ("connection_addition",),
+            ("connection_new_node_addition",),
+        ]
+        node_mutation_specs = (
+            "size",
+            "joint_axis",
+            "recursive_limit",
+        )
+        connection_mutation_specs = (
+            "pos",
+            "axis",
+            "scale",
+            "terminal_only",
+            "motor_enabled",
+            "motor_gear",
+            "ctrlrange",
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        )
+
+        for node_name, node in self.nodes.items():
+            for field_name in node_mutation_specs:
+                self._add_mutable_parameter_paths(
+                    mutable_parameters,
+                    owner=node,
+                    base_path=("node", node_name, field_name),
+                )
+
+            for child_index, connection in enumerate(node.children):
+                mutable_parameters.append(("connection_origin", connection))
+                mutable_parameters.append(("connection_destination", connection))
+                mutable_parameters.append(("connection_type", connection))
+                mutable_parameters.append(("connection_replacement", connection))
+                mutable_parameters.append(("connection_origin_node_replacement", connection))
+                mutable_parameters.append(("connection_destination_node_replacement", connection))
+                mutable_parameters.append(("connection_removal", connection))
+                for field_name in connection_mutation_specs:
+                    self._add_mutable_parameter_paths(
+                        mutable_parameters,
+                        owner=connection,
+                        base_path=("connection", connection, field_name),
+                    )
+
+        return mutable_parameters
+
+    def _add_mutable_parameter_paths(
+        self,
+        mutable_parameters: List[Tuple[Any, ...]],
+        owner: Any,
+        base_path: Tuple[Any, ...],
+    ):
+        field_name = base_path[-1]
+        value = getattr(owner, field_name)
+        if isinstance(value, (list, tuple)):
+            for index in range(len(value)):
+                mutable_parameters.append((*base_path, index))
+            return
+
+        mutable_parameters.append(base_path)
+
+    def _mutate_parameter_path(
+        self,
+        parameter_path: Tuple[Any, ...],
+        random_source: random.Random,
+    ) -> str:
+        parameter_type = parameter_path[0]
+        if (
+            parameter_type
+            in {
+                "connection",
+                "connection_origin",
+                "connection_destination",
+                "connection_type",
+                "connection_replacement",
+                "connection_origin_node_replacement",
+                "connection_destination_node_replacement",
+                "connection_removal",
+            }
+            and not self._is_active_connection(parameter_path[1])
+        ):
+            return (
+                f"{self._describe_connection_source(parameter_path[1])}: "
+                "unchanged; connection is archived"
+            )
+
+        if parameter_type == "connection_origin":
+            return self._mutate_connection_origin(parameter_path[1], random_source)
+        if parameter_type == "connection_destination":
+            return self._mutate_connection_destination(parameter_path[1], random_source)
+        if parameter_type == "connection_type":
+            return self._mutate_connection_type(parameter_path[1], random_source)
+        if parameter_type == "connection_replacement":
+            return self._mutate_connection_replacement(
+                parameter_path[1],
+                random_source,
+            )
+        if parameter_type == "connection_origin_node_replacement":
+            return self._mutate_connection_origin_node_replacement(
+                parameter_path[1],
+                random_source,
+            )
+        if parameter_type == "connection_destination_node_replacement":
+            return self._mutate_connection_destination_node_replacement(
+                parameter_path[1],
+                random_source,
+            )
+        if parameter_type == "connection_addition":
+            return self._mutate_connection_addition(random_source)
+        if parameter_type == "connection_new_node_addition":
+            return self._mutate_connection_new_node_addition(random_source)
+        if parameter_type == "connection_removal":
+            return self._mutate_connection_removal(parameter_path[1])
+
+        owner, field_name, index = self._resolve_parameter_path(parameter_path)
+        mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
+            field_name,
+        )
+        target = self._describe_parameter_target(parameter_path)
+
+        if index is None:
+            value = getattr(owner, field_name)
+            mutated_value = self._mutate_value(
+                value,
+                random_source,
+                mutation_kind,
+                min_mutation_std,
+            )
+            setattr(owner, field_name, mutated_value)
+            return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
+
+        original_values = getattr(owner, field_name)
+        values = list(original_values)
+        old_value = values[index]
+        values[index] = self._mutate_value(
+            values[index],
+            random_source,
+            mutation_kind,
+            min_mutation_std,
+        )
+        mutated_value = values[index]
+
+        if keep_ordered_pair:
+            values = sorted(values)
+            if values[0] == values[1]:
+                values[0] -= min_mutation_std
+                values[1] += min_mutation_std
+
+        final_values = type(original_values)(values)
+        setattr(owner, field_name, final_values)
+
+        return (
+            f"{target}.{field_name}[{index}]: {old_value!r} -> {mutated_value!r}"
+            f" (final {field_name}: {final_values!r})"
+        )
+
+    def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
+        parameter_type = parameter_path[0]
+
+        if parameter_type == "node":
+            _, node_name, *_ = parameter_path
+            return f"node '{node_name}'"
+
+        if parameter_type == "connection":
+            _, connection, *_ = parameter_path
+            node_name, child_index = self._find_connection_owner(connection)
+            return (
+                f"connection '{node_name}' -> '{connection.child}'"
+                f" #{child_index}"
+            )
+
+        if parameter_type in {
+            "connection_origin",
+            "connection_destination",
+            "connection_type",
+            "connection_replacement",
+            "connection_origin_node_replacement",
+            "connection_destination_node_replacement",
+            "connection_removal",
+        }:
+            _, connection = parameter_path
+            node_name, child_index = self._find_connection_owner(connection)
+            return (
+                f"connection '{node_name}' -> '{connection.child}'"
+                f" #{child_index}"
+            )
+
+        raise ValueError(f"Unknown mutable parameter path type: {parameter_type}")
+
+    def _resolve_parameter_path(
+        self,
+        parameter_path: Tuple[Any, ...],
+    ) -> Tuple[Any, str, Optional[int]]:
+        parameter_type = parameter_path[0]
+
+        if parameter_type == "node":
+            _, node_name, field_name, *maybe_index = parameter_path
+            return self.nodes[node_name], field_name, self._path_index(maybe_index)
+
+        if parameter_type == "connection":
+            _, connection, field_name, *maybe_index = parameter_path
+            return connection, field_name, self._path_index(maybe_index)
+
+        raise ValueError(f"Unknown mutable parameter path type: {parameter_type}")
+
+    def _path_index(self, maybe_index: List[Any]) -> Optional[int]:
+        if not maybe_index:
+            return None
+        return maybe_index[0]
+
+    def _mutation_spec(
+        self,
+        field_name: str,
+    ) -> Tuple[str, float, bool]:
+        field_specs = {
+            "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
+            "joint_axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
+            "recursive_limit": (
+                "positive_integer",
+                self.MIN_INTEGER_MUTATION_STD,
+                False,
+            ),
+            "pos": ("relative", self.MIN_POS_MUTATION_STD, False),
+            "axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
+            "scale": ("positive", self.MIN_SCALE_MUTATION_STD, False),
+            "terminal_only": ("boolean", 0.0, False),
+            "motor_enabled": ("boolean", 0.0, False),
+            "motor_gear": ("positive", self.MIN_MOTOR_GEAR_MUTATION_STD, False),
+            "ctrlrange": ("relative", self.MIN_CTRLRANGE_MUTATION_STD, True),
+            "control_amp": ("positive", self.MIN_CONTROL_AMP_MUTATION_STD, False),
+            "control_freq": ("positive", self.MIN_CONTROL_FREQ_MUTATION_STD, False),
+            "control_phase": ("relative", self.MIN_PHASE_MUTATION_STD, False),
+            "control_phase_depth_scale": (
+                "relative",
+                self.MIN_PHASE_MUTATION_STD,
+                False,
+            ),
+            "control_phase_order_scale": (
+                "relative",
+                self.MIN_PHASE_MUTATION_STD,
+                False,
+            ),
+        }
+        return field_specs[field_name]
+
+    def _mutate_value(
+        self,
+        value: Any,
+        random_source: random.Random,
+        mutation_kind: str,
+        min_mutation_std: float,
+    ) -> Any:
+        mutation_kind = mutation_kind.lower()
+
+        if mutation_kind == "boolean":
+            return not value
+
+        if mutation_kind in {"integer", "positive_integer"}:
+            value_as_int = int(value)
+            delta = int(round(
+                self._normal_mutation_delta(
+                    value_as_int,
+                    min_mutation_std,
+                    random_source,
+                )
+            ))
+            if delta == 0:
+                delta = random_source.choice((-1, 1))
+
+            mutated_value = value_as_int + delta
+            if mutation_kind == "positive_integer" and mutated_value < 1:
+                mutated_value = value_as_int + abs(delta)
+            return mutated_value
+
+        if mutation_kind == "positive":
+            value_as_float = float(value)
+            delta = self._normal_mutation_delta(
+                value_as_float,
+                min_mutation_std,
+                random_source,
+            )
+            mutated_value = max(self.MIN_POSITIVE_VALUE, value_as_float + delta)
+            if mutated_value == value_as_float:
+                mutated_value = value_as_float + abs(delta)
+            return mutated_value
+
+        if mutation_kind == "relative":
+            return value + self._normal_mutation_delta(
+                value,
+                min_mutation_std,
+                random_source,
+            )
+
+        raise ValueError(f"Unknown mutation kind: {mutation_kind}")
+
+    def _normal_mutation_delta(
+        self,
+        value: float,
+        min_mutation_std: float,
+        random_source: random.Random,
+    ) -> float:
+        mutation_std = max(
+            abs(float(value)) * self.MUTATION_STD_FRACTION,
+            min_mutation_std,
+        )
+        delta = random_source.gauss(0.0, mutation_std)
+        if delta == 0.0:
+            return mutation_std
+        return delta
+
+    def _mutate_connection_origin(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        old_origin, old_index = self._find_connection_owner(connection)
+        possible_origins = [
+            node_name
+            for node_name in self.nodes
+            if node_name != old_origin
+        ]
+        if not possible_origins:
+            return (
+                f"connection '{old_origin}' -> '{connection.child}'"
+                f" #{old_index}.origin: unchanged; no alternative nodes"
+            )
+
+        new_origin = random_source.choice(possible_origins)
+        self.nodes[old_origin].children.pop(old_index)
+        self.nodes[new_origin].children.append(connection)
+        new_index = len(self.nodes[new_origin].children) - 1
+
+        return (
+            f"connection origin for '{old_origin}' -> '{connection.child}'"
+            f" #{old_index}: {old_origin!r} -> {new_origin!r}"
+            f" (now connection '{new_origin}' -> '{connection.child}' #{new_index})"
+        )
+
+    def _mutate_connection_destination(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        old_destination = connection.child
+        possible_destinations = [
+            node_name
+            for node_name, node in self.nodes.items()
+            if node_name != old_destination and node.joint_type != "free"
+        ]
+        if not possible_destinations:
+            return (
+                f"connection '{origin}' -> '{old_destination}'"
+                f" #{child_index}.destination: unchanged; no alternative nodes"
+            )
+
+        new_destination = random_source.choice(possible_destinations)
+        connection.child = new_destination
+
+        return (
+            f"connection destination for '{origin}' -> '{old_destination}'"
+            f" #{child_index}: {old_destination!r} -> {new_destination!r}"
+            f" (now connection '{origin}' -> '{new_destination}' #{child_index})"
+        )
+
+    def _mutate_connection_type(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        possible_connections = [
+            candidate
+            for candidate in self._connection_coding_pool()
+            if candidate is not connection
+        ]
+        if not possible_connections:
+            return (
+                f"connection '{origin}' -> '{connection.child}'"
+                f" #{child_index}.type: unchanged; no alternative connections"
+            )
+
+        source_connection = random_source.choice(possible_connections)
+        source_label = self._describe_connection_source(source_connection)
+        destination = connection.child
+        connection_fields = (
+            "pos",
+            "axis",
+            "scale",
+            "terminal_only",
+            "motor_enabled",
+            "motor_gear",
+            "ctrlrange",
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        )
+        old_values = {
+            field_name: getattr(connection, field_name)
+            for field_name in connection_fields
+        }
+
+        for field_name in connection_fields:
+            setattr(connection, field_name, getattr(source_connection, field_name))
+        connection.child = destination
+
+        changed_fields = [
+            field_name
+            for field_name in connection_fields
+            if getattr(connection, field_name) != old_values[field_name]
+        ]
+        changed_field_list = ", ".join(changed_fields) if changed_fields else "none"
+
+        return (
+            f"connection type for '{origin}' -> '{destination}' #{child_index}: "
+            f"copied from {source_label}"
+            f" (changed fields: {changed_field_list})"
+        )
+
+    def _mutate_connection_replacement(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        old_connection = connection
+        new_connection = copy.deepcopy(old_connection)
+
+        self.archived_connections.append(old_connection)
+        self.nodes[origin].children[child_index] = new_connection
+
+        mutation_description = self._mutate_new_connection(new_connection, random_source)
+
+        return (
+            f"connection replacement for '{origin}' -> '{new_connection.child}'"
+            f" #{child_index}: created new connection and archived old connection"
+            f" #{len(self.archived_connections) - 1}; {mutation_description}"
+        )
+
+    def _mutate_connection_addition(
+        self,
+        random_source: random.Random,
+    ) -> str:
+        possible_origins = self._node_coding_pool()
+        possible_destinations = [
+            node
+            for node in self._node_coding_pool()
+            if node.joint_type != "free"
+        ]
+        if not possible_origins or not possible_destinations:
+            return "connection addition: unchanged; no valid node pair"
+
+        origin_source = random_source.choice(possible_origins)
+        destination_source = random_source.choice(possible_destinations)
+        origin_node = self._activate_node_gene(origin_source)
+        destination_node = self._activate_node_gene(destination_source)
+        new_index, source_label, mutation_description = self._add_new_connection(
+            origin_node,
+            destination_node,
+            random_source,
+        )
+
+        return (
+            f"connection addition: created connection '{origin_node.name}' -> "
+            f"'{destination_node.name}' #{new_index} from {source_label}; "
+            f"{mutation_description}"
+        )
+
+    def _mutate_connection_new_node_addition(
+        self,
+        random_source: random.Random,
+    ) -> str:
+        possible_origins = list(self.nodes.values())
+        possible_node_templates = [
+            node
+            for node in self._node_coding_pool()
+            if node.joint_type != "free"
+        ]
+        if not possible_origins or not possible_node_templates:
+            return "connection new-node addition: unchanged; no valid node template"
+
+        origin_node = random_source.choice(possible_origins)
+        node_template = random_source.choice(possible_node_templates)
+        new_node = self._new_node_from_existing(node_template, random_source)
+        new_node.children = []
+        mutated_node_field = self._mutate_new_node(new_node, random_source)
+        self.nodes[new_node.name] = new_node
+        new_index, source_label, mutated_connection_description = self._add_new_connection(
+            origin_node,
+            new_node,
+            random_source,
+        )
+
+        return (
+            f"connection new-node addition: created node '{new_node.name}' "
+            f"from '{node_template.name}' with mutated {mutated_node_field}; "
+            f"created connection '{origin_node.name}' -> '{new_node.name}' "
+            f"#{new_index} from {source_label}; {mutated_connection_description}"
+        )
+
+    def _add_new_connection(
+        self,
+        origin_node: NodeGene,
+        destination_node: NodeGene,
+        random_source: random.Random,
+    ) -> Tuple[int, str, str]:
+        source_connection = self._random_connection_template(random_source)
+
+        if source_connection is None:
+            new_connection = ConnectionGene(
+                child=destination_node.name,
+                pos=(0.1, 0.0, 0.0),
+                axis=(0.0, 1.0, 0.0),
+            )
+            source_label = "default connection coding"
+        else:
+            new_connection = copy.deepcopy(source_connection)
+            new_connection.child = destination_node.name
+            source_label = self._describe_connection_source(source_connection)
+
+        origin_node.children.append(new_connection)
+        new_index = len(origin_node.children) - 1
+        mutation_description = self._mutate_new_connection(
+            new_connection,
+            random_source,
+        )
+
+        return new_index, source_label, mutation_description
+
+    def _mutate_connection_removal(
+        self,
+        connection: ConnectionGene,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        destination = connection.child
+
+        self.archived_connections.append(connection)
+        self.nodes[origin].children.pop(child_index)
+
+        return (
+            f"connection removal for '{origin}' -> '{destination}' #{child_index}: "
+            f"archived connection #{len(self.archived_connections) - 1}"
+        )
+
+    def _mutate_connection_origin_node_replacement(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        old_origin, old_index = self._find_connection_owner(connection)
+        old_node = self.nodes[old_origin]
+        new_node = self._new_node_from_existing(old_node, random_source)
+        mutated_field = self._mutate_new_node(new_node, random_source)
+
+        self.archived_nodes.append(copy.deepcopy(old_node))
+        self.nodes[old_origin].children.pop(old_index)
+        new_node.children = [connection]
+        self.nodes[new_node.name] = new_node
+
+        return (
+            f"connection origin node replacement for '{old_origin}' -> "
+            f"'{connection.child}' #{old_index}: {old_origin!r} -> "
+            f"{new_node.name!r}; archived node '{old_origin}'"
+            f" #{len(self.archived_nodes) - 1}; mutated new node {mutated_field}"
+        )
+
+    def _mutate_connection_destination_node_replacement(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        old_destination = connection.child
+        old_node = self.nodes[old_destination]
+        if old_node.joint_type == "free":
+            return (
+                f"connection '{origin}' -> '{old_destination}'"
+                f" #{child_index}.destination node replacement: unchanged; "
+                "free-jointed nodes cannot be connection children"
+            )
+
+        new_node = self._new_node_from_existing(old_node, random_source)
+        mutated_field = self._mutate_new_node(new_node, random_source)
+
+        self.archived_nodes.append(copy.deepcopy(old_node))
+        self.nodes[new_node.name] = new_node
+        connection.child = new_node.name
+
+        return (
+            f"connection destination node replacement for '{origin}' -> "
+            f"'{old_destination}' #{child_index}: {old_destination!r} -> "
+            f"{new_node.name!r}; archived node '{old_destination}'"
+            f" #{len(self.archived_nodes) - 1}; mutated new node {mutated_field}"
+        )
+
+    def _new_node_from_existing(
+        self,
+        node: NodeGene,
+        random_source: random.Random,
+    ) -> NodeGene:
+        new_node = copy.deepcopy(node)
+        new_node.name = self._new_node_name(node.name)
+        return new_node
+
+    def _new_node_name(self, base_name: str) -> str:
+        index = 1
+        while True:
+            candidate = f"{base_name}_mut{index}"
+            if candidate not in self.nodes:
+                return candidate
+            index += 1
+
+    def _mutate_new_node(
+        self,
+        node: NodeGene,
+        random_source: random.Random,
+    ) -> str:
+        mutable_fields = (
+            "size",
+            "joint_axis",
+            "recursive_limit",
+        )
+        field_name = random_source.choice(mutable_fields)
+        base_path = ("new_node", node, field_name)
+        value = getattr(node, field_name)
+
+        if isinstance(value, (list, tuple)):
+            base_path = (*base_path, random_source.randrange(len(value)))
+
+        owner, field_name, index = self._resolve_new_node_path(base_path)
+        mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
+            field_name,
+        )
+
+        if index is None:
+            value = getattr(owner, field_name)
+            setattr(
+                owner,
+                field_name,
+                self._mutate_value(
+                    value,
+                    random_source,
+                    mutation_kind,
+                    min_mutation_std,
+                ),
+            )
+            return field_name
+
+        original_values = getattr(owner, field_name)
+        values = list(original_values)
+        values[index] = self._mutate_value(
+            values[index],
+            random_source,
+            mutation_kind,
+            min_mutation_std,
+        )
+
+        if keep_ordered_pair:
+            values = sorted(values)
+            if values[0] == values[1]:
+                values[0] -= min_mutation_std
+                values[1] += min_mutation_std
+
+        setattr(owner, field_name, type(original_values)(values))
+        return f"{field_name}[{index}]"
+
+    def _resolve_new_node_path(
+        self,
+        parameter_path: Tuple[Any, ...],
+    ) -> Tuple[NodeGene, str, Optional[int]]:
+        _, node, field_name, *maybe_index = parameter_path
+        return node, field_name, self._path_index(maybe_index)
+
+    def _mutate_new_connection(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        mutable_fields = (
+            "pos",
+            "axis",
+            "scale",
+            "terminal_only",
+            "motor_enabled",
+            "motor_gear",
+            "ctrlrange",
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        )
+        field_name = random_source.choice(mutable_fields)
+        base_path = ("connection", connection, field_name)
+        value = getattr(connection, field_name)
+
+        if isinstance(value, (list, tuple)):
+            base_path = (*base_path, random_source.randrange(len(value)))
+
+        return self._mutate_parameter_path(base_path, random_source)
+
+    def _connection_coding_pool(self) -> List[ConnectionGene]:
+        active_connections = [
+            connection
+            for node in self.nodes.values()
+            for connection in node.children
+        ]
+        return active_connections + self.archived_connections
+
+    def _random_connection_template(
+        self,
+        random_source: random.Random,
+    ) -> Optional[ConnectionGene]:
+        connection_pool = self._connection_coding_pool()
+        if not connection_pool:
+            return None
+        return random_source.choice(connection_pool)
+
+    def _node_coding_pool(self) -> List[NodeGene]:
+        return list(self.nodes.values()) + self.archived_nodes
+
+    def _activate_node_gene(
+        self,
+        node: NodeGene,
+        activating_node_names: Optional[set[str]] = None,
+    ) -> NodeGene:
+        if activating_node_names is None:
+            activating_node_names = set()
+
+        active_node = self.nodes.get(node.name)
+        if active_node is not None:
+            return active_node
+
+        new_node = copy.deepcopy(node)
+        if new_node.name in self.nodes:
+            new_node.name = self._new_node_name(new_node.name)
+        self.nodes[new_node.name] = new_node
+        activating_node_names.add(new_node.name)
+
+        for connection in new_node.children:
+            if connection.child in self.nodes or connection.child in activating_node_names:
+                continue
+
+            archived_child_node = self._find_archived_node(connection.child)
+            if archived_child_node is not None:
+                self._activate_node_gene(archived_child_node, activating_node_names)
+
+        return new_node
+
+    def _find_archived_node(self, node_name: str) -> Optional[NodeGene]:
+        for node in reversed(self.archived_nodes):
+            if node.name == node_name:
+                return node
+
+        return None
+
+    def _prune_disconnected_nodes(self) -> Optional[str]:
+        reachable_node_names = self._reachable_node_names()
+        disconnected_node_names = [
+            node_name
+            for node_name in self.nodes
+            if node_name not in reachable_node_names
+        ]
+        if not disconnected_node_names:
+            return None
+
+        for node_name in disconnected_node_names:
+            self.archived_nodes.append(copy.deepcopy(self.nodes[node_name]))
+
+        for node_name in disconnected_node_names:
+            del self.nodes[node_name]
+
+        removed_nodes = ", ".join(repr(node_name) for node_name in disconnected_node_names)
+        return (
+            f"pruned disconnected node(s): {removed_nodes}; archived "
+            f"{len(disconnected_node_names)} node gene(s)"
+        )
+
+    def _reachable_node_names(self) -> set[str]:
+        if self.root not in self.nodes:
+            return set()
+
+        reachable_node_names = set()
+        pending_node_names = [self.root]
+        while pending_node_names:
+            node_name = pending_node_names.pop()
+            if node_name in reachable_node_names or node_name not in self.nodes:
+                continue
+
+            reachable_node_names.add(node_name)
+            for connection in self.nodes[node_name].children:
+                if connection.child in self.nodes:
+                    pending_node_names.append(connection.child)
+
+        return reachable_node_names
+
+    def _describe_connection_source(self, connection: ConnectionGene) -> str:
+        try:
+            origin, child_index = self._find_connection_owner(connection)
+            return f"connection '{origin}' -> '{connection.child}' #{child_index}"
+        except ValueError:
+            archive_index = self._archived_connection_index(connection)
+            return f"archived connection '{connection.child}' #{archive_index}"
+
+    def _is_active_connection(self, connection: ConnectionGene) -> bool:
+        for node in self.nodes.values():
+            for candidate in node.children:
+                if candidate is connection:
+                    return True
+
+        return False
+
+    def _archived_connection_index(self, connection: ConnectionGene) -> int:
+        for archive_index, archived_connection in enumerate(self.archived_connections):
+            if archived_connection is connection:
+                return archive_index
+
+        raise ValueError("Connection is not archived")
+
+    def _find_connection_owner(self, connection: ConnectionGene) -> Tuple[str, int]:
+        for node_name, node in self.nodes.items():
+            for child_index, candidate in enumerate(node.children):
+                if candidate is connection:
+                    return node_name, child_index
+
+        raise ValueError("Connection is not attached to any genotype node")
+
+
+
