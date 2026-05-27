@@ -153,11 +153,13 @@ class Genotype:
                 )
 
             for child_index, connection in enumerate(node.children):
+                mutable_parameters.append(("connection_origin", connection))
+                mutable_parameters.append(("connection_destination", connection))
                 for field_name in connection_mutation_specs:
                     self._add_mutable_parameter_paths(
                         mutable_parameters,
                         owner=connection,
-                        base_path=("connection", node_name, child_index, field_name),
+                        base_path=("connection", connection, field_name),
                     )
 
         return mutable_parameters
@@ -182,6 +184,12 @@ class Genotype:
         parameter_path: Tuple[Any, ...],
         random_source: random.Random,
     ) -> str:
+        parameter_type = parameter_path[0]
+        if parameter_type == "connection_origin":
+            return self._mutate_connection_origin(parameter_path[1], random_source)
+        if parameter_type == "connection_destination":
+            return self._mutate_connection_destination(parameter_path[1], random_source)
+
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
             field_name,
@@ -232,8 +240,16 @@ class Genotype:
             return f"node '{node_name}'"
 
         if parameter_type == "connection":
-            _, node_name, child_index, *_ = parameter_path
-            connection = self.nodes[node_name].children[child_index]
+            _, connection, *_ = parameter_path
+            node_name, child_index = self._find_connection_owner(connection)
+            return (
+                f"connection '{node_name}' -> '{connection.child}'"
+                f" #{child_index}"
+            )
+
+        if parameter_type in {"connection_origin", "connection_destination"}:
+            _, connection = parameter_path
+            node_name, child_index = self._find_connection_owner(connection)
             return (
                 f"connection '{node_name}' -> '{connection.child}'"
                 f" #{child_index}"
@@ -252,8 +268,7 @@ class Genotype:
             return self.nodes[node_name], field_name, self._path_index(maybe_index)
 
         if parameter_type == "connection":
-            _, node_name, child_index, field_name, *maybe_index = parameter_path
-            connection = self.nodes[node_name].children[child_index]
+            _, connection, field_name, *maybe_index = parameter_path
             return connection, field_name, self._path_index(maybe_index)
 
         raise ValueError(f"Unknown mutable parameter path type: {parameter_type}")
@@ -362,6 +377,69 @@ class Genotype:
         if delta == 0.0:
             return mutation_std
         return delta
+
+    def _mutate_connection_origin(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        old_origin, old_index = self._find_connection_owner(connection)
+        possible_origins = [
+            node_name
+            for node_name in self.nodes
+            if node_name != old_origin
+        ]
+        if not possible_origins:
+            return (
+                f"connection '{old_origin}' -> '{connection.child}'"
+                f" #{old_index}.origin: unchanged; no alternative nodes"
+            )
+
+        new_origin = random_source.choice(possible_origins)
+        self.nodes[old_origin].children.pop(old_index)
+        self.nodes[new_origin].children.append(connection)
+        new_index = len(self.nodes[new_origin].children) - 1
+
+        return (
+            f"connection origin for '{old_origin}' -> '{connection.child}'"
+            f" #{old_index}: {old_origin!r} -> {new_origin!r}"
+            f" (now connection '{new_origin}' -> '{connection.child}' #{new_index})"
+        )
+
+    def _mutate_connection_destination(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        old_destination = connection.child
+        possible_destinations = [
+            node_name
+            for node_name in self.nodes
+            if node_name != old_destination
+        ]
+        if not possible_destinations:
+            return (
+                f"connection '{origin}' -> '{old_destination}'"
+                f" #{child_index}.destination: unchanged; no alternative nodes"
+            )
+
+        new_destination = random_source.choice(possible_destinations)
+        connection.child = new_destination
+
+        return (
+            f"connection destination for '{origin}' -> '{old_destination}'"
+            f" #{child_index}: {old_destination!r} -> {new_destination!r}"
+            f" (now connection '{origin}' -> '{new_destination}' #{child_index})"
+        )
+
+    def _find_connection_owner(self, connection: ConnectionGene) -> Tuple[str, int]:
+        for node_name, node in self.nodes.items():
+            for child_index, candidate in enumerate(node.children):
+                if candidate is connection:
+                    return node_name, child_index
+
+        raise ValueError("Connection is not attached to any genotype node")
 
 
 @dataclass
