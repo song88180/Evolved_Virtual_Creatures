@@ -34,6 +34,8 @@ def save_x_axis_swimming_video(
         raise RuntimeError(f"Cannot record video because phenotype build failed: {error}") from error
 
     model = mujoco.MjModel.from_xml_string(mjcf)
+    model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
+    model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []
@@ -54,7 +56,13 @@ def save_x_axis_swimming_video(
                 frames.append(renderer.render())
                 next_frame_time += frame_interval
 
-    iio.imwrite(output_path, frames, fps=fps)
+    try:
+        iio.imwrite(output_path, frames, fps=fps)
+    except OSError as error:
+        raise RuntimeError(
+            "Saving MP4 video requires imageio and imageio-ffmpeg. Install them with:\n"
+            "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
+        ) from error
 
 
 def actuator_ids_for_controllers(
