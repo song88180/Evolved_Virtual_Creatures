@@ -123,10 +123,14 @@ class Genotype:
             )
             print(f"  - {mutation_description}")
 
+        prune_description = self._prune_disconnected_nodes()
+        if prune_description:
+            print(f"  - {prune_description}")
+
         return self
 
     def _collect_mutable_parameters(self) -> List[Tuple[Any, ...]]:
-        mutable_parameters: List[Tuple[Any, ...]] = []
+        mutable_parameters: List[Tuple[Any, ...]] = [("connection_addition",)]
         node_mutation_specs = (
             "size",
             "joint_axis",
@@ -162,6 +166,7 @@ class Genotype:
                 mutable_parameters.append(("connection_replacement", connection))
                 mutable_parameters.append(("connection_origin_node_replacement", connection))
                 mutable_parameters.append(("connection_destination_node_replacement", connection))
+                mutable_parameters.append(("connection_removal", connection))
                 for field_name in connection_mutation_specs:
                     self._add_mutable_parameter_paths(
                         mutable_parameters,
@@ -202,6 +207,7 @@ class Genotype:
                 "connection_replacement",
                 "connection_origin_node_replacement",
                 "connection_destination_node_replacement",
+                "connection_removal",
             }
             and not self._is_active_connection(parameter_path[1])
         ):
@@ -231,6 +237,10 @@ class Genotype:
                 parameter_path[1],
                 random_source,
             )
+        if parameter_type == "connection_addition":
+            return self._mutate_connection_addition(random_source)
+        if parameter_type == "connection_removal":
+            return self._mutate_connection_removal(parameter_path[1])
 
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
@@ -296,6 +306,7 @@ class Genotype:
             "connection_replacement",
             "connection_origin_node_replacement",
             "connection_destination_node_replacement",
+            "connection_removal",
         }:
             _, connection = parameter_path
             node_name, child_index = self._find_connection_owner(connection)
@@ -558,6 +569,65 @@ class Genotype:
             f" #{len(self.archived_connections) - 1}; {mutation_description}"
         )
 
+    def _mutate_connection_addition(
+        self,
+        random_source: random.Random,
+    ) -> str:
+        possible_origins = self._node_coding_pool()
+        possible_destinations = [
+            node
+            for node in self._node_coding_pool()
+            if node.joint_type != "free"
+        ]
+        if not possible_origins or not possible_destinations:
+            return "connection addition: unchanged; no valid node pair"
+
+        origin_source = random_source.choice(possible_origins)
+        destination_source = random_source.choice(possible_destinations)
+        origin_node = self._activate_node_gene(origin_source)
+        destination_node = self._activate_node_gene(destination_source)
+        source_connection = self._random_connection_template(random_source)
+
+        if source_connection is None:
+            new_connection = ConnectionGene(
+                child=destination_node.name,
+                pos=(0.1, 0.0, 0.0),
+                axis=(0.0, 1.0, 0.0),
+            )
+            source_label = "default connection coding"
+        else:
+            new_connection = copy.deepcopy(source_connection)
+            new_connection.child = destination_node.name
+            source_label = self._describe_connection_source(source_connection)
+
+        origin_node.children.append(new_connection)
+        new_index = len(origin_node.children) - 1
+        mutation_description = self._mutate_new_connection(
+            new_connection,
+            random_source,
+        )
+
+        return (
+            f"connection addition: created connection '{origin_node.name}' -> "
+            f"'{destination_node.name}' #{new_index} from {source_label}; "
+            f"{mutation_description}"
+        )
+
+    def _mutate_connection_removal(
+        self,
+        connection: ConnectionGene,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        destination = connection.child
+
+        self.archived_connections.append(connection)
+        self.nodes[origin].children.pop(child_index)
+
+        return (
+            f"connection removal for '{origin}' -> '{destination}' #{child_index}: "
+            f"archived connection #{len(self.archived_connections) - 1}"
+        )
+
     def _mutate_connection_origin_node_replacement(
         self,
         connection: ConnectionGene,
@@ -722,6 +792,93 @@ class Genotype:
             for connection in node.children
         ]
         return active_connections + self.archived_connections
+
+    def _random_connection_template(
+        self,
+        random_source: random.Random,
+    ) -> Optional[ConnectionGene]:
+        connection_pool = self._connection_coding_pool()
+        if not connection_pool:
+            return None
+        return random_source.choice(connection_pool)
+
+    def _node_coding_pool(self) -> List[NodeGene]:
+        return list(self.nodes.values()) + self.archived_nodes
+
+    def _activate_node_gene(
+        self,
+        node: NodeGene,
+        activating_node_names: Optional[set[str]] = None,
+    ) -> NodeGene:
+        if activating_node_names is None:
+            activating_node_names = set()
+
+        active_node = self.nodes.get(node.name)
+        if active_node is not None:
+            return active_node
+
+        new_node = copy.deepcopy(node)
+        if new_node.name in self.nodes:
+            new_node.name = self._new_node_name(new_node.name)
+        self.nodes[new_node.name] = new_node
+        activating_node_names.add(new_node.name)
+
+        for connection in new_node.children:
+            if connection.child in self.nodes or connection.child in activating_node_names:
+                continue
+
+            archived_child_node = self._find_archived_node(connection.child)
+            if archived_child_node is not None:
+                self._activate_node_gene(archived_child_node, activating_node_names)
+
+        return new_node
+
+    def _find_archived_node(self, node_name: str) -> Optional[NodeGene]:
+        for node in reversed(self.archived_nodes):
+            if node.name == node_name:
+                return node
+
+        return None
+
+    def _prune_disconnected_nodes(self) -> Optional[str]:
+        reachable_node_names = self._reachable_node_names()
+        disconnected_node_names = [
+            node_name
+            for node_name in self.nodes
+            if node_name not in reachable_node_names
+        ]
+        if not disconnected_node_names:
+            return None
+
+        for node_name in disconnected_node_names:
+            self.archived_nodes.append(copy.deepcopy(self.nodes[node_name]))
+
+        for node_name in disconnected_node_names:
+            del self.nodes[node_name]
+
+        removed_nodes = ", ".join(repr(node_name) for node_name in disconnected_node_names)
+        return (
+            f"pruned disconnected node(s): {removed_nodes}; archived "
+            f"{len(disconnected_node_names)} node gene(s)"
+        )
+
+    def _reachable_node_names(self) -> set[str]:
+        if self.root not in self.nodes:
+            return set()
+
+        reachable_node_names = set()
+        pending_node_names = [self.root]
+        while pending_node_names:
+            node_name = pending_node_names.pop()
+            if node_name in reachable_node_names or node_name not in self.nodes:
+                continue
+
+            reachable_node_names.add(node_name)
+            for connection in self.nodes[node_name].children:
+                if connection.child in self.nodes:
+                    pending_node_names.append(connection.child)
+
+        return reachable_node_names
 
     def _describe_connection_source(self, connection: ConnectionGene) -> str:
         try:
