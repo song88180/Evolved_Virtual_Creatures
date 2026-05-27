@@ -130,7 +130,10 @@ class Genotype:
         return self
 
     def _collect_mutable_parameters(self) -> List[Tuple[Any, ...]]:
-        mutable_parameters: List[Tuple[Any, ...]] = [("connection_addition",)]
+        mutable_parameters: List[Tuple[Any, ...]] = [
+            ("connection_addition",),
+            ("connection_new_node_addition",),
+        ]
         node_mutation_specs = (
             "size",
             "joint_axis",
@@ -239,6 +242,8 @@ class Genotype:
             )
         if parameter_type == "connection_addition":
             return self._mutate_connection_addition(random_source)
+        if parameter_type == "connection_new_node_addition":
+            return self._mutate_connection_new_node_addition(random_source)
         if parameter_type == "connection_removal":
             return self._mutate_connection_removal(parameter_path[1])
 
@@ -611,6 +616,53 @@ class Genotype:
             f"connection addition: created connection '{origin_node.name}' -> "
             f"'{destination_node.name}' #{new_index} from {source_label}; "
             f"{mutation_description}"
+        )
+
+    def _mutate_connection_new_node_addition(
+        self,
+        random_source: random.Random,
+    ) -> str:
+        possible_origins = list(self.nodes.values())
+        possible_node_templates = [
+            node
+            for node in self._node_coding_pool()
+            if node.joint_type != "free"
+        ]
+        if not possible_origins or not possible_node_templates:
+            return "connection new-node addition: unchanged; no valid node template"
+
+        origin_node = random_source.choice(possible_origins)
+        node_template = random_source.choice(possible_node_templates)
+        new_node = self._new_node_from_existing(node_template, random_source)
+        new_node.children = []
+        mutated_node_field = self._mutate_new_node(new_node, random_source)
+        self.nodes[new_node.name] = new_node
+        source_connection = self._random_connection_template(random_source)
+
+        if source_connection is None:
+            new_connection = ConnectionGene(
+                child=new_node.name,
+                pos=(0.1, 0.0, 0.0),
+                axis=(0.0, 1.0, 0.0),
+            )
+            source_label = "default connection coding"
+        else:
+            new_connection = copy.deepcopy(source_connection)
+            new_connection.child = new_node.name
+            source_label = self._describe_connection_source(source_connection)
+
+        origin_node.children.append(new_connection)
+        new_index = len(origin_node.children) - 1
+        mutated_connection_description = self._mutate_new_connection(
+            new_connection,
+            random_source,
+        )
+
+        return (
+            f"connection new-node addition: created node '{new_node.name}' "
+            f"from '{node_template.name}' with mutated {mutated_node_field}; "
+            f"created connection '{origin_node.name}' -> '{new_node.name}' "
+            f"#{new_index} from {source_label}; {mutated_connection_description}"
         )
 
     def _mutate_connection_removal(
