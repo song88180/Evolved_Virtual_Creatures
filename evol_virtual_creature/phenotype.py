@@ -1,0 +1,277 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+import xml.etree.ElementTree as ET
+
+from .genotype import ConnectionGene, Genotype, NodeGene
+from .graph_analysis import (
+    GenotypeGraphAnalyzer,
+    PhenotypeNodeLimitExceeded,
+)
+
+
+MAX_N_NODES = 500
+
+
+@dataclass
+class ActuatorController:
+    motor_name: str
+    amp: float
+    freq: float
+    phase: float
+
+
+# -----------------------------
+# 2. Genotype -> MJCF phenotype
+# -----------------------------
+
+class PhenotypeBuilder:
+    def __init__(self, genotype: Genotype, max_node: int = MAX_N_NODES):
+        if max_node < 1:
+            raise ValueError("max_node must be at least 1")
+
+        self.genotype = genotype
+        self.max_node = max_node
+        self.body_counter = 0
+        self.joint_counter = 0
+        self.motor_counter = 0
+        self.mujoco_xml: Optional[ET.Element] = None
+        self.actuator_xml: Optional[ET.Element] = None
+        self.actuator_controllers: List[ActuatorController] = []
+
+    def new_body_name(self, node_name: str) -> str:
+        self.body_counter += 1
+        return f"{node_name}_{self.body_counter}"
+
+    def new_joint_name(self, node_name: str) -> str:
+        self.joint_counter += 1
+        return f"{node_name}_joint_{self.joint_counter}"
+
+    def new_motor_name(self, joint_name: str) -> str:
+        self.motor_counter += 1
+        return f"{joint_name}_motor_{self.motor_counter}"
+
+    def build(self) -> str:
+        GenotypeGraphAnalyzer(self.genotype, self.max_node).validate()
+        self.actuator_controllers = []
+        self.mujoco_xml = ET.Element("mujoco", model="genotype_creature")
+        self.configure_model()
+
+        worldbody = ET.SubElement(self.mujoco_xml, "worldbody")
+        self.add_world_elements(worldbody)
+        self.actuator_xml = ET.SubElement(self.mujoco_xml, "actuator")
+
+        root_node = self.genotype.nodes[self.genotype.root]
+        root_body = self.create_body(worldbody, root_node, "0 0 0.6")
+
+        self.add_node_to_body(
+            parent_xml=root_body,
+            node=root_node,
+            incoming_conn=None,
+            current_depths={},
+        )
+
+        ET.indent(self.mujoco_xml, space="  ")
+        return ET.tostring(self.mujoco_xml, encoding="unicode")
+
+    def configure_model(self):
+        if self.mujoco_xml is None:
+            raise RuntimeError("mujoco_xml must be initialized before configuring the model")
+
+        compiler = ET.SubElement(self.mujoco_xml, "compiler")
+        compiler.set("angle", "degree")
+
+        option = ET.SubElement(self.mujoco_xml, "option")
+        option.set("gravity", "0 0 0")
+        option.set("density", "1000")
+        option.set("viscosity", "0.001")
+
+        self.add_defaults()
+
+    def add_defaults(self):
+        if self.mujoco_xml is None:
+            raise RuntimeError("mujoco_xml must be initialized before adding defaults")
+
+        default = ET.SubElement(self.mujoco_xml, "default")
+
+        geom_default = ET.SubElement(default, "geom")
+        geom_default.set("type", "box")
+        geom_default.set("density", "500")
+        geom_default.set("friction", "1.0 0.5 0.5")
+        geom_default.set("contype", "0")
+        geom_default.set("conaffinity", "0")
+
+        joint_default = ET.SubElement(default, "joint")
+        joint_default.set("limited", "true")
+        joint_default.set("range", "-45 45")
+        joint_default.set("damping", "2.0")
+
+        motor_default = ET.SubElement(default, "motor")
+        motor_default.set("ctrllimited", "true")
+
+    def add_world_elements(self, worldbody: ET.Element):
+        floor = ET.SubElement(worldbody, "geom")
+        floor.set("name", "floor")
+        floor.set("type", "plane")
+        floor.set("size", "5 5 0.1")
+        floor.set("pos", "0 0 -0.05")
+
+        light = ET.SubElement(worldbody, "light")
+        light.set("pos", "0 0 3")
+
+    def create_body(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        pos: str,
+    ) -> ET.Element:
+        if self.body_counter >= self.max_node:
+            raise PhenotypeNodeLimitExceeded(
+                "Maximum allowed number of phenotype nodes exceeded while "
+                f"building XML: max_node is {self.max_node}."
+            )
+
+        body = ET.SubElement(parent_xml, "body")
+        body.set("name", self.new_body_name(node.name))
+        body.set("pos", pos)
+        return body
+
+    def add_node_to_body(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        incoming_conn: Optional[ConnectionGene],
+        current_depths: Dict[str, int],
+    ):
+        """
+        Add one phenotype body part from one genotype node.
+        Then recursively add children according to connections.
+        """
+        node_depth = current_depths.get(node.name, 0) + 1
+
+        self.add_joint(parent_xml, node, incoming_conn, node_depth)
+        self.add_geom(parent_xml, node)
+
+        next_depths = self.next_depths(current_depths, node.name, node_depth)
+        self.add_children(parent_xml, node, next_depths)
+
+    def add_joint(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        incoming_conn: Optional[ConnectionGene],
+        node_depth: int,
+    ):
+        if node.joint_type == "free":
+            joint = ET.SubElement(parent_xml, "joint")
+            joint.set("type", "free")
+            joint.set("name", self.new_joint_name(node.name))
+        elif node.joint_type == "hinge":
+            self.add_hinge_joint(parent_xml, node, incoming_conn, node_depth)
+
+    def add_hinge_joint(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        incoming_conn: Optional[ConnectionGene],
+        node_depth: int,
+    ):
+        joint_name = self.new_joint_name(node.name)
+        joint = ET.SubElement(parent_xml, "joint")
+        joint.set("type", "hinge")
+        joint.set("name", joint_name)
+        joint_axis = incoming_conn.axis if incoming_conn else node.joint_axis
+        joint.set("axis", vec_to_str(joint_axis))
+
+        if incoming_conn is None or incoming_conn.motor_enabled:
+            self.add_motor(joint_name, incoming_conn, node_depth)
+
+    def add_motor(
+        self,
+        joint_name: str,
+        incoming_conn: Optional[ConnectionGene],
+        node_depth: int,
+    ):
+        if self.actuator_xml is None:
+            raise RuntimeError("actuator_xml must be initialized before adding motors")
+
+        motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
+        ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
+        control_amp = incoming_conn.control_amp if incoming_conn else 0.5
+        control_freq = incoming_conn.control_freq if incoming_conn else 4.0
+        control_order = len(self.actuator_controllers)
+        control_phase = (
+            incoming_conn.phase_for(node_depth, control_order)
+            if incoming_conn
+            else 0.0
+        )
+
+        motor_name = self.new_motor_name(joint_name)
+        motor = ET.SubElement(self.actuator_xml, "motor")
+        motor.set("name", motor_name)
+        motor.set("joint", joint_name)
+        motor.set("gear", str(motor_gear))
+        motor.set("ctrlrange", vec_to_str(ctrlrange))
+
+        self.actuator_controllers.append(
+            ActuatorController(
+                motor_name=motor_name,
+                amp=control_amp,
+                freq=control_freq,
+                phase=control_phase,
+            )
+        )
+
+    def add_geom(self, parent_xml: ET.Element, node: NodeGene):
+        geom = ET.SubElement(parent_xml, "geom")
+        geom.set("name", f"{parent_xml.get('name')}_geom")
+        geom.set("size", vec_to_str(node.size))
+        geom.set("rgba", "0.6 0.7 0.9 1")
+
+    def next_depths(
+        self,
+        current_depths: Dict[str, int],
+        node_name: str,
+        node_depth: int,
+    ) -> Dict[str, int]:
+        next_depths = dict(current_depths)
+        next_depths[node_name] = node_depth
+        return next_depths
+
+    def add_children(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        current_depths: Dict[str, int],
+    ):
+        for conn in node.children:
+            child_node = self.genotype.nodes[conn.child]
+            if not self.can_add_child(child_node, current_depths):
+                continue
+
+            child_body = self.create_body(
+                parent_xml,
+                child_node,
+                vec_to_str(conn.pos),
+            )
+
+            self.add_node_to_body(
+                parent_xml=child_body,
+                node=child_node,
+                incoming_conn=conn,
+                current_depths=current_depths,
+            )
+
+    def can_add_child(
+        self,
+        child_node: NodeGene,
+        current_depths: Dict[str, int],
+    ) -> bool:
+        child_depth = current_depths.get(child_node.name, 0)
+        return child_depth < child_node.recursive_limit
+
+
+def vec_to_str(v):
+    return " ".join(str(x) for x in v)
+

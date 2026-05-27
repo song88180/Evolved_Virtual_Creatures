@@ -1,8 +1,8 @@
 # Python Code Explanation
 
-This project contains a single Python script, `generate_model.py`, that turns a small graph-like genotype into a MuJoCo creature model. It loads the genotype, applies a random mutation, writes the generated MJCF XML to `generated_creature.xml`, loads that XML into MuJoCo, and opens a viewer where the creature is animated with a simple sinusoidal controller.
+This project turns a small graph-like genotype into a MuJoCo creature model. The runnable entrypoint is `generate_model.py`, which loads the genotype, applies random mutations, writes the generated MJCF XML to `generated_creature.xml`, loads that XML into MuJoCo, and opens a viewer where the creature is animated with a simple sinusoidal controller.
 
-The script header currently says to run `python genotype_to_mujoco.py`, but the file in this repository is named `generate_model.py`. The correct command is:
+The correct command is:
 
 ```bash
 python generate_model.py
@@ -17,29 +17,16 @@ The code separates a creature into two conceptual layers:
 
 This mirrors evolutionary robotics terminology. The genotype is the recipe, and the phenotype is the actual simulated body generated from that recipe.
 
-## Imports
+## Module Layout
 
-```python
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
-import xml.etree.ElementTree as ET
-import json
-import math
-import random
-import mujoco
-import mujoco.viewer
-```
+The code is split by responsibility:
 
-The script uses:
-
-- `dataclasses` to define lightweight data containers for genotype information.
-- `pathlib.Path` and `json` to load the genotype recipe from `example_genotype.json`.
-- `typing` to make the expected shapes of dictionaries, lists, and tuples clear.
-- `xml.etree.ElementTree` to build MuJoCo XML programmatically.
-- `random` to select and perturb genotype parameters during mutation.
-- `math` to compute the sinusoidal motor controls.
-- `mujoco` and `mujoco.viewer` to load, simulate, and display the generated creature.
+- `generate_model.py`: thin command-line entrypoint.
+- `evol_virtual_creature/genotype.py`: genotype dataclasses and mutation logic.
+- `evol_virtual_creature/genotype_io.py`: JSON genotype loading.
+- `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
+- `evol_virtual_creature/phenotype.py`: MJCF phenotype generation.
+- `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
 
 ## Genotype Data Structures
 
@@ -353,7 +340,7 @@ builder = PhenotypeBuilder(genotype)
 mjcf = builder.build()
 ```
 
-It loads the genotype from JSON, applies one random mutation, builds the MJCF XML from the mutated genotype, and stores the XML string in `mjcf`. Because `Genotype.mutation()` prints the mutation report itself, each run shows which genotype parameter changed before the MuJoCo organism is built.
+It loads the genotype from JSON, applies random mutations, builds the MJCF XML from the mutated genotype, and stores the XML string in `mjcf`. Because `Genotype.mutation()` prints the mutation report itself, each run shows which genotype parameters changed before the MuJoCo organism is built.
 
 Then it writes the XML to disk:
 
