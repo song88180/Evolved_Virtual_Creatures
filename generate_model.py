@@ -155,6 +155,7 @@ class Genotype:
             for child_index, connection in enumerate(node.children):
                 mutable_parameters.append(("connection_origin", connection))
                 mutable_parameters.append(("connection_destination", connection))
+                mutable_parameters.append(("connection_type", connection))
                 for field_name in connection_mutation_specs:
                     self._add_mutable_parameter_paths(
                         mutable_parameters,
@@ -189,6 +190,8 @@ class Genotype:
             return self._mutate_connection_origin(parameter_path[1], random_source)
         if parameter_type == "connection_destination":
             return self._mutate_connection_destination(parameter_path[1], random_source)
+        if parameter_type == "connection_type":
+            return self._mutate_connection_type(parameter_path[1], random_source)
 
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
@@ -247,7 +250,11 @@ class Genotype:
                 f" #{child_index}"
             )
 
-        if parameter_type in {"connection_origin", "connection_destination"}:
+        if parameter_type in {
+            "connection_origin",
+            "connection_destination",
+            "connection_type",
+        }:
             _, connection = parameter_path
             node_name, child_index = self._find_connection_owner(connection)
             return (
@@ -415,8 +422,8 @@ class Genotype:
         old_destination = connection.child
         possible_destinations = [
             node_name
-            for node_name in self.nodes
-            if node_name != old_destination
+            for node_name, node in self.nodes.items()
+            if node_name != old_destination and node.joint_type != "free"
         ]
         if not possible_destinations:
             return (
@@ -431,6 +438,64 @@ class Genotype:
             f"connection destination for '{origin}' -> '{old_destination}'"
             f" #{child_index}: {old_destination!r} -> {new_destination!r}"
             f" (now connection '{origin}' -> '{new_destination}' #{child_index})"
+        )
+
+    def _mutate_connection_type(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> str:
+        origin, child_index = self._find_connection_owner(connection)
+        possible_connections = [
+            candidate
+            for node in self.nodes.values()
+            for candidate in node.children
+            if candidate is not connection
+        ]
+        if not possible_connections:
+            return (
+                f"connection '{origin}' -> '{connection.child}'"
+                f" #{child_index}.type: unchanged; no alternative connections"
+            )
+
+        source_connection = random_source.choice(possible_connections)
+        source_origin, source_index = self._find_connection_owner(source_connection)
+        destination = connection.child
+        connection_fields = (
+            "pos",
+            "axis",
+            "scale",
+            "terminal_only",
+            "motor_enabled",
+            "motor_gear",
+            "ctrlrange",
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        )
+        old_values = {
+            field_name: getattr(connection, field_name)
+            for field_name in connection_fields
+        }
+
+        for field_name in connection_fields:
+            setattr(connection, field_name, getattr(source_connection, field_name))
+        connection.child = destination
+
+        changed_fields = [
+            field_name
+            for field_name in connection_fields
+            if getattr(connection, field_name) != old_values[field_name]
+        ]
+        changed_field_list = ", ".join(changed_fields) if changed_fields else "none"
+
+        return (
+            f"connection type for '{origin}' -> '{destination}' #{child_index}: "
+            f"copied from connection '{source_origin}' -> "
+            f"'{source_connection.child}' #{source_index}"
+            f" (changed fields: {changed_field_list})"
         )
 
     def _find_connection_owner(self, connection: ConnectionGene) -> Tuple[str, int]:
