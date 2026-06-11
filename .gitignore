@@ -3,3 +3,6 @@ __pycache__/
 generated_creature.xml
 *.mp4
 .DS_Store
+runs/
+*.swp
+MUJOCO_LOG.TXT
