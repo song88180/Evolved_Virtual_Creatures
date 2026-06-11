@@ -26,6 +26,7 @@ class GenotypeMutationMixin:
         num_mutations: int = 1,
         mutation_rate: Optional[float] = None,
         rng: Optional[random.Random] = None,
+        allow_topology_mutations: bool = True,
     ) -> "Genotype":
         """
         Randomly mutate mutable genotype parameters in place.
@@ -33,9 +34,13 @@ class GenotypeMutationMixin:
         If mutation_rate is provided, every mutable parameter is independently
         mutated with that probability and num_mutations is ignored. Otherwise,
         num_mutations distinct mutable parameters are chosen uniformly.
+        Set allow_topology_mutations to False to only mutate existing node and
+        connection properties without changing how genes are linked.
         """
         random_source = rng if rng is not None else random
-        mutable_parameters = self._collect_mutable_parameters()
+        mutable_parameters = self._collect_mutable_parameters(
+            allow_topology_mutations=allow_topology_mutations,
+        )
         if not mutable_parameters:
             return self
 
@@ -63,17 +68,23 @@ class GenotypeMutationMixin:
             )
             print(f"  - {mutation_description}")
 
-        prune_description = self._prune_disconnected_nodes()
-        if prune_description:
-            print(f"  - {prune_description}")
+        if allow_topology_mutations:
+            prune_description = self._prune_disconnected_nodes()
+            if prune_description:
+                print(f"  - {prune_description}")
 
         return self
 
-    def _collect_mutable_parameters(self) -> List[Tuple[Any, ...]]:
-        mutable_parameters: List[Tuple[Any, ...]] = [
-            ("connection_addition",),
-            ("connection_new_node_addition",),
-        ]
+    def _collect_mutable_parameters(
+        self,
+        allow_topology_mutations: bool = True,
+    ) -> List[Tuple[Any, ...]]:
+        mutable_parameters: List[Tuple[Any, ...]] = []
+        if allow_topology_mutations:
+            mutable_parameters.extend((
+                ("connection_addition",),
+                ("connection_new_node_addition",),
+            ))
         node_mutation_specs = (
             "size",
             "joint_axis",
@@ -103,13 +114,14 @@ class GenotypeMutationMixin:
                 )
 
             for child_index, connection in enumerate(node.children):
-                mutable_parameters.append(("connection_origin", connection))
-                mutable_parameters.append(("connection_destination", connection))
-                mutable_parameters.append(("connection_type", connection))
-                mutable_parameters.append(("connection_replacement", connection))
-                mutable_parameters.append(("connection_origin_node_replacement", connection))
-                mutable_parameters.append(("connection_destination_node_replacement", connection))
-                mutable_parameters.append(("connection_removal", connection))
+                if allow_topology_mutations:
+                    mutable_parameters.append(("connection_origin", connection))
+                    mutable_parameters.append(("connection_destination", connection))
+                    mutable_parameters.append(("connection_type", connection))
+                    mutable_parameters.append(("connection_replacement", connection))
+                    mutable_parameters.append(("connection_origin_node_replacement", connection))
+                    mutable_parameters.append(("connection_destination_node_replacement", connection))
+                    mutable_parameters.append(("connection_removal", connection))
                 for field_name in connection_mutation_specs:
                     self._add_mutable_parameter_paths(
                         mutable_parameters,
@@ -901,6 +913,4 @@ class GenotypeMutationMixin:
                     return node_name, child_index
 
         raise ValueError("Connection is not attached to any genotype node")
-
-
 
