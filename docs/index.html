@@ -19,7 +19,7 @@
       <nav class="top-nav" aria-label="Main navigation">
         <a href="#getting-started">Getting Started</a>
         <a href="#concepts">Concepts</a>
-        <a href="#api-reference">API Reference</a>
+        <a href="api.html">API Reference</a>
         <a href="#cli-reference">CLI</a>
       </nav>
     </header>
@@ -32,7 +32,7 @@
           <a href="#getting-started">Getting Started</a>
           <a href="#genotype-json">Genotype JSON</a>
           <a href="#concepts">Core Concepts</a>
-          <a href="#api-reference">API Reference</a>
+          <a href="api.html">API Reference</a>
           <a href="#cli-reference">CLI Reference</a>
         </nav>
       </aside>
@@ -48,7 +48,7 @@
               running mutation-based evolution.
             </p>
             <div class="hero-actions" aria-label="Primary actions">
-              <a class="button primary" href="#api-reference">Browse API</a>
+              <a class="button primary" href="api.html">Browse API</a>
               <a class="button secondary" href="#getting-started">Start Quickly</a>
             </div>
           </div>
@@ -173,131 +173,24 @@
         <section id="api-reference" class="doc-section">
           <h2>API Reference</h2>
           <p>
-            The project keeps its public surface small. The sections below list
-            the modules and objects most useful for scripts and notebooks.
+            The full API reference now lives on a dedicated page with detailed
+            signatures, parameter descriptions, return values, examples, and
+            notes for the public project utilities.
           </p>
 
-          <div class="reference-list">
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.genes</code></h3>
-              <dl>
-                <dt><code>ConnectionGene</code></dt>
-                <dd>
-                  Defines child node attachment, hinge axis, actuator settings,
-                  and open-loop sine controller parameters.
-                </dd>
-                <dt><code>ConnectionGene.phase_for(depth, order)</code></dt>
-                <dd>
-                  Computes controller phase from base phase, recursive depth,
-                  and actuator order.
-                </dd>
-                <dt><code>NodeGene</code></dt>
-                <dd>
-                  Defines a reusable body-part type with geometry size, joint
-                  type, joint axis, recursion limit, and child connections.
-                </dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.genotype</code></h3>
-              <dl>
-                <dt><code>Genotype</code></dt>
-                <dd>
-                  Stores the root node, active node map, archived connections,
-                  and archived nodes.
-                </dd>
-                <dt><code>Genotype.mutation(...)</code></dt>
-                <dd>
-                  Mutates parameters in place. Supports fixed mutation counts,
-                  mutation rates, seeded random sources, and optional topology
-                  mutation disabling.
-                </dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.genotype_io</code></h3>
-              <dl>
-                <dt><code>build_genotype(root, spec)</code></dt>
-                <dd>Builds a concrete <code>Genotype</code> from a mapping recipe.</dd>
-                <dt><code>load_genotype_from_json(path)</code></dt>
-                <dd>Loads active and archived genes from a JSON genotype file.</dd>
-                <dt><code>save_genotype_to_json(genotype, path)</code></dt>
-                <dd>Writes a genotype recipe to JSON, creating parent directories.</dd>
-                <dt><code>genotype_to_dict(genotype)</code></dt>
-                <dd>Converts a genotype to the JSON-compatible project schema.</dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.graph_analysis</code></h3>
-              <dl>
-                <dt><code>GenotypeGraphAnalyzer(genotype, max_node)</code></dt>
-                <dd>
-                  Pre-validates recursive graph expansion before MJCF generation.
-                </dd>
-                <dt><code>validate()</code></dt>
-                <dd>
-                  Returns the expanded phenotype node count or raises a build
-                  abort exception for invalid or oversized graphs.
-                </dd>
-                <dt><code>PhenotypeBuildAbort</code></dt>
-                <dd>Base exception for graph or phenotype build failures.</dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.phenotype</code></h3>
-              <dl>
-                <dt><code>PhenotypeBuilder(genotype, max_node)</code></dt>
-                <dd>
-                  Converts a genotype into MJCF XML and exposes generated
-                  actuator controller metadata.
-                </dd>
-                <dt><code>PhenotypeBuilder.build()</code></dt>
-                <dd>Returns a formatted MJCF XML string.</dd>
-                <dt><code>ActuatorController</code></dt>
-                <dd>
-                  Stores motor name, amplitude, frequency, and phase for the
-                  generated open-loop controller.
-                </dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.evaluation</code></h3>
-              <dl>
-                <dt><code>SwimmingEvaluationConfig</code></dt>
-                <dd>
-                  Simulation duration, node cap, target direction, fitness
-                  weights, and failure penalties.
-                </dd>
-                <dt><code>evaluate_x_axis_swimming(genotype, config=None)</code></dt>
-                <dd>
-                  Simulates a genotype and returns a structured swimming fitness
-                  result.
-                </dd>
-                <dt><code>SwimmingEvaluationResult</code></dt>
-                <dd>
-                  Contains fitness, displacement, drift, energy, angular speed,
-                  simulation time, body count, actuator count, and failure state.
-                </dd>
-              </dl>
-            </section>
-
-            <section class="reference-item">
-              <h3><code>evol_virtual_creature.video</code></h3>
-              <dl>
-                <dt><code>save_x_axis_swimming_video(...)</code></dt>
-                <dd>
-                  Renders an evaluated swimming episode to MP4 using MuJoCo's
-                  renderer and <code>imageio</code>.
-                </dd>
-                <dt><code>apply_open_loop_controller(...)</code></dt>
-                <dd>Applies sine-wave motor control for generated actuators.</dd>
-              </dl>
-            </section>
+          <div class="reference-list compact-reference">
+            <a class="reference-item reference-link" href="api.html#genes">
+              <h3><code>genes</code></h3>
+              <p>Connection and node dataclasses used to encode creature bodies.</p>
+            </a>
+            <a class="reference-item reference-link" href="api.html#phenotypebuilder">
+              <h3><code>PhenotypeBuilder</code></h3>
+              <p>Genotype graph validation, MJCF generation, and actuator metadata.</p>
+            </a>
+            <a class="reference-item reference-link" href="api.html#evaluate-x-axis-swimming">
+              <h3><code>evaluate_x_axis_swimming</code></h3>
+              <p>Swimming task fitness, result metrics, and failure behavior.</p>
+            </a>
           </div>
         </section>
 

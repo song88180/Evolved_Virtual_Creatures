@@ -49,6 +49,7 @@ code {
   padding: 0.08rem 0.28rem;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
+  overflow-wrap: anywhere;
 }
 
 pre {
@@ -114,6 +115,12 @@ pre code {
   flex-wrap: wrap;
   gap: 0.9rem;
   font-size: 0.95rem;
+}
+
+.top-nav .active {
+  border-bottom: 3px solid var(--accent);
+  color: var(--brand-dark);
+  font-weight: 800;
 }
 
 .page-shell {
@@ -357,6 +364,25 @@ figcaption {
   grid-template-columns: 1fr;
 }
 
+.compact-reference {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.reference-link {
+  color: inherit;
+}
+
+.reference-link:hover {
+  border-color: var(--brand);
+  color: inherit;
+  text-decoration: none;
+}
+
+.reference-link p {
+  margin: 0;
+  color: var(--muted);
+}
+
 dl {
   margin: 0;
 }
@@ -419,13 +445,140 @@ tr:last-child td {
   margin-top: 0.45rem;
 }
 
+.api-shell {
+  display: grid;
+  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr) minmax(12rem, 15rem);
+  gap: clamp(1rem, 3vw, 2rem);
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 2rem) 4rem;
+}
+
+.api-sidebar,
+.on-page {
+  position: sticky;
+  top: 5rem;
+  height: calc(100vh - 6rem);
+  overflow: auto;
+}
+
+.api-content {
+  min-width: 0;
+}
+
+.api-header {
+  border-bottom: 1px solid var(--line);
+  padding: clamp(2rem, 5vw, 4rem) 0 2rem;
+}
+
+.api-header h1 {
+  max-width: none;
+  font-size: clamp(2.7rem, 5vw, 4.8rem);
+}
+
+.api-module {
+  min-width: 0;
+  scroll-margin-top: 6rem;
+  border-bottom: 1px solid var(--line);
+  padding: 2.4rem 0;
+}
+
+.api-module > p {
+  max-width: 78ch;
+  color: var(--muted);
+}
+
+.api-entry {
+  min-width: 0;
+  overflow: hidden;
+  scroll-margin-top: 6rem;
+  margin-top: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+  box-shadow: var(--shadow);
+}
+
+.api-entry + .api-entry {
+  margin-top: 1rem;
+}
+
+.api-entry h3 {
+  font-size: 1.35rem;
+}
+
+.api-entry h4 {
+  margin: 1.25rem 0 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  color: var(--brand-dark);
+  font-size: 1rem;
+}
+
+.api-entry p {
+  max-width: 82ch;
+  color: var(--muted);
+}
+
+.api-entry pre {
+  margin-top: 0.8rem;
+}
+
+.param-list dt {
+  margin-top: 0.9rem;
+}
+
+.param-list dt span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.param-list dd {
+  max-width: 82ch;
+  color: var(--muted);
+}
+
+.on-page {
+  border-left: 1px solid var(--line);
+  padding: 1rem 0 1rem 1rem;
+}
+
+.on-page a {
+  display: block;
+  border-radius: 6px;
+  padding: 0.22rem 0.4rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.on-page a:hover {
+  background: var(--panel-soft);
+  color: var(--brand-dark);
+  text-decoration: none;
+}
+
 @media (max-width: 980px) {
   .page-shell {
     grid-template-columns: 1fr;
   }
 
+  .api-shell {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     position: static;
+  }
+
+  .api-sidebar,
+  .on-page {
+    position: static;
+    height: auto;
+  }
+
+  .on-page {
+    display: none;
   }
 
   .sidebar nav {
@@ -451,7 +604,8 @@ tr:last-child td {
   .sidebar nav,
   .code-grid,
   .concept-grid,
-  .map-branches {
+  .map-branches,
+  .compact-reference {
     grid-template-columns: 1fr;
   }
 
