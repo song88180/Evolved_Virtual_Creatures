@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Evol Virtual Creature Documentation</title>
+    <meta
+      name="description"
+      content="Reference documentation for the evolutionary MuJoCo virtual creature project."
+    >
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Evol Virtual Creature home">
+        <span class="brand-mark">EVC</span>
+        <span>Evol Virtual Creature</span>
+      </a>
+      <nav class="top-nav" aria-label="Main navigation">
+        <a href="#getting-started">Getting Started</a>
+        <a href="#concepts">Concepts</a>
+        <a href="#api-reference">API Reference</a>
+        <a href="#cli-reference">CLI</a>
+      </nav>
+    </header>
+
+    <main id="top" class="page-shell">
+      <aside class="sidebar" aria-label="Documentation sections">
+        <nav>
+          <p class="sidebar-title">Contents</p>
+          <a href="#overview">Overview</a>
+          <a href="#getting-started">Getting Started</a>
+          <a href="#genotype-json">Genotype JSON</a>
+          <a href="#concepts">Core Concepts</a>
+          <a href="#api-reference">API Reference</a>
+          <a href="#cli-reference">CLI Reference</a>
+          <a href="#publishing">GitHub Pages</a>
+        </nav>
+      </aside>
+
+      <article class="content">
+        <section class="hero" id="overview">
+          <div class="hero-copy">
+            <p class="eyebrow">MuJoCo evolutionary robotics</p>
+            <h1>Evol Virtual Creature Documentation</h1>
+            <p class="lede">
+              A compact reference for building genotype recipes, expanding them
+              into MuJoCo MJCF creatures, evaluating swimming fitness, and
+              running mutation-based evolution.
+            </p>
+            <div class="hero-actions" aria-label="Primary actions">
+              <a class="button primary" href="#api-reference">Browse API</a>
+              <a class="button secondary" href="#getting-started">Start Quickly</a>
+            </div>
+          </div>
+
+          <div class="system-map" aria-label="Project flow diagram">
+            <div class="map-node root">JSON genotype</div>
+            <div class="map-link"></div>
+            <div class="map-node">Mutation</div>
+            <div class="map-link"></div>
+            <div class="map-node">PhenotypeBuilder</div>
+            <div class="map-link"></div>
+            <div class="map-node accent">MJCF creature</div>
+            <div class="map-branches">
+              <span>Viewer</span>
+              <span>Swimming evaluation</span>
+              <span>Evolution runs</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="getting-started" class="doc-section">
+          <h2>Getting Started</h2>
+          <p>
+            Run commands from the repository root. This project expects the
+            <code>mujoco</code> conda environment for Python scripts, tests, and
+            checks.
+          </p>
+          <div class="code-grid">
+            <figure>
+              <figcaption>Generate and view a creature</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output python generate_model.py</code></pre>
+            </figure>
+            <figure>
+              <figcaption>Evaluate swimming fitness</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output python evaluate_swimming.py --video</code></pre>
+            </figure>
+            <figure>
+              <figcaption>Run evolution</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output python evolve_swimming.py \
+  --population-size 100 \
+  --generations 100 \
+  --seed 7</code></pre>
+            </figure>
+            <figure>
+              <figcaption>Run tests</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output python -m pytest</code></pre>
+            </figure>
+          </div>
+        </section>
+
+        <section id="genotype-json" class="doc-section">
+          <h2>Genotype JSON</h2>
+          <p>
+            Genotypes are compact graph recipes. A root node names the starting
+            body part, and each node can declare reusable child connections.
+            Recursive connections are bounded by each node's
+            <code>recursive_limit</code>.
+          </p>
+          <pre><code>{
+  "root": "body",
+  "nodes": {
+    "body": {
+      "size": [0.15, 0.08, 0.06],
+      "joint_type": "free",
+      "children": [
+        {"child": "segment", "pos": [0.18, 0, 0], "axis": [0, 1, 0]}
+      ]
+    },
+    "segment": {
+      "size": [0.12, 0.05, 0.04],
+      "recursive_limit": 10,
+      "children": [
+        {"child": "segment", "pos": [0.22, 0, 0], "axis": [0, 1, 0]},
+        {"child": "limb", "pos": [0, 0.14, 0], "axis": [1, 0, 0]}
+      ]
+    },
+    "limb": {
+      "size": [0.04, 0.12, 0.03],
+      "recursive_limit": 1
+    }
+  }
+}</code></pre>
+        </section>
+
+        <section id="concepts" class="doc-section">
+          <h2>Core Concepts</h2>
+          <div class="concept-grid">
+            <section>
+              <h3>Genotype</h3>
+              <p>
+                The recipe layer. It stores reusable node genes, connection
+                genes, controller parameters, and archived genetic material used
+                by topology mutations.
+              </p>
+            </section>
+            <section>
+              <h3>Phenotype</h3>
+              <p>
+                The expanded MuJoCo XML model. <code>PhenotypeBuilder</code>
+                validates the graph, creates bodies and hinge joints, and
+                records actuator controller metadata.
+              </p>
+            </section>
+            <section>
+              <h3>Evaluation</h3>
+              <p>
+                The x-axis swimming task rewards forward speed while penalizing
+                control energy, drift, tumbling, and excessive body complexity.
+              </p>
+            </section>
+            <section>
+              <h3>Evolution</h3>
+              <p>
+                The evolutionary loop evaluates a population, keeps elites,
+                selects parents with tournaments, mutates children, and writes
+                reproducible run artifacts.
+              </p>
+            </section>
+          </div>
+        </section>
+
+        <section id="api-reference" class="doc-section">
+          <h2>API Reference</h2>
+          <p>
+            The project keeps its public surface small. The sections below list
+            the modules and objects most useful for scripts and notebooks.
+          </p>
+
+          <div class="reference-list">
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.genes</code></h3>
+              <dl>
+                <dt><code>ConnectionGene</code></dt>
+                <dd>
+                  Defines child node attachment, hinge axis, actuator settings,
+                  and open-loop sine controller parameters.
+                </dd>
+                <dt><code>ConnectionGene.phase_for(depth, order)</code></dt>
+                <dd>
+                  Computes controller phase from base phase, recursive depth,
+                  and actuator order.
+                </dd>
+                <dt><code>NodeGene</code></dt>
+                <dd>
+                  Defines a reusable body-part type with geometry size, joint
+                  type, joint axis, recursion limit, and child connections.
+                </dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.genotype</code></h3>
+              <dl>
+                <dt><code>Genotype</code></dt>
+                <dd>
+                  Stores the root node, active node map, archived connections,
+                  and archived nodes.
+                </dd>
+                <dt><code>Genotype.mutation(...)</code></dt>
+                <dd>
+                  Mutates parameters in place. Supports fixed mutation counts,
+                  mutation rates, seeded random sources, and optional topology
+                  mutation disabling.
+                </dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.genotype_io</code></h3>
+              <dl>
+                <dt><code>build_genotype(root, spec)</code></dt>
+                <dd>Builds a concrete <code>Genotype</code> from a mapping recipe.</dd>
+                <dt><code>load_genotype_from_json(path)</code></dt>
+                <dd>Loads active and archived genes from a JSON genotype file.</dd>
+                <dt><code>save_genotype_to_json(genotype, path)</code></dt>
+                <dd>Writes a genotype recipe to JSON, creating parent directories.</dd>
+                <dt><code>genotype_to_dict(genotype)</code></dt>
+                <dd>Converts a genotype to the JSON-compatible project schema.</dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.graph_analysis</code></h3>
+              <dl>
+                <dt><code>GenotypeGraphAnalyzer(genotype, max_node)</code></dt>
+                <dd>
+                  Pre-validates recursive graph expansion before MJCF generation.
+                </dd>
+                <dt><code>validate()</code></dt>
+                <dd>
+                  Returns the expanded phenotype node count or raises a build
+                  abort exception for invalid or oversized graphs.
+                </dd>
+                <dt><code>PhenotypeBuildAbort</code></dt>
+                <dd>Base exception for graph or phenotype build failures.</dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.phenotype</code></h3>
+              <dl>
+                <dt><code>PhenotypeBuilder(genotype, max_node)</code></dt>
+                <dd>
+                  Converts a genotype into MJCF XML and exposes generated
+                  actuator controller metadata.
+                </dd>
+                <dt><code>PhenotypeBuilder.build()</code></dt>
+                <dd>Returns a formatted MJCF XML string.</dd>
+                <dt><code>ActuatorController</code></dt>
+                <dd>
+                  Stores motor name, amplitude, frequency, and phase for the
+                  generated open-loop controller.
+                </dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.evaluation</code></h3>
+              <dl>
+                <dt><code>SwimmingEvaluationConfig</code></dt>
+                <dd>
+                  Simulation duration, node cap, target direction, fitness
+                  weights, and failure penalties.
+                </dd>
+                <dt><code>evaluate_x_axis_swimming(genotype, config=None)</code></dt>
+                <dd>
+                  Simulates a genotype and returns a structured swimming fitness
+                  result.
+                </dd>
+                <dt><code>SwimmingEvaluationResult</code></dt>
+                <dd>
+                  Contains fitness, displacement, drift, energy, angular speed,
+                  simulation time, body count, actuator count, and failure state.
+                </dd>
+              </dl>
+            </section>
+
+            <section class="reference-item">
+              <h3><code>evol_virtual_creature.video</code></h3>
+              <dl>
+                <dt><code>save_x_axis_swimming_video(...)</code></dt>
+                <dd>
+                  Renders an evaluated swimming episode to MP4 using MuJoCo's
+                  renderer and <code>imageio</code>.
+                </dd>
+                <dt><code>apply_open_loop_controller(...)</code></dt>
+                <dd>Applies sine-wave motor control for generated actuators.</dd>
+              </dl>
+            </section>
+          </div>
+        </section>
+
+        <section id="cli-reference" class="doc-section">
+          <h2>CLI Reference</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Script</th>
+                  <th>Purpose</th>
+                  <th>Useful options</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>generate_model.py</code></td>
+                  <td>Load, mutate, build, save, and view one MuJoCo creature.</td>
+                  <td>Uses <code>example_genotype.json</code> and writes <code>generated_creature.xml</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>evaluate_swimming.py</code></td>
+                  <td>Score one genotype on the x-axis swimming task.</td>
+                  <td><code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--video</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>evolve_swimming.py</code></td>
+                  <td>Run population-based mutation search for better swimmers.</td>
+                  <td><code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--seed</code>, <code>--max-node</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="publishing" class="doc-section">
+          <h2>Publishing With GitHub Pages</h2>
+          <ol class="steps">
+            <li>Push this repository to GitHub.</li>
+            <li>Open the repository settings and choose <strong>Pages</strong>.</li>
+            <li>Set the source to <strong>Deploy from a branch</strong>.</li>
+            <li>Select the branch to publish and choose the <strong>/docs</strong> folder.</li>
+            <li>Save. GitHub will publish the site at the repository Pages URL.</li>
+          </ol>
+        </section>
+      </article>
+    </main>
+  </body>
+</html>
