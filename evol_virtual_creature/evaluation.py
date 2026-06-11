@@ -5,6 +5,7 @@ import math
 from typing import Sequence
 
 import mujoco
+import numpy as np
 
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
@@ -24,6 +25,7 @@ class SwimmingEvaluationConfig:
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
     build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
 
 
 @dataclass(frozen=True)
@@ -71,8 +73,12 @@ def evaluate_x_axis_swimming(
     control_energy = 0.0
     angular_speed_sum = 0.0
     sample_count = 0
+    max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
 
-    while data.time < config.episode_seconds:
+    for _ in range(max_steps):
+        if data.time >= config.episode_seconds:
+            break
+
         _apply_open_loop_controller(
             data=data,
             actuator_ids=actuator_ids,
@@ -81,6 +87,12 @@ def evaluate_x_axis_swimming(
 
         ctrl = data.ctrl.copy()
         mujoco.mj_step(model, data)
+
+        if not _simulation_state_is_stable(data, config.max_abs_state_value):
+            return _failed_evaluation(
+                config,
+                "Simulation became numerically unstable.",
+            )
 
         dt = data.time - previous_time
         previous_time = data.time
@@ -113,6 +125,8 @@ def evaluate_x_axis_swimming(
         - config.vertical_drift_weight * vertical_drift
         - config.angular_speed_weight * mean_angular_speed
     )
+    if not math.isfinite(fitness):
+        return _failed_evaluation(config, "Simulation produced a non-finite fitness.")
 
     return SwimmingEvaluationResult(
         fitness=fitness,
@@ -171,6 +185,24 @@ def _actuator_ids(
         )
         for controller in actuator_controllers
     ]
+
+
+def _simulation_state_is_stable(
+    data: mujoco.MjData,
+    max_abs_state_value: float,
+) -> bool:
+    return (
+        _array_is_stable(data.qpos, max_abs_state_value)
+        and _array_is_stable(data.qvel, max_abs_state_value)
+        and _array_is_stable(data.qacc, max_abs_state_value)
+    )
+
+
+def _array_is_stable(values, max_abs_value: float) -> bool:
+    return bool(
+        np.all(np.isfinite(values))
+        and np.all(np.abs(values) <= max_abs_value)
+    )
 
 
 def _apply_open_loop_controller(
