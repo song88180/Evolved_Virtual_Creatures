@@ -1,4 +1,4 @@
-"""Evaluate the example genotype on the x-axis swimming task."""
+"""Evaluate a genotype on the x-axis swimming task."""
 
 import argparse
 from pathlib import Path
@@ -17,7 +17,7 @@ DEFAULT_VIDEO_PATH = Path(__file__).with_name("example_swimming.mp4")
 
 def main():
     args = parse_args()
-    genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
+    genotype = load_genotype_from_json(args.genotype)
     config = SwimmingEvaluationConfig(episode_seconds=args.duration)
     result = evaluate_x_axis_swimming(
         genotype,
@@ -30,6 +30,7 @@ def main():
         return
 
     print("X-axis swimming evaluation")
+    print(f"Genotype: {args.genotype}")
     print(f"Fitness: {result.fitness:.6f}")
     print(f"Forward distance: {result.forward_distance:.6f}")
     print(f"Average forward speed: {result.average_forward_speed:.6f}")
@@ -57,9 +58,15 @@ def main():
         print(f"Saved video: {video_path}")
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate and optionally record the example swimming creature.",
+        description="Evaluate and optionally record a swimming creature genotype.",
+    )
+    parser.add_argument(
+        "--genotype",
+        type=Path,
+        default=DEFAULT_GENOTYPE_PATH,
+        help="Genotype JSON path. Defaults to example_genotype.json.",
     )
     parser.add_argument(
         "--duration",
