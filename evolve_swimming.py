@@ -54,6 +54,7 @@ def main() -> None:
     config = SwimmingEvaluationConfig(
         episode_seconds=args.duration,
         max_node=args.max_node,
+        body_count_weight=args.body_count_weight,
     )
 
     population = _initial_population(
@@ -89,6 +90,7 @@ def main() -> None:
                 f"best={best.fitness:.6f} "
                 f"best_ever={best_so_far.fitness:.6f} "
                 f"mean={summary['mean_fitness']:.6f} "
+                f"bodies={summary['best_body_count']} "
                 f"failures={summary['build_failures']}"
             )
 
@@ -181,6 +183,12 @@ def parse_args() -> argparse.Namespace:
         help="Maximum phenotype nodes allowed during build/evaluation.",
     )
     parser.add_argument(
+        "--body-count-weight",
+        type=float,
+        default=SwimmingEvaluationConfig.body_count_weight,
+        help="Fitness penalty per generated body.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=None,
@@ -205,6 +213,8 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-mutations must be >= --min-mutations >= 0")
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
+    if args.body_count_weight < 0.0:
+        raise ValueError("--body-count-weight must be non-negative")
 
 
 def _default_run_dir() -> Path:
@@ -259,6 +269,7 @@ def _evaluate_creature(
             "mean_angular_speed": 0.0,
             "simulated_seconds": 0.0,
             "actuator_count": 0,
+            "body_count": 0,
             "build_failed": True,
             "failure_reason": str(error),
         }
@@ -343,6 +354,8 @@ def _generation_summary(
         "mean_fitness": mean(fitnesses),
         "worst_fitness": fitnesses[-1],
         "build_failures": build_failures,
+        "best_body_count": evaluated[0].metrics.get("body_count", 0),
+        "best_ever_body_count": best_so_far.metrics.get("body_count", 0),
         "best_metrics": evaluated[0].metrics,
         "best_ever_metrics": best_so_far.metrics,
     }

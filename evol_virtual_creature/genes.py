@@ -12,7 +12,7 @@ class ConnectionGene:
     scale: float = 1.0
     terminal_only: bool = False
     motor_enabled: bool = True
-    motor_gear: float = 50.0
+    motor_gear: float = 300.0
     ctrlrange: Tuple[float, float] = (-1.0, 1.0)
     control_amp: float = 0.1
     control_freq: float = 10

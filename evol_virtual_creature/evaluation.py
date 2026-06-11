@@ -24,6 +24,7 @@ class SwimmingEvaluationConfig:
     sideways_drift_weight: float = 0.1
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
+    body_count_weight: float = 0.001
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
 
@@ -39,6 +40,7 @@ class SwimmingEvaluationResult:
     mean_angular_speed: float
     simulated_seconds: float
     actuator_count: int
+    body_count: int
     build_failed: bool = False
     failure_reason: str | None = None
 
@@ -53,7 +55,7 @@ def evaluate_x_axis_swimming(
     The current controller is open-loop: each generated actuator follows the
     sine-wave control parameters stored in its connection gene. The resulting
     fitness rewards average +x speed and penalizes wasted control effort,
-    sideways/vertical drift, and excessive tumbling.
+    sideways/vertical drift, excessive tumbling, and extra body complexity.
     """
     config = config or SwimmingEvaluationConfig()
 
@@ -66,6 +68,7 @@ def evaluate_x_axis_swimming(
     model = mujoco.MjModel.from_xml_string(mjcf)
     data = mujoco.MjData(model)
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
+    body_count = max(model.nbody - 1, 0)
 
     target_direction = _normalized_target_direction(config.target_direction)
     initial_position = data.qpos[:3].copy()
@@ -124,6 +127,7 @@ def evaluate_x_axis_swimming(
         - config.sideways_drift_weight * sideways_drift
         - config.vertical_drift_weight * vertical_drift
         - config.angular_speed_weight * mean_angular_speed
+        - config.body_count_weight * body_count
     )
     if not math.isfinite(fitness):
         return _failed_evaluation(config, "Simulation produced a non-finite fitness.")
@@ -138,6 +142,7 @@ def evaluate_x_axis_swimming(
         mean_angular_speed=mean_angular_speed,
         simulated_seconds=simulated_seconds,
         actuator_count=len(actuator_ids),
+        body_count=body_count,
     )
 
 
@@ -155,6 +160,7 @@ def _failed_evaluation(
         mean_angular_speed=0.0,
         simulated_seconds=0.0,
         actuator_count=0,
+        body_count=0,
         build_failed=True,
         failure_reason=failure_reason,
     )

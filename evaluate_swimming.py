@@ -18,7 +18,10 @@ DEFAULT_VIDEO_PATH = Path(__file__).with_name("example_swimming.mp4")
 def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
-    config = SwimmingEvaluationConfig(episode_seconds=args.duration)
+    config = SwimmingEvaluationConfig(
+        episode_seconds=args.duration,
+        body_count_weight=args.body_count_weight,
+    )
     result = evaluate_x_axis_swimming(
         genotype,
         config,
@@ -40,6 +43,7 @@ def main():
     print(f"Mean angular speed: {result.mean_angular_speed:.6f}")
     print(f"Simulated seconds: {result.simulated_seconds:.2f}")
     print(f"Actuators: {result.actuator_count}")
+    print(f"Bodies: {result.body_count}")
 
     if args.video:
         video_path = args.video
@@ -75,6 +79,12 @@ def parse_args() -> argparse.Namespace:
         help="Simulation duration in seconds.",
     )
     parser.add_argument(
+        "--body-count-weight",
+        type=float,
+        default=SwimmingEvaluationConfig.body_count_weight,
+        help="Fitness penalty per generated body.",
+    )
+    parser.add_argument(
         "--video",
         nargs="?",
         const=DEFAULT_VIDEO_PATH,
@@ -99,7 +109,10 @@ def parse_args() -> argparse.Namespace:
         default=540,
         help="Video height in pixels.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.body_count_weight < 0.0:
+        parser.error("--body-count-weight must be non-negative")
+    return args
 
 
 if __name__ == "__main__":

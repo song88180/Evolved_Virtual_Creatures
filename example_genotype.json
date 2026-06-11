@@ -8,9 +8,9 @@
       "children": [
         {
           "child": "segment",
-          "pos": [0.28, 0.0, 0.0],
+          "pos": [-0.25, 0.0, 0.0],
           "axis": [0, 1, 0],
-          "control_phase": 0.0
+          "control_phase": 0.3
         }
       ]
     },
@@ -18,13 +18,13 @@
       "size": [0.18, 0.08, 0.08],
       "joint_type": "hinge",
       "joint_axis": [0, 1, 0],
-      "recursive_limit": 2,
+      "recursive_limit": 7,
       "children": [
         {
           "child": "segment",
-          "pos": [0.22, 0.0, 0.0],
+          "pos": [-0.18, 0.0, 0.0],
           "axis": [0, 1, 0],
-          "control_phase_depth_scale": 1.0471666666666666
+          "control_phase_depth_scale": -0.8
         },
         {
           "child": "limb",

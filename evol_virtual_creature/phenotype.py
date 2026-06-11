@@ -83,7 +83,7 @@ class PhenotypeBuilder:
         option.set("gravity", "0 0 0")
         option.set("density", "1000")
         option.set("viscosity", "0.001")
-        option.set("timestep", "0.1")
+        option.set("timestep", "0.025")
 
         self.add_defaults()
 
