@@ -76,14 +76,20 @@ pre code {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
   padding: 0.85rem clamp(1rem, 4vw, 2rem);
   backdrop-filter: blur(16px);
+}
+
+.site-header-inner {
+  display: flex;
+  width: 100%;
+  max-width: 1280px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 auto;
 }
 
 .brand {
@@ -598,7 +604,7 @@ tr:last-child td {
 }
 
 @media (max-width: 720px) {
-  .site-header {
+  .site-header-inner {
     align-items: flex-start;
     flex-direction: column;
   }
