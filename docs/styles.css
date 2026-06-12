@@ -1,5 +1,12 @@
 :root {
   color-scheme: light;
+  --header-edge-pad: clamp(1rem, 4vw, 2rem);
+  --brand-mark-size: 2.25rem;
+  --brand-gap: 0.7rem;
+  --brand-text-left: calc(
+    var(--header-edge-pad) + var(--brand-mark-size) + var(--brand-gap)
+  );
+  --contents-sidebar-shift: 4rem;
   --bg: #f7f8fb;
   --panel: #ffffff;
   --panel-soft: #eef6f3;
@@ -82,7 +89,7 @@ pre code {
   gap: 1rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
-  padding: 0.85rem clamp(1rem, 4vw, 2rem);
+  padding: 0.85rem var(--header-edge-pad);
   backdrop-filter: blur(16px);
 }
 
@@ -100,8 +107,8 @@ pre code {
 
 .brand-mark {
   display: inline-grid;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--brand-mark-size);
+  height: var(--brand-mark-size);
   place-items: center;
   border-radius: 8px;
   background: var(--brand);
@@ -128,8 +135,9 @@ pre code {
   grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
   gap: clamp(1rem, 3vw, 2.5rem);
   max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem clamp(1rem, 4vw, 2rem) 4rem;
+  margin: 0;
+  padding: 2rem var(--header-edge-pad) 4rem
+    calc(var(--brand-text-left) + var(--contents-sidebar-shift));
 }
 
 .sidebar {
@@ -140,6 +148,10 @@ pre code {
   border-radius: 8px;
   background: var(--panel);
   padding: 1rem;
+}
+
+.page-shell > .sidebar {
+  transform: translateX(calc(-1 * var(--contents-sidebar-shift)));
 }
 
 .sidebar nav {
@@ -561,6 +573,8 @@ tr:last-child td {
 @media (max-width: 980px) {
   .page-shell {
     grid-template-columns: 1fr;
+    margin: 0 auto;
+    padding: 2rem var(--header-edge-pad) 4rem;
   }
 
   .api-shell {
@@ -569,6 +583,10 @@ tr:last-child td {
 
   .sidebar {
     position: static;
+  }
+
+  .page-shell > .sidebar {
+    transform: none;
   }
 
   .api-sidebar,
