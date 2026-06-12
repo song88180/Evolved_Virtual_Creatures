@@ -93,10 +93,6 @@
   --generations 100 \
   --seed 7</code></pre>
             </figure>
-            <figure>
-              <figcaption>Run tests</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python -m pytest</code></pre>
-            </figure>
           </div>
         </section>
 
@@ -108,7 +104,9 @@
             Recursive connections are bounded by each node's
             <code>recursive_limit</code>.
           </p>
-          <pre><code>{
+          <figure>
+            <figcaption>Example genotype JSON</figcaption>
+            <pre><code>{
   "root": "body",
   "nodes": {
     "body": {
@@ -132,6 +130,7 @@
     }
   }
 }</code></pre>
+          </figure>
         </section>
 
         <section id="concepts" class="doc-section">

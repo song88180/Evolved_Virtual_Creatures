@@ -85,7 +85,7 @@ pre code {
 .site-header-inner {
   display: flex;
   width: 100%;
-  max-width: 1280px;
+  max-width: 1500px;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -131,8 +131,8 @@ pre code {
 
 .page-shell {
   display: grid;
-  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
-  gap: clamp(1rem, 3vw, 2.5rem);
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem clamp(1rem, 4vw, 2rem) 4rem;
@@ -146,12 +146,6 @@ pre code {
   border-radius: 8px;
   background: var(--panel);
   padding: 1rem;
-}
-
-@media (min-width: 1400px) {
-  .page-shell > .sidebar {
-    transform: translateX(-25%);
-  }
 }
 
 .sidebar nav {
@@ -334,14 +328,14 @@ h3 {
 }
 
 .code-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 figure,
 .concept-grid section,
 .reference-item {
   min-width: 0;
-  margin: 0;
+  margin: 0 2em;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
