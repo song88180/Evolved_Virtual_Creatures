@@ -81,9 +81,9 @@ class PhenotypeBuilder:
 
         option = ET.SubElement(self.mujoco_xml, "option")
         option.set("gravity", "0 0 0")
-        option.set("density", "1000")
+        option.set("density", "1000") # water-like density (1000 kg/m³).
         option.set("viscosity", "0.001")
-        option.set("timestep", "0.025")
+        option.set("timestep", "0.01")
 
         self.add_defaults()
 

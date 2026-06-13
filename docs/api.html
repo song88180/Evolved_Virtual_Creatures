@@ -28,449 +28,193 @@
 
     <main id="top" class="api-shell">
       <aside class="sidebar api-sidebar" aria-label="API navigation">
-        <nav>
+        <nav id="api-module-nav">
           <p class="sidebar-title">API Reference</p>
-          <a href="#genes">genes</a>
-          <a href="#genotype">genotype</a>
-          <a href="#genotype-io">genotype_io</a>
-          <a href="#graph-analysis">graph_analysis</a>
-          <a href="#phenotype">phenotype</a>
-          <a href="#evaluation">evaluation</a>
-          <a href="#video">video</a>
-          <a href="#viewer">viewer</a>
         </nav>
       </aside>
 
       <article class="api-content">
         <header class="api-header">
-          <p class="eyebrow">API Reference</p>
-          <h1>Evol Virtual Creature API</h1>
-          <p class="lede">
-            Detailed reference for the modules that define genotype recipes,
-            mutate creature graphs, build MuJoCo MJCF models, evaluate swimming
-            fitness, and render videos.
-          </p>
+          <p class="eyebrow" id="api-eyebrow">API Reference</p>
+          <h1 id="api-title">Evol Virtual Creature API</h1>
+          <p class="lede" id="api-description"></p>
         </header>
 
-        <section id="genes" class="api-module">
-          <h2><code>evol_virtual_creature.genes</code></h2>
-          <p>
-            Dataclasses for the symbolic genotype layer. These classes describe
-            reusable body-part types and directed connections between them.
-          </p>
-
-          <section id="connectiongene" class="api-entry">
-            <h3><code>ConnectionGene</code></h3>
-            <pre><code>ConnectionGene(
-    child: str,
-    pos: tuple[float, float, float],
-    axis: tuple[float, float, float],
-    scale: float = 1.0,
-    terminal_only: bool = False,
-    motor_enabled: bool = True,
-    motor_gear: float = 100.0,
-    ctrlrange: tuple[float, float] = (-1.0, 1.0),
-    control_amp: float = 0.1,
-    control_freq: float = 10,
-    control_phase: float = 0.0,
-    control_phase_depth_scale: float = 0.0,
-    control_phase_order_scale: float = 0.0,
-)</code></pre>
-            <p>
-              Describe how an origin node attaches a child node and how the
-              generated hinge actuator should be controlled.
-            </p>
-            <h4>Parameters</h4>
-            <dl class="param-list">
-              <dt><code>child</code> : <span>str</span></dt>
-              <dd>Name of the child node in <code>Genotype.nodes</code>.</dd>
-              <dt><code>pos</code> : <span>tuple[float, float, float]</span></dt>
-              <dd>Child body position relative to the parent body.</dd>
-              <dt><code>axis</code> : <span>tuple[float, float, float]</span></dt>
-              <dd>Hinge axis used for the child joint.</dd>
-              <dt><code>motor_enabled</code> : <span>bool, default True</span></dt>
-              <dd>Whether this connection receives a generated MuJoCo motor.</dd>
-              <dt><code>motor_gear</code> : <span>float, default 100.0</span></dt>
-              <dd>Motor gear value written to the MJCF actuator.</dd>
-              <dt><code>ctrlrange</code> : <span>tuple[float, float], default (-1.0, 1.0)</span></dt>
-              <dd>Control range for the generated motor.</dd>
-              <dt><code>control_amp</code>, <code>control_freq</code>, <code>control_phase</code> : <span>float</span></dt>
-              <dd>Open-loop sine controller amplitude, frequency, and base phase.</dd>
-              <dt><code>control_phase_depth_scale</code>, <code>control_phase_order_scale</code> : <span>float</span></dt>
-              <dd>Additional phase offsets for recursive depth and actuator order.</dd>
-            </dl>
-            <h4>Methods</h4>
-            <dl class="param-list">
-              <dt><code>phase_for(depth: int, order: int) -&gt; float</code></dt>
-              <dd>
-                Return <code>control_phase + control_phase_depth_scale * (depth - 1)
-                + control_phase_order_scale * order</code>.
-              </dd>
-            </dl>
-          </section>
-
-          <section id="nodegene" class="api-entry">
-            <h3><code>NodeGene</code></h3>
-            <pre><code>NodeGene(
-    name: str,
-    size: tuple[float, float, float],
-    joint_type: str = "hinge",
-    joint_axis: tuple[float, float, float] = (0, 1, 0),
-    recursive_limit: int = 1,
-    children: list[ConnectionGene] = field(default_factory=list),
-)</code></pre>
-            <p>Describe one reusable body-part type in a genotype graph.</p>
-            <h4>Parameters</h4>
-            <dl class="param-list">
-              <dt><code>name</code> : <span>str</span></dt>
-              <dd>Symbolic node name, such as <code>"body"</code> or <code>"segment"</code>.</dd>
-              <dt><code>size</code> : <span>tuple[float, float, float]</span></dt>
-              <dd>MuJoCo box half-size used for the generated geometry.</dd>
-              <dt><code>joint_type</code> : <span>{"free", "hinge"}, default "hinge"</span></dt>
-              <dd>Root nodes usually use <code>"free"</code>; articulated child nodes use <code>"hinge"</code>.</dd>
-              <dt><code>recursive_limit</code> : <span>int, default 1</span></dt>
-              <dd>Maximum number of this node type allowed along one recursive expansion path.</dd>
-              <dt><code>children</code> : <span>list[ConnectionGene]</span></dt>
-              <dd>Directed connections expanded beneath each generated body of this type.</dd>
-            </dl>
-          </section>
-        </section>
-
-        <section id="genotype" class="api-module">
-          <h2><code>evol_virtual_creature.genotype</code></h2>
-          <section id="genotype-class" class="api-entry">
-            <h3><code>Genotype</code></h3>
-            <pre><code>Genotype(
-    root: str,
-    nodes: dict[str, NodeGene],
-    archived_connections: list[ConnectionGene] = field(default_factory=list),
-    archived_nodes: list[NodeGene] = field(default_factory=list),
-)</code></pre>
-            <p>
-              Store the active graph recipe and archived genetic material that
-              topology mutations can reuse later.
-            </p>
-            <h4>Attributes</h4>
-            <dl class="param-list">
-              <dt><code>root</code> : <span>str</span></dt>
-              <dd>Name of the node where phenotype expansion begins.</dd>
-              <dt><code>nodes</code> : <span>dict[str, NodeGene]</span></dt>
-              <dd>Active node genes keyed by node name.</dd>
-              <dt><code>archived_connections</code> : <span>list[ConnectionGene]</span></dt>
-              <dd>Inactive connection genes retained as mutation templates.</dd>
-              <dt><code>archived_nodes</code> : <span>list[NodeGene]</span></dt>
-              <dd>Inactive node genes retained as mutation templates.</dd>
-            </dl>
-          </section>
-
-          <section id="genotype-mutation" class="api-entry">
-            <h3><code>Genotype.mutation</code></h3>
-            <pre><code>Genotype.mutation(
-    num_mutations: int = 1,
-    mutation_rate: float | None = None,
-    rng: random.Random | None = None,
-    allow_topology_mutations: bool = True,
-) -&gt; Genotype</code></pre>
-            <p>
-              Mutate the genotype in place and return the same object. The
-              method can perturb numeric fields, flip booleans, alter connection
-              endpoints, replace archived genes, add new nodes, and remove
-              disconnected genes.
-            </p>
-            <h4>Parameters</h4>
-            <dl class="param-list">
-              <dt><code>num_mutations</code> : <span>int, default 1</span></dt>
-              <dd>Number of distinct mutable parameters to sample when <code>mutation_rate</code> is not set.</dd>
-              <dt><code>mutation_rate</code> : <span>float or None, default None</span></dt>
-              <dd>When provided, each mutable parameter is independently mutated with this probability.</dd>
-              <dt><code>rng</code> : <span>random.Random or None, default None</span></dt>
-              <dd>Random source for reproducible mutation sequences.</dd>
-              <dt><code>allow_topology_mutations</code> : <span>bool, default True</span></dt>
-              <dd>Set to <code>False</code> to mutate only existing parameter values and keep graph topology fixed.</dd>
-            </dl>
-            <h4>Returns</h4>
-            <p><code>Genotype</code>: the mutated object.</p>
-            <h4>Raises</h4>
-            <p>
-              <code>ValueError</code> if <code>num_mutations</code> is negative or
-              <code>mutation_rate</code> is outside <code>[0.0, 1.0]</code>.
-            </p>
-            <h4>Examples</h4>
-            <pre><code>import copy
-import random
-
-from evol_virtual_creature.genotype_io import load_genotype_from_json
-
-seed = load_genotype_from_json("example_genotype.json")
-rng = random.Random(7)
-child = copy.deepcopy(seed).mutation(num_mutations=3, rng=rng)</code></pre>
-          </section>
-        </section>
-
-        <section id="genotype-io" class="api-module">
-          <h2><code>evol_virtual_creature.genotype_io</code></h2>
-          <section id="build-genotype" class="api-entry">
-            <h3><code>build_genotype</code></h3>
-            <pre><code>build_genotype(root: str, spec: GenotypeSpec) -&gt; Genotype</code></pre>
-            <p>Build a concrete genotype from a compact mapping recipe.</p>
-            <h4>Parameters</h4>
-            <dl class="param-list">
-              <dt><code>root</code> : <span>str</span></dt>
-              <dd>Name of the root node.</dd>
-              <dt><code>spec</code> : <span>mapping</span></dt>
-              <dd>Mapping from node names to node keyword data and optional <code>children</code> connection lists.</dd>
-            </dl>
-            <h4>Returns</h4>
-            <p><code>Genotype</code>.</p>
-            <h4>Raises</h4>
-            <p><code>KeyError</code> if the root or any connection child is unknown.</p>
-          </section>
-
-          <section id="load-genotype-from-json" class="api-entry">
-            <h3><code>load_genotype_from_json</code></h3>
-            <pre><code>load_genotype_from_json(path: str | pathlib.Path) -&gt; Genotype</code></pre>
-            <p>
-              Load a genotype JSON file, including optional
-              <code>archived_connections</code> and <code>archived_nodes</code>.
-            </p>
-            <h4>Examples</h4>
-            <pre><code>from evol_virtual_creature.genotype_io import load_genotype_from_json
-
-genotype = load_genotype_from_json("example_genotype.json")</code></pre>
-          </section>
-
-          <section id="save-genotype-to-json" class="api-entry">
-            <h3><code>save_genotype_to_json</code></h3>
-            <pre><code>save_genotype_to_json(genotype: Genotype, path: str | pathlib.Path) -&gt; None</code></pre>
-            <p>
-              Serialize active and archived genotype data to JSON. Parent
-              directories are created automatically.
-            </p>
-          </section>
-
-          <section id="genotype-to-dict" class="api-entry">
-            <h3><code>genotype_to_dict</code></h3>
-            <pre><code>genotype_to_dict(genotype: Genotype) -&gt; dict[str, Any]</code></pre>
-            <p>Convert a genotype into the JSON-compatible schema used by this project.</p>
-          </section>
-        </section>
-
-        <section id="graph-analysis" class="api-module">
-          <h2><code>evol_virtual_creature.graph_analysis</code></h2>
-          <section id="genotype-graph-analyzer" class="api-entry">
-            <h3><code>GenotypeGraphAnalyzer</code></h3>
-            <pre><code>GenotypeGraphAnalyzer(genotype: Genotype, max_node: int)</code></pre>
-            <p>
-              Analyze recursive graph expansion before building MuJoCo XML.
-              This protects phenotype generation from unknown children,
-              invalid recursion limits, unbounded loops, and oversized models.
-            </p>
-            <h4>Methods</h4>
-            <dl class="param-list">
-              <dt><code>validate() -&gt; int</code></dt>
-              <dd>Return the exact expanded phenotype node count when it is within <code>max_node</code>.</dd>
-            </dl>
-            <h4>Raises</h4>
-            <dl class="param-list">
-              <dt><code>GenotypeGraphError</code></dt>
-              <dd>Raised for invalid roots, unknown children, invalid recursion limits, or unbounded recursion.</dd>
-              <dt><code>PhenotypeNodeLimitExceeded</code></dt>
-              <dd>Raised when expansion would exceed the configured node budget.</dd>
-            </dl>
-          </section>
-        </section>
-
-        <section id="phenotype" class="api-module">
-          <h2><code>evol_virtual_creature.phenotype</code></h2>
-          <section id="phenotypebuilder" class="api-entry">
-            <h3><code>PhenotypeBuilder</code></h3>
-            <pre><code>PhenotypeBuilder(genotype: Genotype, max_node: int)</code></pre>
-            <p>
-              Convert a genotype graph into MuJoCo MJCF XML. The builder also
-              stores controller metadata for each generated actuator.
-            </p>
-            <h4>Attributes</h4>
-            <dl class="param-list">
-              <dt><code>actuator_controllers</code> : <span>list[ActuatorController]</span></dt>
-              <dd>Controller metadata populated during <code>build()</code>.</dd>
-              <dt><code>max_node</code> : <span>int</span></dt>
-              <dd>Maximum number of phenotype bodies allowed during expansion.</dd>
-            </dl>
-            <h4>Methods</h4>
-            <dl class="param-list">
-              <dt><code>build() -&gt; str</code></dt>
-              <dd>Validate the graph, configure defaults, expand bodies, create actuators, and return MJCF XML.</dd>
-              <dt><code>new_body_name(node_name: str) -&gt; str</code></dt>
-              <dd>Return a unique body name using the node name and body counter.</dd>
-              <dt><code>new_joint_name(node_name: str) -&gt; str</code></dt>
-              <dd>Return a unique joint name using the node name and joint counter.</dd>
-              <dt><code>new_motor_name(joint_name: str) -&gt; str</code></dt>
-              <dd>Return a unique motor name using the joint name and motor counter.</dd>
-            </dl>
-            <h4>Examples</h4>
-            <pre><code>from evol_virtual_creature.genotype_io import load_genotype_from_json
-from evol_virtual_creature.phenotype import PhenotypeBuilder
-
-genotype = load_genotype_from_json("example_genotype.json")
-builder = PhenotypeBuilder(genotype, max_node=500)
-mjcf = builder.build()</code></pre>
-          </section>
-
-          <section id="actuatorcontroller" class="api-entry">
-            <h3><code>ActuatorController</code></h3>
-            <pre><code>ActuatorController(
-    motor_name: str,
-    amp: float,
-    freq: float,
-    phase: float,
-)</code></pre>
-            <p>
-              Store the generated motor name and sine-wave control parameters
-              used by evaluation, video rendering, and the interactive viewer.
-            </p>
-          </section>
-        </section>
-
-        <section id="evaluation" class="api-module">
-          <h2><code>evol_virtual_creature.evaluation</code></h2>
-          <section id="swimming-evaluation-config" class="api-entry">
-            <h3><code>SwimmingEvaluationConfig</code></h3>
-            <pre><code>SwimmingEvaluationConfig(
-    episode_seconds: float = 10.0,
-    max_node: int = 500,
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0),
-    forward_speed_weight: float = 1.0,
-    energy_weight: float = 0.001,
-    sideways_drift_weight: float = 0.1,
-    vertical_drift_weight: float = 0.1,
-    angular_speed_weight: float = 0.01,
-    body_count_weight: float = 0.001,
-    build_failure_fitness: float = -1000.0,
-    max_abs_state_value: float = 1000000.0,
-)</code></pre>
-            <p>Frozen dataclass of swimming task weights and simulation settings.</p>
-          </section>
-
-          <section id="swimming-evaluation-result" class="api-entry">
-            <h3><code>SwimmingEvaluationResult</code></h3>
-            <pre><code>SwimmingEvaluationResult(
-    fitness: float,
-    forward_distance: float,
-    average_forward_speed: float,
-    sideways_drift: float,
-    vertical_drift: float,
-    control_energy: float,
-    mean_angular_speed: float,
-    simulated_seconds: float,
-    actuator_count: int,
-    body_count: int,
-    build_failed: bool = False,
-    failure_reason: str | None = None,
-)</code></pre>
-            <p>Frozen dataclass containing the final fitness and diagnostic metrics.</p>
-          </section>
-
-          <section id="evaluate-x-axis-swimming" class="api-entry">
-            <h3><code>evaluate_x_axis_swimming</code></h3>
-            <pre><code>evaluate_x_axis_swimming(
-    genotype: Genotype,
-    config: SwimmingEvaluationConfig | None = None,
-) -&gt; SwimmingEvaluationResult</code></pre>
-            <p>
-              Score a genotype by simulating open-loop actuator control and
-              measuring swimming progress in the target direction.
-            </p>
-            <h4>Fitness</h4>
-            <pre><code>fitness =
-    forward_speed_weight * average_forward_speed
-    - energy_weight * control_energy
-    - sideways_drift_weight * sideways_drift
-    - vertical_drift_weight * vertical_drift
-    - angular_speed_weight * mean_angular_speed
-    - body_count_weight * body_count</code></pre>
-            <h4>Returns</h4>
-            <p>
-              <code>SwimmingEvaluationResult</code>. Build failures and numerical
-              instability return a result with <code>build_failed=True</code>
-              instead of raising.
-            </p>
-            <h4>Examples</h4>
-            <pre><code>from evol_virtual_creature.evaluation import (
-    SwimmingEvaluationConfig,
-    evaluate_x_axis_swimming,
-)
-from evol_virtual_creature.genotype_io import load_genotype_from_json
-
-genotype = load_genotype_from_json("example_genotype.json")
-config = SwimmingEvaluationConfig(episode_seconds=6.0)
-result = evaluate_x_axis_swimming(genotype, config)
-print(result.fitness)</code></pre>
-          </section>
-        </section>
-
-        <section id="video" class="api-module">
-          <h2><code>evol_virtual_creature.video</code></h2>
-          <section id="save-x-axis-swimming-video" class="api-entry">
-            <h3><code>save_x_axis_swimming_video</code></h3>
-            <pre><code>save_x_axis_swimming_video(
-    genotype: Genotype,
-    output_path: pathlib.Path,
-    config: SwimmingEvaluationConfig,
-    fps: int,
-    width: int,
-    height: int,
-) -&gt; None</code></pre>
-            <p>
-              Render a swimming episode to MP4 using MuJoCo's offscreen
-              renderer and <code>imageio</code>.
-            </p>
-            <h4>Raises</h4>
-            <p>
-              <code>RuntimeError</code> when video dependencies are missing or
-              phenotype generation fails.
-            </p>
-          </section>
-
-          <section id="apply-open-loop-controller" class="api-entry">
-            <h3><code>apply_open_loop_controller</code></h3>
-            <pre><code>apply_open_loop_controller(
-    data: mujoco.MjData,
-    actuator_ids: list[int],
-    actuator_controllers: list[ActuatorController],
-) -&gt; None</code></pre>
-            <p>
-              Write <code>amp * sin(freq * data.time + phase)</code> into each
-              actuator control slot.
-            </p>
-          </section>
-        </section>
-
-        <section id="viewer" class="api-module">
-          <h2><code>evol_virtual_creature.viewer</code></h2>
-          <section id="launch-viewer" class="api-entry">
-            <h3><code>launch_viewer</code></h3>
-            <pre><code>launch_viewer(
-    mjcf: str,
-    actuator_controllers: list[ActuatorController],
-) -&gt; None</code></pre>
-            <p>
-              Open a passive MuJoCo viewer, apply the generated sine-wave
-              controls every step, and synchronize the viewer until it closes.
-            </p>
-          </section>
-        </section>
+        <div id="api-modules" aria-live="polite"></div>
       </article>
 
       <aside class="on-page" aria-label="On this page">
         <p class="sidebar-title">On This Page</p>
-        <a href="#connectiongene">ConnectionGene</a>
-        <a href="#nodegene">NodeGene</a>
-        <a href="#genotype-mutation">Genotype.mutation</a>
-        <a href="#load-genotype-from-json">load_genotype_from_json</a>
-        <a href="#phenotypebuilder">PhenotypeBuilder</a>
-        <a href="#evaluate-x-axis-swimming">evaluate_x_axis_swimming</a>
-        <a href="#save-x-axis-swimming-video">save_x_axis_swimming_video</a>
+        <nav id="api-on-page-nav"></nav>
       </aside>
     </main>
+
+    <script>
+      const referencePath = "api-reference.json";
+      const moduleNav = document.querySelector("#api-module-nav");
+      const onPageNav = document.querySelector("#api-on-page-nav");
+      const modulesRoot = document.querySelector("#api-modules");
+
+      const text = (tagName, value, className) => {
+        const element = document.createElement(tagName);
+        if (className) {
+          element.className = className;
+        }
+        element.textContent = value || "";
+        return element;
+      };
+
+      const code = (value) => {
+        const element = document.createElement("code");
+        element.textContent = value || "";
+        return element;
+      };
+
+      const paragraph = (value) => {
+        const element = text("p", value);
+        return element;
+      };
+
+      const codeBlock = (value) => {
+        const pre = document.createElement("pre");
+        pre.append(code(value));
+        return pre;
+      };
+
+      const appendDefinitionList = (parent, items) => {
+        const list = document.createElement("dl");
+        list.className = "param-list";
+
+        for (const item of items || []) {
+          const term = document.createElement("dt");
+          term.append(code(item.term));
+          if (item.type) {
+            term.append(" : ");
+            term.append(text("span", item.type));
+          }
+          list.append(term);
+
+          const description = document.createElement("dd");
+          description.textContent = item.description || "";
+          list.append(description);
+        }
+
+        parent.append(list);
+      };
+
+      const appendEntrySection = (parent, section) => {
+        parent.append(text("h4", section.title));
+
+        if (section.items) {
+          appendDefinitionList(parent, section.items);
+        }
+        if (section.body) {
+          parent.append(paragraph(section.body));
+        }
+        if (section.code) {
+          parent.append(codeBlock(section.code));
+        }
+      };
+
+      const appendEntry = (parent, entry) => {
+        const section = document.createElement("section");
+        section.id = entry.id;
+        section.className = "api-entry";
+
+        const heading = document.createElement("h3");
+        heading.append(code(entry.name));
+        section.append(heading);
+
+        if (entry.signature) {
+          section.append(codeBlock(entry.signature));
+        }
+        if (entry.description) {
+          section.append(paragraph(entry.description));
+        }
+        for (const subsection of entry.sections || []) {
+          appendEntrySection(section, subsection);
+        }
+
+        parent.append(section);
+      };
+
+      const appendModule = (parent, module) => {
+        const section = document.createElement("section");
+        section.id = module.id;
+        section.className = "api-module";
+
+        const heading = document.createElement("h2");
+        heading.append(code(module.name));
+        section.append(heading);
+
+        if (module.description) {
+          section.append(paragraph(module.description));
+        }
+        for (const entry of module.entries || []) {
+          appendEntry(section, entry);
+        }
+
+        parent.append(section);
+      };
+
+      const formatModuleLabel = (moduleName) => moduleName.split(".").pop();
+
+      const findEntryById = (modules, id) => {
+        for (const module of modules || []) {
+          const entry = (module.entries || []).find((candidate) => candidate.id === id);
+          if (entry) {
+            return entry;
+          }
+        }
+        return null;
+      };
+
+      const renderReference = (reference) => {
+        document.title = `${reference.meta?.eyebrow || "API Reference"} - Evol Virtual Creature`;
+        document.querySelector("#api-eyebrow").textContent = reference.meta?.eyebrow || "";
+        document.querySelector("#api-title").textContent = reference.meta?.title || "";
+        document.querySelector("#api-description").textContent = reference.meta?.description || "";
+
+        for (const module of reference.modules || []) {
+          const link = text("a", formatModuleLabel(module.name));
+          link.href = `#${module.id}`;
+          moduleNav.append(link);
+          appendModule(modulesRoot, module);
+        }
+
+        for (const entryId of reference.onPage || []) {
+          const entry = findEntryById(reference.modules, entryId);
+          if (!entry) {
+            continue;
+          }
+          const link = text("a", entry.name);
+          link.href = `#${entry.id}`;
+          onPageNav.append(link);
+        }
+      };
+
+      const renderError = (error) => {
+        const section = document.createElement("section");
+        section.className = "api-entry";
+        section.append(text("h3", "Could not load API reference"));
+        section.append(
+          paragraph(
+            `The page could not load ${referencePath}. Serve the docs from a local web server or check that the JSON file is present.`
+          )
+        );
+        section.append(codeBlock(String(error)));
+        modulesRoot.append(section);
+      };
+
+      fetch(referencePath)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(renderReference)
+        .catch(renderError);
+    </script>
   </body>
 </html>

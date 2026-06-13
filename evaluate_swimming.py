@@ -75,7 +75,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duration",
         type=float,
-        default=10.0,
+        default=6.0,
         help="Simulation duration in seconds.",
     )
     parser.add_argument(

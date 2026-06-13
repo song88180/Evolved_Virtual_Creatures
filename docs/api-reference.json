@@ -1,0 +1,919 @@
+{
+  "evol_virtual_creature.__init__": {
+    "Overview": {
+      "Purpose": "Package marker and short package description for evolutionary virtual creature generation utilities.",
+      "Main_Use_Cases": [
+        "Identify evol_virtual_creature as an importable Python package",
+        "Provide the package-level docstring"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genes",
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.phenotype",
+        "evol_virtual_creature.evaluation"
+      ]
+    },
+    "Classes": {},
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evol_virtual_creature.genes": {
+    "Overview": {
+      "Purpose": "Defines dataclass genes used to describe reusable genotype node types and directed child connections.",
+      "Main_Use_Cases": [
+        "Represent symbolic body-part nodes before MuJoCo XML generation",
+        "Represent directed connections between node genes",
+        "Store open-loop motor control parameters on each connection"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.genotype_io",
+        "evol_virtual_creature.genotype_mutation",
+        "evol_virtual_creature.phenotype"
+      ]
+    },
+    "Classes": {
+      "ConnectionGene": {
+        "Purpose": "Describes how a parent genotype node attaches a child node and how the generated hinge actuator should be controlled.",
+        "Constructor": {
+          "Signature": "ConnectionGene(child: str, pos: Tuple[float, float, float], axis: Tuple[float, float, float], scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0)",
+          "Parameters": {
+            "child": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "Name of the child node in Genotype.nodes."
+            },
+            "pos": {
+              "Type": "Tuple[float, float, float]",
+              "Default": "required",
+              "Description": "Child body position relative to the parent body."
+            },
+            "axis": {
+              "Type": "Tuple[float, float, float]",
+              "Default": "required",
+              "Description": "Hinge axis used for the child joint."
+            },
+            "scale": {
+              "Type": "float",
+              "Default": "1.0",
+              "Description": "Connection scale parameter available for mutation and serialization."
+            },
+            "terminal_only": {
+              "Type": "bool",
+              "Default": "False",
+              "Description": "Flag available for connection typing and mutation."
+            },
+            "motor_enabled": {
+              "Type": "bool",
+              "Default": "True",
+              "Description": "Whether this connection receives a generated MuJoCo motor."
+            },
+            "motor_gear": {
+              "Type": "float",
+              "Default": "100.0",
+              "Description": "Motor gear value written to the MJCF actuator."
+            },
+            "ctrlrange": {
+              "Type": "Tuple[float, float]",
+              "Default": "(-1.0, 1.0)",
+              "Description": "Control range for the generated motor."
+            },
+            "control_amp": {
+              "Type": "float",
+              "Default": "0.1",
+              "Description": "Amplitude for the sine-wave open-loop controller."
+            },
+            "control_freq": {
+              "Type": "float",
+              "Default": "10",
+              "Description": "Frequency multiplier for the sine-wave open-loop controller."
+            },
+            "control_phase": {
+              "Type": "float",
+              "Default": "0.0",
+              "Description": "Base phase offset for the sine-wave open-loop controller."
+            },
+            "control_phase_depth_scale": {
+              "Type": "float",
+              "Default": "0.0",
+              "Description": "Additional phase offset multiplied by recursive depth."
+            },
+            "control_phase_order_scale": {
+              "Type": "float",
+              "Default": "0.0",
+              "Description": "Additional phase offset multiplied by actuator order."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "child": {"Type": "str", "Description": "Name of the child node."},
+          "pos": {"Type": "Tuple[float, float, float]", "Description": "Relative child body position."},
+          "axis": {"Type": "Tuple[float, float, float]", "Description": "Hinge axis for the connection."},
+          "scale": {"Type": "float", "Description": "Connection scale parameter."},
+          "terminal_only": {"Type": "bool", "Description": "Connection typing flag."},
+          "motor_enabled": {"Type": "bool", "Description": "Whether to create a motor for the generated hinge joint."},
+          "motor_gear": {"Type": "float", "Description": "MuJoCo motor gear value."},
+          "ctrlrange": {"Type": "Tuple[float, float]", "Description": "MuJoCo motor control range."},
+          "control_amp": {"Type": "float", "Description": "Open-loop control amplitude."},
+          "control_freq": {"Type": "float", "Description": "Open-loop control frequency."},
+          "control_phase": {"Type": "float", "Description": "Open-loop base phase."},
+          "control_phase_depth_scale": {"Type": "float", "Description": "Depth-based phase scale."},
+          "control_phase_order_scale": {"Type": "float", "Description": "Actuator-order-based phase scale."}
+        },
+        "Methods": {
+          "phase_for": {
+            "Signature": "phase_for(depth: int, order: int) -> float",
+            "Purpose": "Compute the controller phase after depth and actuator-order offsets are applied.",
+            "Parameters": {
+              "depth": {"Type": "int", "Description": "Recursive node depth for the generated body."},
+              "order": {"Type": "int", "Description": "Zero-based order of the generated actuator."}
+            },
+            "Returns": {
+              "Type": "float",
+              "Description": "control_phase + control_phase_depth_scale * (depth - 1) + control_phase_order_scale * order."
+            },
+            "Raises": [],
+            "Example": "phase = connection.phase_for(depth=2, order=0)"
+          }
+        },
+        "Example": "connection = ConnectionGene(child=\"tail\", pos=(0.2, 0.0, 0.0), axis=(0.0, 1.0, 0.0))"
+      },
+      "NodeGene": {
+        "Purpose": "Describes one reusable body-part type in the genotype graph.",
+        "Constructor": {
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", joint_axis: Tuple[float, float, float] = (0, 1, 0), recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list))",
+          "Parameters": {
+            "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
+            "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "MuJoCo box half-size for generated geometry."},
+            "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body; commonly \"free\" for root or \"hinge\" for children."},
+            "joint_axis": {"Type": "Tuple[float, float, float]", "Default": "(0, 1, 0)", "Description": "Default hinge axis when no incoming connection supplies one."},
+            "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
+            "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."}
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "name": {"Type": "str", "Description": "Symbolic node name."},
+          "size": {"Type": "Tuple[float, float, float]", "Description": "Generated box geometry size."},
+          "joint_type": {"Type": "str", "Description": "Generated joint type."},
+          "joint_axis": {"Type": "Tuple[float, float, float]", "Description": "Default joint axis."},
+          "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
+          "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."}
+        },
+        "Methods": {},
+        "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\")"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evol_virtual_creature.genotype": {
+    "Overview": {
+      "Purpose": "Defines the top-level genotype dataclass that combines active genes with archived genetic material and mutation behavior.",
+      "Main_Use_Cases": [
+        "Store the root node and active NodeGene mapping",
+        "Carry archived nodes and connections used by topology mutations",
+        "Expose mutation behavior through GenotypeMutationMixin"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genes",
+        "evol_virtual_creature.genotype_mutation",
+        "evol_virtual_creature.genotype_io",
+        "evol_virtual_creature.phenotype"
+      ]
+    },
+    "Classes": {
+      "Genotype": {
+        "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
+        "Constructor": {
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
+          "Parameters": {
+            "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
+            "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
+            "archived_connections": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Inactive connection genes retained as mutation templates."},
+            "archived_nodes": {"Type": "List[NodeGene]", "Default": "field(default_factory=list)", "Description": "Inactive node genes retained as mutation templates."}
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "root": {"Type": "str", "Description": "Root node name."},
+          "nodes": {"Type": "Dict[str, NodeGene]", "Description": "Active node genes."},
+          "archived_connections": {"Type": "List[ConnectionGene]", "Description": "Archived connection templates."},
+          "archived_nodes": {"Type": "List[NodeGene]", "Description": "Archived node templates."}
+        },
+        "Methods": {
+          "mutation": {
+            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True) -> Genotype",
+            "Purpose": "Inherited from GenotypeMutationMixin; mutates genotype parameters in place and returns the same object.",
+            "Parameters": {
+              "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters to sample when mutation_rate is not provided."},
+              "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent mutation probability for every mutable parameter; overrides num_mutations when provided."},
+              "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source for reproducible mutation sequences."},
+              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether to allow connection and node topology changes."}
+            },
+            "Returns": {"Type": "Genotype", "Description": "The same genotype object after in-place mutation."},
+            "Raises": ["ValueError"],
+            "Example": "child = copy.deepcopy(parent).mutation(num_mutations=3, rng=random.Random(7))"
+          }
+        },
+        "Example": "genotype = Genotype(root=\"body\", nodes={\"body\": body_node})"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evol_virtual_creature.genotype_io": {
+    "Overview": {
+      "Purpose": "Builds, loads, saves, and serializes genotype graph recipes using the project JSON schema.",
+      "Main_Use_Cases": [
+        "Construct Genotype objects from compact mapping specs",
+        "Load genotype recipes from JSON files",
+        "Save active and archived genetic material back to JSON"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genes",
+        "evol_virtual_creature.genotype"
+      ]
+    },
+    "Classes": {},
+    "Functions": {
+      "build_genotype": {
+        "Signature": "build_genotype(root: str, spec: GenotypeSpec) -> Genotype",
+        "Purpose": "Build a concrete Genotype from a compact declarative mapping.",
+        "Parameters": {
+          "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
+          "spec": {"Type": "GenotypeSpec", "Default": "required", "Description": "Mapping from node names to node keyword data and optional children connection lists."}
+        },
+        "Returns": {"Type": "Genotype", "Description": "A genotype with NodeGene and ConnectionGene objects linked according to spec."},
+        "Raises": ["KeyError"],
+        "Example": "genotype = build_genotype(\"body\", {\"body\": {\"size\": [0.1, 0.1, 0.1], \"joint_type\": \"free\"}})"
+      },
+      "load_genotype_from_json": {
+        "Signature": "load_genotype_from_json(path: str | Path) -> Genotype",
+        "Purpose": "Load a genotype JSON file, including optional archived connections and nodes.",
+        "Parameters": {
+          "path": {"Type": "str | Path", "Default": "required", "Description": "Path to a genotype JSON file."}
+        },
+        "Returns": {"Type": "Genotype", "Description": "Loaded genotype object."},
+        "Raises": ["KeyError", "json.JSONDecodeError", "OSError"],
+        "Example": "genotype = load_genotype_from_json(\"example_genotype.json\")"
+      },
+      "save_genotype_to_json": {
+        "Signature": "save_genotype_to_json(genotype: Genotype, path: str | Path) -> None",
+        "Purpose": "Save a genotype recipe to JSON, including archived genetic material.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype object to serialize."},
+          "path": {"Type": "str | Path", "Default": "required", "Description": "Output JSON path; parent directories are created automatically."}
+        },
+        "Returns": {"Type": "None", "Description": "Writes JSON to disk."},
+        "Raises": ["OSError", "TypeError"],
+        "Example": "save_genotype_to_json(genotype, \"runs/best_genotype.json\")"
+      },
+      "genotype_to_dict": {
+        "Signature": "genotype_to_dict(genotype: Genotype) -> Dict[str, Any]",
+        "Purpose": "Convert a Genotype object into the JSON-compatible recipe shape used by this project.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype object to convert."}
+        },
+        "Returns": {"Type": "Dict[str, Any]", "Description": "Dictionary with root, nodes, archived_connections, and archived_nodes."},
+        "Raises": [],
+        "Example": "data = genotype_to_dict(genotype)"
+      }
+    },
+    "Internal_Functions": {
+      "_node_to_dict": {
+        "Signature": "_node_to_dict(node: NodeGene, include_name: bool = False) -> Dict[str, Any]",
+        "Purpose": "Serialize a NodeGene and optionally retain its name field."
+      },
+      "_node_from_dict": {
+        "Signature": "_node_from_dict(node_data: Mapping[str, Any]) -> NodeGene",
+        "Purpose": "Rebuild a NodeGene and its children from serialized dictionary data."
+      }
+    },
+    "Type_Aliases": {
+      "GenotypeSpec": "Mapping[str, Mapping[str, Any]]"
+    },
+    "Exceptions": {}
+  },
+  "evol_virtual_creature.genotype_mutation": {
+    "Overview": {
+      "Purpose": "Implements parameter and topology mutation behavior mixed into Genotype.",
+      "Main_Use_Cases": [
+        "Mutate numeric, boolean, and tuple-valued genotype fields",
+        "Add, remove, replace, and retarget genotype connections",
+        "Create new mutated node genes and archive disconnected genetic material"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genes",
+        "evol_virtual_creature.genotype"
+      ]
+    },
+    "Classes": {
+      "GenotypeMutationMixin": {
+        "Purpose": "Mixin that provides in-place genotype mutation methods and helper routines.",
+        "Constructor": {},
+        "Attributes": {
+          "MUTATION_STD_FRACTION": {"Type": "ClassVar[float]", "Description": "Fraction of a numeric value used as the default mutation standard deviation."},
+          "MIN_SIZE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for size mutations."},
+          "MIN_AXIS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for axis mutations."},
+          "MIN_INTEGER_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for integer mutations."},
+          "MIN_POS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for position mutations."},
+          "MIN_SCALE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for scale mutations."},
+          "MIN_MOTOR_GEAR_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for motor gear mutations."},
+          "MIN_CTRLRANGE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control range mutations."},
+          "MIN_CONTROL_AMP_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control amplitude mutations."},
+          "MIN_CONTROL_FREQ_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control frequency mutations."},
+          "MIN_PHASE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for phase mutations."},
+          "MIN_POSITIVE_VALUE": {"Type": "ClassVar[float]", "Description": "Lower clamp used for positive-valued mutations."}
+        },
+        "Methods": {
+          "mutation": {
+            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True) -> Genotype",
+            "Purpose": "Randomly mutate mutable genotype parameters in place.",
+            "Parameters": {
+              "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters sampled when mutation_rate is None."},
+              "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent probability applied to every mutable parameter."},
+              "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source; defaults to the random module."},
+              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether topology-changing mutation paths are included."}
+            },
+            "Returns": {"Type": "Genotype", "Description": "The mutated object itself."},
+            "Raises": ["ValueError"],
+            "Example": "genotype.mutation(num_mutations=5, rng=random.Random(42))"
+          }
+        },
+        "Internal_Methods": {
+          "_collect_mutable_parameters": "Collects tuple paths for all mutable fields and optional topology operations.",
+          "_add_mutable_parameter_paths": "Adds scalar or per-element tuple/list mutation paths for one field.",
+          "_mutate_parameter_path": "Dispatches one selected mutation path to the appropriate mutation operation.",
+          "_describe_parameter_target": "Builds human-readable labels for mutation logging.",
+          "_resolve_parameter_path": "Resolves a mutation path to the owner object, field name, and optional index.",
+          "_path_index": "Returns the optional tuple/list index from a mutation path.",
+          "_mutation_spec": "Maps field names to mutation kind, minimum standard deviation, and ordered-pair behavior.",
+          "_mutate_value": "Mutates boolean, integer, positive, and relative numeric values.",
+          "_normal_mutation_delta": "Draws a Gaussian mutation delta with a minimum standard deviation.",
+          "_mutate_connection_origin": "Moves a connection to a different origin node.",
+          "_mutate_connection_destination": "Changes a connection child to another non-free node.",
+          "_mutate_connection_type": "Copies connection parameters from another active or archived connection.",
+          "_mutate_connection_replacement": "Archives a connection and replaces it with a mutated copy.",
+          "_mutate_connection_addition": "Adds a new connection between active or archived node templates.",
+          "_mutate_connection_new_node_addition": "Creates a new mutated node and connects it to an existing origin.",
+          "_add_new_connection": "Creates and attaches a new connection from a template or default coding.",
+          "_mutate_connection_removal": "Archives and removes an active connection.",
+          "_mutate_connection_origin_node_replacement": "Creates a mutated replacement for the origin node of a connection.",
+          "_mutate_connection_destination_node_replacement": "Creates a mutated replacement for the destination node of a connection.",
+          "_new_node_from_existing": "Deep-copies a node and assigns a new mutation-derived name.",
+          "_new_node_name": "Finds an unused name of the form '<base>_mutN'.",
+          "_mutate_new_node": "Mutates one field on a newly created node.",
+          "_resolve_new_node_path": "Resolves a mutation path for a new node.",
+          "_mutate_new_connection": "Mutates one field on a newly created connection.",
+          "_connection_coding_pool": "Returns active and archived connections as templates.",
+          "_random_connection_template": "Chooses a connection template or returns None when none exist.",
+          "_node_coding_pool": "Returns active and archived nodes as templates.",
+          "_activate_node_gene": "Moves an archived node template into active nodes, recursively activating archived children when needed.",
+          "_find_archived_node": "Finds the most recently archived node by name.",
+          "_prune_disconnected_nodes": "Archives and removes nodes unreachable from the genotype root.",
+          "_reachable_node_names": "Computes active node names reachable from the root.",
+          "_describe_connection_source": "Builds human-readable labels for active or archived connection templates.",
+          "_is_active_connection": "Checks whether a connection object is attached to an active node.",
+          "_archived_connection_index": "Finds the archive index for a connection object.",
+          "_find_connection_owner": "Finds the active origin node and child index for a connection object."
+        },
+        "Example": "mutant = genotype.mutation(mutation_rate=0.05, allow_topology_mutations=True)"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {
+      "ValueError": {
+        "Description": "Raised by mutation when mutation_rate is outside [0, 1], num_mutations is negative, or an unknown mutation path/kind is encountered."
+      }
+    }
+  },
+  "evol_virtual_creature.graph_analysis": {
+    "Overview": {
+      "Purpose": "Validates recursive genotype graphs and estimates expanded phenotype size before XML generation.",
+      "Main_Use_Cases": [
+        "Reject invalid roots or child references before phenotype build",
+        "Reject invalid recursion limits and unbounded recursive loops",
+        "Abort expansion before max_node would be exceeded"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.phenotype",
+        "evol_virtual_creature.evaluation",
+        "evol_virtual_creature.video"
+      ]
+    },
+    "Classes": {
+      "PhenotypeBuildAbort": {
+        "Purpose": "Base runtime error for failures that should prevent phenotype expansion.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {},
+        "Example": "except PhenotypeBuildAbort as error: handle_build_failure(error)"
+      },
+      "PhenotypeNodeLimitExceeded": {
+        "Purpose": "Signals that genotype expansion would exceed the configured phenotype node budget.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {},
+        "Example": "raise PhenotypeNodeLimitExceeded(\"Maximum allowed number of phenotype nodes exceeded\")"
+      },
+      "GenotypeGraphError": {
+        "Purpose": "Signals invalid genotype graph structure such as unknown children, bad recursion limits, or unbounded recursion.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {},
+        "Example": "raise GenotypeGraphError(\"Unknown genotype root\")"
+      },
+      "GenotypeGraphAnalyzer": {
+        "Purpose": "Counts bounded genotype graph expansion and validates structure before MuJoCo XML is built.",
+        "Constructor": {
+          "Signature": "GenotypeGraphAnalyzer(genotype: Genotype, max_node: int)",
+          "Parameters": {
+            "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to validate."},
+            "max_node": {"Type": "int", "Default": "required", "Description": "Maximum expanded phenotype body count."}
+          },
+          "Raises": ["ValueError"]
+        },
+        "Attributes": {
+          "genotype": {"Type": "Genotype", "Description": "Graph under analysis."},
+          "max_node": {"Type": "int", "Description": "Allowed expanded node budget."},
+          "memoized_counts": {"Type": "Dict[Tuple[str, Tuple[Tuple[str, int], ...]], int]", "Description": "Cache of expansion counts by node/depth state."},
+          "active_states": {"Type": "set[Tuple[str, Tuple[Tuple[str, int], ...]]]", "Description": "States currently on the recursion stack."}
+        },
+        "Methods": {
+          "validate": {
+            "Signature": "validate() -> int",
+            "Purpose": "Validate graph structure and return exact expanded node count when within budget.",
+            "Parameters": {},
+            "Returns": {"Type": "int", "Description": "Expanded phenotype node count."},
+            "Raises": ["GenotypeGraphError", "PhenotypeNodeLimitExceeded"],
+            "Example": "node_count = GenotypeGraphAnalyzer(genotype, max_node=500).validate()"
+          }
+        },
+        "Internal_Methods": {
+          "_validate_recursive_limits": "Ensures every node recursive_limit is a positive integer and not a bool.",
+          "_count_expanded_nodes": "Recursively counts expanded nodes with memoization and cycle detection."
+        },
+        "Example": "GenotypeGraphAnalyzer(genotype, max_node=500).validate()"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {
+      "PhenotypeBuildAbort": {"Description": "Base class for phenotype build aborts."},
+      "PhenotypeNodeLimitExceeded": {"Description": "Raised when graph analysis or XML creation exceeds max_node."},
+      "GenotypeGraphError": {"Description": "Raised for invalid genotype roots, child references, recursion limits, or unbounded recursive loops."},
+      "ValueError": {"Description": "Raised when max_node is less than 1."}
+    }
+  },
+  "evol_virtual_creature.phenotype": {
+    "Overview": {
+      "Purpose": "Converts genotype graphs into MuJoCo MJCF XML and records actuator controller metadata.",
+      "Main_Use_Cases": [
+        "Validate a genotype and build MJCF XML",
+        "Create MuJoCo bodies, joints, geoms, motors, defaults, and world elements",
+        "Record open-loop controller metadata for generated actuators"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genes",
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.graph_analysis",
+        "evol_virtual_creature.evaluation",
+        "evol_virtual_creature.video",
+        "evol_virtual_creature.viewer"
+      ]
+    },
+    "Classes": {
+      "ActuatorController": {
+        "Purpose": "Stores generated motor name and sine-wave control parameters.",
+        "Constructor": {
+          "Signature": "ActuatorController(motor_name: str, amp: float, freq: float, phase: float)",
+          "Parameters": {
+            "motor_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo motor name."},
+            "amp": {"Type": "float", "Default": "required", "Description": "Controller amplitude."},
+            "freq": {"Type": "float", "Default": "required", "Description": "Controller frequency multiplier."},
+            "phase": {"Type": "float", "Default": "required", "Description": "Controller phase offset."}
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "motor_name": {"Type": "str", "Description": "Generated motor name."},
+          "amp": {"Type": "float", "Description": "Sine control amplitude."},
+          "freq": {"Type": "float", "Description": "Sine control frequency."},
+          "phase": {"Type": "float", "Description": "Sine control phase."}
+        },
+        "Methods": {},
+        "Example": "controller = ActuatorController(\"tail_joint_motor_1\", amp=0.1, freq=10.0, phase=0.0)"
+      },
+      "PhenotypeBuilder": {
+        "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
+        "Constructor": {
+          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int)",
+          "Parameters": {
+            "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
+            "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."}
+          },
+          "Raises": ["ValueError"]
+        },
+        "Attributes": {
+          "genotype": {"Type": "Genotype", "Description": "Genotype being expanded."},
+          "max_node": {"Type": "int", "Description": "Generated body budget."},
+          "body_counter": {"Type": "int", "Description": "Counter used for unique body names."},
+          "joint_counter": {"Type": "int", "Description": "Counter used for unique joint names."},
+          "motor_counter": {"Type": "int", "Description": "Counter used for unique motor names."},
+          "mujoco_xml": {"Type": "Optional[xml.etree.ElementTree.Element]", "Description": "Root MJCF element during build."},
+          "actuator_xml": {"Type": "Optional[xml.etree.ElementTree.Element]", "Description": "MJCF actuator section during build."},
+          "actuator_controllers": {"Type": "List[ActuatorController]", "Description": "Controller metadata generated during build."}
+        },
+        "Methods": {
+          "build": {
+            "Signature": "build() -> str",
+            "Purpose": "Validate graph, build MJCF elements, populate actuator_controllers, and return XML text.",
+            "Parameters": {},
+            "Returns": {"Type": "str", "Description": "Formatted MJCF XML string."},
+            "Raises": ["GenotypeGraphError", "PhenotypeNodeLimitExceeded", "RuntimeError"],
+            "Example": "mjcf = PhenotypeBuilder(genotype, max_node=500).build()"
+          },
+          "new_body_name": {
+            "Signature": "new_body_name(node_name: str) -> str",
+            "Purpose": "Create a unique body name.",
+            "Parameters": {"node_name": {"Type": "str", "Description": "Source node name."}},
+            "Returns": {"Type": "str", "Description": "Name like '<node_name>_<counter>'."},
+            "Raises": [],
+            "Example": "name = builder.new_body_name(\"segment\")"
+          },
+          "new_joint_name": {
+            "Signature": "new_joint_name(node_name: str) -> str",
+            "Purpose": "Create a unique joint name.",
+            "Parameters": {"node_name": {"Type": "str", "Description": "Source node name."}},
+            "Returns": {"Type": "str", "Description": "Name like '<node_name>_joint_<counter>'."},
+            "Raises": [],
+            "Example": "name = builder.new_joint_name(\"segment\")"
+          },
+          "new_motor_name": {
+            "Signature": "new_motor_name(joint_name: str) -> str",
+            "Purpose": "Create a unique motor name for a generated joint.",
+            "Parameters": {"joint_name": {"Type": "str", "Description": "Generated joint name."}},
+            "Returns": {"Type": "str", "Description": "Name like '<joint_name>_motor_<counter>'."},
+            "Raises": [],
+            "Example": "name = builder.new_motor_name(\"segment_joint_1\")"
+          },
+          "configure_model": {
+            "Signature": "configure_model() -> None",
+            "Purpose": "Add compiler, option, and default MJCF settings.",
+            "Parameters": {},
+            "Returns": {"Type": "None", "Description": "Mutates builder.mujoco_xml."},
+            "Raises": ["RuntimeError"],
+            "Example": "builder.configure_model()"
+          },
+          "add_defaults": {
+            "Signature": "add_defaults() -> None",
+            "Purpose": "Add default geom, joint, and motor settings to the MJCF model.",
+            "Parameters": {},
+            "Returns": {"Type": "None", "Description": "Mutates builder.mujoco_xml."},
+            "Raises": ["RuntimeError"],
+            "Example": "builder.add_defaults()"
+          },
+          "add_world_elements": {
+            "Signature": "add_world_elements(worldbody: ET.Element) -> None",
+            "Purpose": "Add floor and light elements to the MuJoCo worldbody.",
+            "Parameters": {"worldbody": {"Type": "ET.Element", "Description": "MJCF worldbody element."}},
+            "Returns": {"Type": "None", "Description": "Mutates the supplied worldbody element."},
+            "Raises": [],
+            "Example": "builder.add_world_elements(worldbody)"
+          },
+          "create_body": {
+            "Signature": "create_body(parent_xml: ET.Element, node: NodeGene, pos: str) -> ET.Element",
+            "Purpose": "Create one MJCF body element for a node.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Parent XML element."},
+              "node": {"Type": "NodeGene", "Description": "Node gene for the body."},
+              "pos": {"Type": "str", "Description": "MuJoCo position string."}
+            },
+            "Returns": {"Type": "ET.Element", "Description": "Created body element."},
+            "Raises": ["PhenotypeNodeLimitExceeded"],
+            "Example": "body = builder.create_body(worldbody, root_node, \"0 0 0.6\")"
+          },
+          "add_node_to_body": {
+            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], current_depths: Dict[str, int]) -> None",
+            "Purpose": "Add joint, geom, and recursive children for one node body.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element to populate."},
+              "node": {"Type": "NodeGene", "Description": "Node gene represented by the body."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection used to reach this node, if any."},
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Current recursive depth by node name."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
+            "Raises": ["RuntimeError", "PhenotypeNodeLimitExceeded"],
+            "Example": "builder.add_node_to_body(root_body, root_node, None, {})"
+          },
+          "add_joint": {
+            "Signature": "add_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], node_depth: int) -> None",
+            "Purpose": "Add a free or hinge joint for one generated body.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Description": "Node gene defining joint type."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection for hinge settings."},
+              "node_depth": {"Type": "int", "Description": "Recursive node depth."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates XML and possibly controller list."},
+            "Raises": ["RuntimeError"],
+            "Example": "builder.add_joint(body, node, incoming_conn, node_depth=1)"
+          },
+          "add_hinge_joint": {
+            "Signature": "add_hinge_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], node_depth: int) -> None",
+            "Purpose": "Add a hinge joint and optional motor for one generated body.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Description": "Node gene defining fallback axis."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection defining axis and motor settings."},
+              "node_depth": {"Type": "int", "Description": "Recursive node depth."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates XML and possibly controller list."},
+            "Raises": ["RuntimeError"],
+            "Example": "builder.add_hinge_joint(body, node, incoming_conn, 2)"
+          },
+          "add_motor": {
+            "Signature": "add_motor(joint_name: str, incoming_conn: Optional[ConnectionGene], node_depth: int) -> None",
+            "Purpose": "Add a MuJoCo motor and append matching ActuatorController metadata.",
+            "Parameters": {
+              "joint_name": {"Type": "str", "Description": "Joint receiving the motor."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection with motor and controller settings."},
+              "node_depth": {"Type": "int", "Description": "Recursive node depth for phase calculation."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates actuator XML and actuator_controllers."},
+            "Raises": ["RuntimeError"],
+            "Example": "builder.add_motor(\"tail_joint_1\", connection, 2)"
+          },
+          "add_geom": {
+            "Signature": "add_geom(parent_xml: ET.Element, node: NodeGene) -> None",
+            "Purpose": "Add a box geom to a generated body.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Description": "Node gene defining geom size."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates the body XML element."},
+            "Raises": [],
+            "Example": "builder.add_geom(body, node)"
+          },
+          "next_depths": {
+            "Signature": "next_depths(current_depths: Dict[str, int], node_name: str, node_depth: int) -> Dict[str, int]",
+            "Purpose": "Return a copied recursive-depth map with the current node depth updated.",
+            "Parameters": {
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Existing depth map."},
+              "node_name": {"Type": "str", "Description": "Node name being updated."},
+              "node_depth": {"Type": "int", "Description": "Depth value to store."}
+            },
+            "Returns": {"Type": "Dict[str, int]", "Description": "Updated depth map copy."},
+            "Raises": [],
+            "Example": "depths = builder.next_depths({}, \"segment\", 1)"
+          },
+          "add_children": {
+            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int]) -> None",
+            "Purpose": "Recursively add child bodies for each allowed outgoing connection.",
+            "Parameters": {
+              "parent_xml": {"Type": "ET.Element", "Description": "Parent body XML element."},
+              "node": {"Type": "NodeGene", "Description": "Node whose children are expanded."},
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Depth map used to enforce recursive limits."}
+            },
+            "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
+            "Raises": ["KeyError", "RuntimeError", "PhenotypeNodeLimitExceeded"],
+            "Example": "builder.add_children(body, node, depths)"
+          },
+          "can_add_child": {
+            "Signature": "can_add_child(child_node: NodeGene, current_depths: Dict[str, int]) -> bool",
+            "Purpose": "Check whether a child node is still below its recursive limit.",
+            "Parameters": {
+              "child_node": {"Type": "NodeGene", "Description": "Potential child node."},
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Current depth map."}
+            },
+            "Returns": {"Type": "bool", "Description": "True when expansion may continue for this child node."},
+            "Raises": [],
+            "Example": "if builder.can_add_child(child_node, depths): ..."
+          }
+        },
+        "Example": "builder = PhenotypeBuilder(genotype, max_node=500); mjcf = builder.build(); controllers = builder.actuator_controllers"
+      }
+    },
+    "Functions": {
+      "vec_to_str": {
+        "Signature": "vec_to_str(v) -> str",
+        "Purpose": "Convert an iterable of values into a space-separated MuJoCo vector string.",
+        "Parameters": {
+          "v": {"Type": "Iterable[Any]", "Default": "required", "Description": "Values to join."}
+        },
+        "Returns": {"Type": "str", "Description": "Space-separated string representation."},
+        "Raises": [],
+        "Example": "axis = vec_to_str((0, 1, 0))"
+      }
+    },
+    "Exceptions": {
+      "ValueError": {"Description": "Raised when PhenotypeBuilder receives max_node less than 1."},
+      "RuntimeError": {"Description": "Raised when model/default/motor setup methods are called before required XML elements are initialized."},
+      "PhenotypeNodeLimitExceeded": {"Description": "Raised when XML body creation would exceed max_node."}
+    }
+  },
+  "evol_virtual_creature.evaluation": {
+    "Overview": {
+      "Purpose": "Scores genotypes on an x-axis swimming task using MuJoCo simulation and open-loop actuator control.",
+      "Main_Use_Cases": [
+        "Evaluate a genotype's swimming fitness",
+        "Return diagnostics such as distance, drift, energy, angular speed, and body count",
+        "Convert phenotype build failures or unstable simulations into failed evaluation results"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.graph_analysis",
+        "evol_virtual_creature.phenotype",
+        "evol_virtual_creature.video"
+      ]
+    },
+    "Classes": {
+      "SwimmingEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
+        "Constructor": {
+          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0)",
+          "Parameters": {
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction used to measure forward progress."},
+            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average forward speed."},
+            "energy_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for control energy."},
+            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for y-axis drift."},
+            "vertical_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for z-axis drift."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for generated body count."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned when build or simulation fails."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "State magnitude threshold used to detect numerical instability."}
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "episode_seconds": {"Type": "float", "Description": "Simulation duration."},
+          "max_node": {"Type": "int", "Description": "Phenotype node budget."},
+          "target_direction": {"Type": "Sequence[float]", "Description": "Target movement direction."},
+          "forward_speed_weight": {"Type": "float", "Description": "Forward speed reward weight."},
+          "energy_weight": {"Type": "float", "Description": "Control energy penalty weight."},
+          "sideways_drift_weight": {"Type": "float", "Description": "Sideways drift penalty weight."},
+          "vertical_drift_weight": {"Type": "float", "Description": "Vertical drift penalty weight."},
+          "angular_speed_weight": {"Type": "float", "Description": "Angular speed penalty weight."},
+          "body_count_weight": {"Type": "float", "Description": "Body count penalty weight."},
+          "build_failure_fitness": {"Type": "float", "Description": "Fallback fitness for failed evaluations."},
+          "max_abs_state_value": {"Type": "float", "Description": "Numerical stability threshold."}
+        },
+        "Methods": {},
+        "Example": "config = SwimmingEvaluationConfig(episode_seconds=6.0, body_count_weight=0.002)"
+      },
+      "SwimmingEvaluationResult": {
+        "Purpose": "Frozen dataclass containing final fitness and diagnostic metrics.",
+        "Constructor": {
+          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, build_failed: bool = False, failure_reason: str | None = None)",
+          "Parameters": {
+            "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
+            "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
+            "average_forward_speed": {"Type": "float", "Default": "required", "Description": "Forward distance divided by simulated seconds."},
+            "sideways_drift": {"Type": "float", "Default": "required", "Description": "Absolute y-axis lateral drift."},
+            "vertical_drift": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement."},
+            "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared actuator control."},
+            "mean_angular_speed": {"Type": "float", "Default": "required", "Description": "Mean root angular speed."},
+            "simulated_seconds": {"Type": "float", "Default": "required", "Description": "Actual simulated duration."},
+            "actuator_count": {"Type": "int", "Default": "required", "Description": "Number of generated actuators used."},
+            "body_count": {"Type": "int", "Default": "required", "Description": "Number of generated bodies excluding world."},
+            "build_failed": {"Type": "bool", "Default": "False", "Description": "Whether this result represents a build or simulation failure."},
+            "failure_reason": {"Type": "str | None", "Default": "None", "Description": "Failure detail when build_failed is True."}
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "fitness": {"Type": "float", "Description": "Final scalar fitness."},
+          "forward_distance": {"Type": "float", "Description": "Forward movement distance."},
+          "average_forward_speed": {"Type": "float", "Description": "Forward movement speed."},
+          "sideways_drift": {"Type": "float", "Description": "Sideways drift metric."},
+          "vertical_drift": {"Type": "float", "Description": "Vertical drift metric."},
+          "control_energy": {"Type": "float", "Description": "Control effort metric."},
+          "mean_angular_speed": {"Type": "float", "Description": "Tumbling metric."},
+          "simulated_seconds": {"Type": "float", "Description": "Actual simulated time."},
+          "actuator_count": {"Type": "int", "Description": "Actuator count."},
+          "body_count": {"Type": "int", "Description": "Body count."},
+          "build_failed": {"Type": "bool", "Description": "Failure flag."},
+          "failure_reason": {"Type": "str | None", "Description": "Failure explanation."}
+        },
+        "Methods": {},
+        "Example": "if result.build_failed: print(result.failure_reason)"
+      }
+    },
+    "Functions": {
+      "evaluate_x_axis_swimming": {
+        "Signature": "evaluate_x_axis_swimming(genotype: Genotype, config: SwimmingEvaluationConfig | None = None) -> SwimmingEvaluationResult",
+        "Purpose": "Score a genotype by simulating open-loop actuator control and measuring movement in the target direction.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
+          "config": {"Type": "SwimmingEvaluationConfig | None", "Default": "None", "Description": "Evaluation settings; defaults to SwimmingEvaluationConfig()."}
+        },
+        "Returns": {"Type": "SwimmingEvaluationResult", "Description": "Fitness and diagnostic metrics; build failures are represented as failed results."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_x_axis_swimming(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
+      }
+    },
+    "Internal_Functions": {
+      "_failed_evaluation": "Builds a SwimmingEvaluationResult with build_failed=True and fallback fitness.",
+      "_normalized_target_direction": "Validates and normalizes a three-component target direction.",
+      "_actuator_ids": "Maps ActuatorController motor names to MuJoCo actuator IDs.",
+      "_simulation_state_is_stable": "Checks qpos, qvel, and qacc for finite bounded values.",
+      "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude.",
+      "_apply_open_loop_controller": "Writes sine-wave control values to MuJoCo actuator slots."
+    },
+    "Exceptions": {
+      "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
+    }
+  },
+  "evol_virtual_creature.video": {
+    "Overview": {
+      "Purpose": "Renders x-axis swimming simulations to MP4 video and exposes controller helpers shared with rendering.",
+      "Main_Use_Cases": [
+        "Build a genotype phenotype and record a swimming episode",
+        "Map generated actuator controllers to MuJoCo actuator IDs",
+        "Apply open-loop sine controls during video rendering"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.evaluation",
+        "evol_virtual_creature.genotype",
+        "evol_virtual_creature.graph_analysis",
+        "evol_virtual_creature.phenotype"
+      ]
+    },
+    "Classes": {},
+    "Functions": {
+      "save_x_axis_swimming_video": {
+        "Signature": "save_x_axis_swimming_video(genotype: Genotype, output_path: Path, config: SwimmingEvaluationConfig, fps: int, width: int, height: int) -> None",
+        "Purpose": "Render a swimming episode to MP4 using MuJoCo's offscreen renderer and imageio.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
+          "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
+          "config": {"Type": "SwimmingEvaluationConfig", "Default": "required", "Description": "Simulation settings and max_node budget."},
+          "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
+          "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
+          "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."}
+        },
+        "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
+        "Raises": ["RuntimeError", "OSError"],
+        "Example": "save_x_axis_swimming_video(genotype, Path(\"swim.mp4\"), config, fps=30, width=1280, height=720)"
+      },
+      "actuator_ids_for_controllers": {
+        "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
+        "Purpose": "Resolve generated controller motor names to MuJoCo actuator IDs.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "MuJoCo model containing actuators."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller metadata from PhenotypeBuilder."}
+        },
+        "Returns": {"Type": "list[int]", "Description": "Actuator IDs in the same order as actuator_controllers."},
+        "Raises": [],
+        "Example": "actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)"
+      },
+      "apply_open_loop_controller": {
+        "Signature": "apply_open_loop_controller(data: mujoco.MjData, actuator_ids: list[int], actuator_controllers: list[ActuatorController]) -> None",
+        "Purpose": "Write amp * sin(freq * data.time + phase) into each actuator control slot.",
+        "Parameters": {
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "Simulation data whose ctrl array is updated."},
+          "actuator_ids": {"Type": "list[int]", "Default": "required", "Description": "Actuator IDs to control."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller parameters for each actuator."}
+        },
+        "Returns": {"Type": "None", "Description": "Mutates data.ctrl."},
+        "Raises": [],
+        "Example": "apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)"
+      }
+    },
+    "Exceptions": {
+      "RuntimeError": {"Description": "Raised when imageio/imageio-ffmpeg is unavailable, output writing fails, or phenotype generation fails before recording."}
+    }
+  },
+  "evol_virtual_creature.viewer": {
+    "Overview": {
+      "Purpose": "Launches an interactive passive MuJoCo viewer and applies generated open-loop actuator controls while it runs.",
+      "Main_Use_Cases": [
+        "Inspect generated MJCF creatures interactively",
+        "Preview open-loop controller behavior in MuJoCo"
+      ],
+      "Related_Modules": [
+        "evol_virtual_creature.phenotype",
+        "evol_virtual_creature.video"
+      ]
+    },
+    "Classes": {},
+    "Functions": {
+      "launch_viewer": {
+        "Signature": "launch_viewer(mjcf: str, actuator_controllers: list[ActuatorController]) -> None",
+        "Purpose": "Open a passive MuJoCo viewer, apply sine-wave controls each step, and synchronize until the viewer closes.",
+        "Parameters": {
+          "mjcf": {"Type": "str", "Default": "required", "Description": "MuJoCo MJCF XML string."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller metadata generated by PhenotypeBuilder."}
+        },
+        "Returns": {"Type": "None", "Description": "Runs until the viewer closes."},
+        "Raises": ["mujoco.FatalError", "RuntimeError"],
+        "Example": "launch_viewer(mjcf, builder.actuator_controllers)"
+      }
+    },
+    "Exceptions": {}
+  }
+}
