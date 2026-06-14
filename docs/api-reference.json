@@ -1,22 +1,4 @@
 {
-  "evol_virtual_creature.__init__": {
-    "Overview": {
-      "Purpose": "Package marker and short package description for evolutionary virtual creature generation utilities.",
-      "Main_Use_Cases": [
-        "Identify evol_virtual_creature as an importable Python package",
-        "Provide the package-level docstring"
-      ],
-      "Related_Modules": [
-        "evol_virtual_creature.genes",
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.phenotype",
-        "evol_virtual_creature.evaluation"
-      ]
-    },
-    "Classes": {},
-    "Functions": {},
-    "Exceptions": {}
-  },
   "evol_virtual_creature.genes": {
     "Overview": {
       "Purpose": "Defines dataclass genes used to describe reusable genotype node types and directed child connections.",
