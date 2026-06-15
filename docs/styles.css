@@ -156,14 +156,24 @@ pre code {
 }
 
 .sidebar a {
+  border-left: 4px solid transparent;
   border-radius: 6px;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.65rem;
   color: var(--muted);
 }
 
 .sidebar a:hover {
   background: var(--panel-soft);
   color: var(--brand-dark);
+  text-decoration: none;
+}
+
+.sidebar a.active,
+.on-page a.active {
+  border-left-color: var(--brand);
+  background: #edf7f5;
+  color: var(--brand-dark);
+  font-weight: 800;
   text-decoration: none;
 }
 
@@ -554,8 +564,9 @@ tr:last-child td {
 
 .on-page a {
   display: block;
+  border-left: 4px solid transparent;
   border-radius: 6px;
-  padding: 0.22rem 0.4rem;
+  padding: 0.22rem 0.4rem 0.22rem 0.65rem;
   color: var(--muted);
   font-size: 0.92rem;
 }

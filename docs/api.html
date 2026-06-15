@@ -349,6 +349,71 @@
         parent.append(section);
       };
 
+      const setLinkActive = (links, activeLink) => {
+        for (const link of links) {
+          const isActive = link === activeLink;
+          link.classList.toggle("active", isActive);
+          if (isActive) {
+            link.setAttribute("aria-current", "true");
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        }
+      };
+
+      const initScrollSpy = (linkSelector) => {
+        const links = Array.from(document.querySelectorAll(linkSelector));
+        const tracked = links
+          .map((link) => ({
+            link,
+            section: document.querySelector(decodeURIComponent(link.hash)),
+          }))
+          .filter((item) => item.section);
+
+        if (tracked.length === 0) {
+          return;
+        }
+
+        const updateActive = () => {
+          const marker = window.scrollY + 120;
+          const pageBottom =
+            window.innerHeight + window.scrollY >=
+            document.documentElement.scrollHeight - 24;
+          let active = tracked[0];
+
+          if (pageBottom) {
+            active = tracked[tracked.length - 1];
+          } else {
+            for (const item of tracked) {
+              if (item.section.offsetTop <= marker) {
+                active = item;
+              } else {
+                break;
+              }
+            }
+          }
+
+          setLinkActive(links, active.link);
+        };
+
+        let ticking = false;
+        const requestUpdate = () => {
+          if (ticking) {
+            return;
+          }
+          ticking = true;
+          window.requestAnimationFrame(() => {
+            updateActive();
+            ticking = false;
+          });
+        };
+
+        updateActive();
+        window.addEventListener("scroll", requestUpdate, { passive: true });
+        window.addEventListener("resize", requestUpdate);
+        return updateActive;
+      };
+
       const appendModule = (moduleName, moduleDetails) => {
         const moduleId = slug(moduleName);
         const section = document.createElement("section");
@@ -415,6 +480,28 @@
         appendNavigation(reference);
         for (const [moduleName, moduleDetails] of Object.entries(reference)) {
           appendModule(moduleName, moduleDetails);
+        }
+        const updateModuleNav = initScrollSpy("#api-module-nav a[href^='#']");
+        const updateOnPageNav = initScrollSpy("#api-on-page-nav a[href^='#']");
+
+        const scrollToHashTarget = () => {
+          const target = document.querySelector(decodeURIComponent(location.hash));
+          if (target) {
+            const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+            document.documentElement.style.scrollBehavior = "auto";
+            window.scrollTo({
+              top: Math.max(target.offsetTop - 96, 0),
+              behavior: "auto",
+            });
+            document.documentElement.style.scrollBehavior = previousScrollBehavior;
+            updateModuleNav?.();
+            updateOnPageNav?.();
+          }
+        };
+
+        if (location.hash) {
+          window.requestAnimationFrame(scrollToHashTarget);
+          window.setTimeout(scrollToHashTarget, 150);
         }
       };
 

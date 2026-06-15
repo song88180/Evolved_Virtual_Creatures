@@ -204,5 +204,78 @@
 
       </article>
     </main>
+
+    <script>
+      const initScrollSpy = (linkSelector) => {
+        const links = Array.from(document.querySelectorAll(linkSelector));
+        const tracked = links
+          .map((link) => ({
+            link,
+            section: document.querySelector(decodeURIComponent(link.hash)),
+          }))
+          .filter((item) => item.section);
+
+        if (tracked.length === 0) {
+          return;
+        }
+
+        const setActive = (activeLink) => {
+          for (const { link } of tracked) {
+            const isActive = link === activeLink;
+            link.classList.toggle("active", isActive);
+            if (isActive) {
+              link.setAttribute("aria-current", "true");
+            } else {
+              link.removeAttribute("aria-current");
+            }
+          }
+        };
+
+        const updateActive = () => {
+          const marker = window.scrollY + 120;
+          const pageBottom =
+            window.innerHeight + window.scrollY >=
+            document.documentElement.scrollHeight - 24;
+          let active = tracked[0];
+
+          if (pageBottom) {
+            active = tracked[tracked.length - 1];
+          } else {
+            for (const item of tracked) {
+              if (item.section.offsetTop <= marker) {
+                active = item;
+              } else {
+                break;
+              }
+            }
+          }
+
+          setActive(active.link);
+        };
+
+        let ticking = false;
+        const requestUpdate = () => {
+          if (ticking) {
+            return;
+          }
+          ticking = true;
+          window.requestAnimationFrame(() => {
+            updateActive();
+            ticking = false;
+          });
+        };
+
+        updateActive();
+        window.addEventListener("scroll", requestUpdate, { passive: true });
+        window.addEventListener("resize", requestUpdate);
+        return updateActive;
+      };
+
+      const updateContentsNav = initScrollSpy(".sidebar a[href^='#']");
+      if (location.hash) {
+        window.requestAnimationFrame(() => updateContentsNav?.());
+        window.setTimeout(() => updateContentsNav?.(), 150);
+      }
+    </script>
   </body>
 </html>
