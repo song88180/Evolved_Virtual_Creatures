@@ -6,3 +6,4 @@ generated_creature.xml
 runs/
 *.swp
 MUJOCO_LOG.TXT
+.codex/
