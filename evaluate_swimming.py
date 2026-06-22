@@ -1,7 +1,24 @@
 """Evaluate a genotype on the x-axis swimming task."""
 
 import argparse
+import os
 from pathlib import Path
+import sys
+
+
+def _configure_video_rendering_backend() -> None:
+    """Use headless EGL rendering for Linux video output by default."""
+    video_requested = any(
+        argument == "--video" or argument.startswith("--video=")
+        for argument in sys.argv[1:]
+    )
+    if sys.platform.startswith("linux") and video_requested:
+        os.environ.setdefault("MUJOCO_GL", "egl")
+
+
+# MuJoCo selects its OpenGL backend when it is imported, so this must run
+# before importing project modules that import mujoco.
+_configure_video_rendering_backend()
 
 from evol_virtual_creature.evaluation import (
     SwimmingEvaluationConfig,
