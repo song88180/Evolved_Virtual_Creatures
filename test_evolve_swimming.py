@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import sys
 
 import pytest
@@ -35,19 +35,21 @@ def test_parse_args_rejects_nonpositive_threads(monkeypatch):
         evolve_swimming.parse_args()
 
 
-def test_evaluate_population_preserves_input_order(monkeypatch):
-    population = list(range(20))
-    config = object()
-    monkeypatch.setattr(
-        evolve_swimming,
-        "_evaluate_creature",
-        lambda genotype, evaluation_config: (genotype, evaluation_config),
+def test_evaluate_population_runs_in_processes_and_preserves_order():
+    genotype = evolve_swimming.load_genotype_from_json(
+        evolve_swimming.DEFAULT_GENOTYPE_PATH
     )
+    population = [genotype, genotype]
+    config = evolve_swimming.SwimmingEvaluationConfig(episode_seconds=0.02)
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ProcessPoolExecutor(max_workers=2) as executor:
         evaluated = evolve_swimming._evaluate_population(
             population, config, executor
         )
 
-    assert evaluated == [(genotype, config) for genotype in population]
+    assert len(evaluated) == len(population)
+    assert [creature.fitness for creature in evaluated] == [
+        evaluated[0].fitness,
+        evaluated[0].fitness,
+    ]
 

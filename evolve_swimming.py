@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import contextlib
 import copy
 from dataclasses import asdict, dataclass
@@ -76,10 +76,10 @@ def main() -> None:
         f"{args.population_size} creatures for {args.generations} generation(s)."
     )
 
-    print(f"Evaluation threads: {args.threads}")
+    print(f"Evaluation worker processes: {args.threads}")
 
     with (
-        ThreadPoolExecutor(max_workers=args.threads) as executor,
+        ProcessPoolExecutor(max_workers=args.threads) as executor,
         metrics_path.open("w") as metrics_file,
     ):
         for generation in range(args.generations + 1):
@@ -147,7 +147,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=_default_thread_count(),
         help=(
-            "Number of concurrent population-evaluation threads. "
+            "Number of concurrent population-evaluation worker processes. "
             "Defaults to half of the available CPU cores."
         ),
     )
@@ -269,7 +269,7 @@ def _initial_population(
 def _evaluate_population(
     population: list[Genotype],
     config: SwimmingEvaluationConfig,
-    executor: ThreadPoolExecutor,
+    executor: ProcessPoolExecutor,
 ) -> list[EvaluatedCreature]:
     """Simulate and score every genotype concurrently, preserving input order."""
     return list(executor.map(_evaluate_creature, population, repeat(config)))
