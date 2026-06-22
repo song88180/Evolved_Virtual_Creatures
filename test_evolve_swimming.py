@@ -4,6 +4,8 @@ import sys
 import pytest
 
 import evolve_swimming
+import evaluate_swimming
+import generate_model
 
 
 def test_default_thread_count_uses_half_available_affinity(monkeypatch):
@@ -52,4 +54,59 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
         evaluated[0].fitness,
         evaluated[0].fitness,
     ]
+
+@pytest.mark.parametrize(
+    ("parse_args", "expected_defaults"),
+    [
+        (
+            evaluate_swimming.parse_args,
+            (
+                "default: example_genotype.json",
+                "default: 6.0",
+                "default: 0.001",
+                "default: disabled",
+                "default: 30",
+                "default: 960",
+                "default: 540",
+            ),
+        ),
+        (
+            evolve_swimming.parse_args,
+            (
+                "default: example_genotype.json",
+                "default: runs/swimming_<timestamp>",
+                "default: 100",
+                f"default: {evolve_swimming._default_thread_count()}",
+                "default: 5",
+                "default: 4",
+                "default: 1",
+                "default: 3",
+                "default: 10.0",
+                "default: 500",
+                "default: 0.001",
+                "default: random",
+            ),
+        ),
+        (
+            generate_model.parse_args,
+            (
+                "default: example_genotype.json",
+                "default: generated_creature.xml",
+                "default: 50",
+                "default: 500",
+            ),
+        ),
+    ],
+)
+def test_help_describes_parameter_defaults(
+    monkeypatch, capsys, parse_args, expected_defaults
+):
+    monkeypatch.setattr(sys, "argv", ["program", "--help"])
+
+    with pytest.raises(SystemExit, match="0"):
+        parse_args()
+
+    normalized_help = " ".join(capsys.readouterr().out.split())
+    for expected_default in expected_defaults:
+        assert expected_default in normalized_help
 

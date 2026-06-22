@@ -119,22 +119,32 @@ def main() -> None:
     print(f"Metrics: {metrics_path}")
 
 
+class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+    """Show concrete defaults while allowing dynamic defaults in help text."""
+
+    def _get_help_string(self, action):
+        if action.default is None or action.default is argparse.SUPPRESS:
+            return action.help
+        return super()._get_help_string(action)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments for the evolution run."""
     parser = argparse.ArgumentParser(
         description="Run mutation-based evolution for x-axis swimming creatures.",
+        formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--genotype",
         type=Path,
         default=DEFAULT_GENOTYPE_PATH,
-        help="Seed genotype JSON path.",
+        help="Seed genotype JSON path. (default: example_genotype.json)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
-        help="Run output directory. Defaults to runs/swimming_<timestamp>.",
+        help="Run output directory. (default: runs/swimming_<timestamp>)",
     )
     parser.add_argument(
         "--population-size",
@@ -148,7 +158,7 @@ def parse_args() -> argparse.Namespace:
         default=_default_thread_count(),
         help=(
             "Number of concurrent population-evaluation worker processes. "
-            "Defaults to half of the available CPU cores."
+            "Uses half of the available CPU cores by default."
         ),
     )
     parser.add_argument(
@@ -209,7 +219,7 @@ def parse_args() -> argparse.Namespace:
         "--seed",
         type=int,
         default=None,
-        help="Random seed for reproducible evolution.",
+        help="Random seed for reproducible evolution. (default: random)",
     )
     args = parser.parse_args()
     _validate_args(args)

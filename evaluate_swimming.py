@@ -79,15 +79,25 @@ def main():
         print(f"Saved video: {video_path}")
 
 
+class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+    """Show concrete defaults while allowing dynamic defaults in help text."""
+
+    def _get_help_string(self, action):
+        if action.default is None or action.default is argparse.SUPPRESS:
+            return action.help
+        return super()._get_help_string(action)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Evaluate and optionally record a swimming creature genotype.",
+        formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--genotype",
         type=Path,
         default=DEFAULT_GENOTYPE_PATH,
-        help="Genotype JSON path. Defaults to example_genotype.json.",
+        help="Genotype JSON path. (default: example_genotype.json)",
     )
     parser.add_argument(
         "--duration",
@@ -106,7 +116,10 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         const=DEFAULT_VIDEO_PATH,
         type=Path,
-        help="Optional MP4 output path. Defaults to example_swimming.mp4.",
+        help=(
+            "Optional MP4 output path (default: disabled); when this option is "
+            "supplied without a path, example_swimming.mp4 is used."
+        ),
     )
     parser.add_argument(
         "--fps",
