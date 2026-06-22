@@ -7,3 +7,4 @@ runs/
 *.swp
 MUJOCO_LOG.TXT
 .codex/
+.envrc
