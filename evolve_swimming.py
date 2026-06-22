@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import copy
 from dataclasses import asdict, dataclass
 from datetime import datetime
 import io
+from itertools import repeat
 import json
+import os
 from pathlib import Path
 import random
 from statistics import mean
@@ -73,9 +76,14 @@ def main() -> None:
         f"{args.population_size} creatures for {args.generations} generation(s)."
     )
 
-    with metrics_path.open("w") as metrics_file:
+    print(f"Evaluation threads: {args.threads}")
+
+    with (
+        ThreadPoolExecutor(max_workers=args.threads) as executor,
+        metrics_path.open("w") as metrics_file,
+    ):
         for generation in range(args.generations + 1):
-            evaluated = _evaluate_population(population, config)
+            evaluated = _evaluate_population(population, config, executor)
             evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
             best = evaluated[0]
             best_so_far = _best_of(best_so_far, best)
@@ -133,6 +141,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=100,
         help="Number of creatures per generation.",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=_default_thread_count(),
+        help=(
+            "Number of concurrent population-evaluation threads. "
+            "Defaults to half of the available CPU cores."
+        ),
     )
     parser.add_argument(
         "--generations",
@@ -203,6 +220,8 @@ def _validate_args(args: argparse.Namespace) -> None:
     """Raise ValueError when CLI arguments are inconsistent."""
     if args.population_size < 1:
         raise ValueError("--population-size must be at least 1")
+    if args.threads < 1:
+        raise ValueError("--threads must be at least 1")
     if args.generations < 0:
         raise ValueError("--generations must be non-negative")
     if not 0 <= args.elite_count <= args.population_size:
@@ -223,6 +242,15 @@ def _default_run_dir() -> Path:
     return DEFAULT_RUNS_DIR / f"swimming_{timestamp}"
 
 
+def _default_thread_count() -> int:
+    """Use half of the CPU cores available to this process, with a minimum of one."""
+    if hasattr(os, "sched_getaffinity"):
+        available_cores = len(os.sched_getaffinity(0))
+    else:
+        available_cores = os.cpu_count() or 1
+    return max(1, available_cores // 2)
+
+
 def _initial_population(
     seed_genotype: Genotype,
     population_size: int,
@@ -241,12 +269,10 @@ def _initial_population(
 def _evaluate_population(
     population: list[Genotype],
     config: SwimmingEvaluationConfig,
+    executor: ThreadPoolExecutor,
 ) -> list[EvaluatedCreature]:
-    """Simulate and score every genotype in the population."""
-    return [
-        _evaluate_creature(genotype, config)
-        for genotype in population
-    ]
+    """Simulate and score every genotype concurrently, preserving input order."""
+    return list(executor.map(_evaluate_creature, population, repeat(config)))
 
 
 def _evaluate_creature(
