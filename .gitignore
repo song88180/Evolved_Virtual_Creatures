@@ -8,3 +8,4 @@ runs/
 MUJOCO_LOG.TXT
 .codex/
 .envrc
+*.sh
