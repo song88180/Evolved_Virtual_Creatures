@@ -4,19 +4,16 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict
 from datetime import datetime
-from itertools import repeat
 import json
 from pathlib import Path
 import random
 
-from evol_virtual_creature.evaluation import (
-    SwimmingEvaluationConfig,
-    evaluate_x_axis_swimming,
-)
+from evol_virtual_creature.evaluation import SwimmingEvaluationConfig
 from evol_virtual_creature.evolve import (
     EvaluatedCreature,
+    _evaluate_population,
+    _save_generation_best,
     best_of,
     default_thread_count,
     generation_summary,
@@ -24,18 +21,13 @@ from evol_virtual_creature.evolve import (
     next_population,
     write_json,
 )
-from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.genotype_io import (
     load_genotype_from_json,
-    save_genotype_to_json,
 )
-from evol_virtual_creature.graph_analysis import PhenotypeBuildAbort
-from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 
 DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
 DEFAULT_RUNS_DIR = Path(__file__).with_name("runs")
-
 
 
 def main() -> None:
@@ -245,73 +237,6 @@ def _default_run_dir() -> Path:
     """Return a timestamped directory under ``runs/`` for this evolution run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return DEFAULT_RUNS_DIR / f"swimming_{timestamp}"
-
-
-def _evaluate_population(
-    population: list[Genotype],
-    config: SwimmingEvaluationConfig,
-    executor: ProcessPoolExecutor,
-) -> list[EvaluatedCreature]:
-    """Simulate and score every genotype concurrently, preserving input order."""
-    return list(executor.map(_evaluate_creature, population, repeat(config)))
-
-
-def _evaluate_creature(
-    genotype: Genotype,
-    config: SwimmingEvaluationConfig,
-) -> EvaluatedCreature:
-    """Evaluate one genotype, returning a failure score if simulation raises."""
-    try:
-        result = evaluate_x_axis_swimming(genotype, config)
-        metrics = asdict(result)
-        fitness = result.fitness
-    except Exception as error:
-        metrics = {
-            "fitness": config.build_failure_fitness,
-            "forward_distance": 0.0,
-            "average_forward_speed": 0.0,
-            "sideways_drift": 0.0,
-            "vertical_drift": 0.0,
-            "control_energy": 0.0,
-            "mean_angular_speed": 0.0,
-            "simulated_seconds": 0.0,
-            "actuator_count": 0,
-            "body_count": 0,
-            "build_failed": True,
-            "failure_reason": str(error),
-        }
-        fitness = config.build_failure_fitness
-    return EvaluatedCreature(genotype=genotype, fitness=fitness, metrics=metrics)
-
-
-def _save_generation_best(
-    run_dir: Path,
-    generation: int,
-    generation_best: EvaluatedCreature,
-    best_so_far: EvaluatedCreature,
-    max_node: int,
-) -> None:
-    """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
-    save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
-    save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
-    write_json(run_dir / "best_metrics.json", best_so_far.metrics)
-    _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, max_node)
-
-    generation_dir = run_dir / "generation_bests"
-    generation_dir.mkdir(exist_ok=True)
-    save_genotype_to_json(
-        generation_best.genotype,
-        generation_dir / f"generation_{generation:04d}.json",
-    )
-
-
-def _write_best_xml(path: Path, genotype: Genotype, max_node: int) -> None:
-    """Write the best creature's MJCF to disk, skipping output if the build aborts."""
-    try:
-        mjcf = PhenotypeBuilder(genotype, max_node=max_node).build()
-    except PhenotypeBuildAbort:
-        return
-    path.write_text(mjcf)
 
 
 if __name__ == "__main__":

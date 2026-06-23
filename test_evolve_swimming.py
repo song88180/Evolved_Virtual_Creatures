@@ -46,7 +46,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
     config = evolve_swimming.SwimmingEvaluationConfig(episode_seconds=0.02)
 
     with ProcessPoolExecutor(max_workers=2) as executor:
-        evaluated = evolve_swimming._evaluate_population(
+        evaluated = evolve._evaluate_population(
             population, config, executor
         )
 
