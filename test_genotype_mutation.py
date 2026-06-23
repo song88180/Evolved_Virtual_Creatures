@@ -40,6 +40,7 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
 
     assert connection.parent_face in {"+x", "-x", "+y", "-y", "+z", "-z"}
     assert all(-1.0 <= value <= 1.0 for value in connection.surface_uv)
+    assert set(connection.symmetry) <= {"xy", "xz", "yz"}
     assert all(-1.0 <= value <= 1.0 for value in connection.axis)
     assert 0.5 <= connection.scale <= 1.5
     assert 20.0 <= connection.motor_gear <= 200.0

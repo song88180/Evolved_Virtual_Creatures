@@ -33,15 +33,8 @@
           "axis": [1, 0, 0],
           "parent_face": "+y",
           "surface_uv": [0.0, 0.0],
+          "symmetry": ["xz"],
           "control_phase": 1.4,
-          "motor_enabled": true
-        },
-        {
-          "child": "limb",
-          "axis": [1, 0, 0],
-          "parent_face": "-y",
-          "surface_uv": [0.0, 0.0],
-          "control_phase": -1.4,
           "motor_enabled": true
         }
       ]

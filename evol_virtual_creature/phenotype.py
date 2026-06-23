@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
-from .genes import ATTACHMENT_FACES
+from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .graph_analysis import (
     GenotypeGraphAnalyzer,
@@ -20,6 +20,13 @@ FACE_NORMALS = {
     "+z": (0.0, 0.0, 1.0),
     "-z": (0.0, 0.0, -1.0),
 }
+
+PLANE_REFLECTIONS = {
+    "xy": (1.0, 1.0, -1.0),
+    "xz": (1.0, -1.0, 1.0),
+    "yz": (-1.0, 1.0, 1.0),
+}
+IDENTITY_REFLECTION = (1.0, 1.0, 1.0)
 
 
 @dataclass
@@ -47,6 +54,7 @@ class PhenotypeBuilder:
         self.mujoco_xml: Optional[ET.Element] = None
         self.actuator_xml: Optional[ET.Element] = None
         self.actuator_controllers: List[ActuatorController] = []
+        self.control_orders: Dict[Tuple[int, ...], int] = {}
 
     def new_body_name(self, node_name: str) -> str:
         self.body_counter += 1
@@ -63,6 +71,7 @@ class PhenotypeBuilder:
     def build(self) -> str:
         GenotypeGraphAnalyzer(self.genotype, self.max_node).validate()
         self.actuator_controllers = []
+        self.control_orders = {}
         self.mujoco_xml = ET.Element("mujoco", model="genotype_creature")
         self.configure_model()
 
@@ -77,8 +86,11 @@ class PhenotypeBuilder:
             parent_xml=root_body,
             node=root_node,
             incoming_conn=None,
+            incoming_axis=None,
             current_depths={},
             geom_center=(0.0, 0.0, 0.0),
+            reflection=IDENTITY_REFLECTION,
+            logical_path=(),
         )
 
         ET.indent(self.mujoco_xml, space="  ")
@@ -152,8 +164,11 @@ class PhenotypeBuilder:
         parent_xml: ET.Element,
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
+        incoming_axis: Optional[Tuple[float, float, float]],
         current_depths: Dict[str, int],
         geom_center: tuple[float, float, float],
+        reflection: Tuple[float, float, float],
+        logical_path: Tuple[int, ...],
     ):
         """
         Add one phenotype body part from one genotype node.
@@ -161,49 +176,80 @@ class PhenotypeBuilder:
         """
         node_depth = current_depths.get(node.name, 0) + 1
 
-        self.add_joint(parent_xml, node, incoming_conn, node_depth)
+        self.add_joint(
+            parent_xml,
+            node,
+            incoming_conn,
+            incoming_axis,
+            node_depth,
+            logical_path,
+        )
         self.add_geom(parent_xml, node, geom_center)
 
         next_depths = self.next_depths(current_depths, node.name, node_depth)
-        self.add_children(parent_xml, node, next_depths, geom_center)
+        self.add_children(
+            parent_xml,
+            node,
+            next_depths,
+            geom_center,
+            reflection,
+            logical_path,
+        )
 
     def add_joint(
         self,
         parent_xml: ET.Element,
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
+        incoming_axis: Optional[Tuple[float, float, float]],
         node_depth: int,
+        logical_path: Tuple[int, ...],
     ):
         if node.joint_type == "free":
             joint = ET.SubElement(parent_xml, "joint")
             joint.set("type", "free")
             joint.set("name", self.new_joint_name(node.name))
         elif node.joint_type == "hinge":
-            self.add_hinge_joint(parent_xml, node, incoming_conn, node_depth)
+            self.add_hinge_joint(
+                parent_xml,
+                node,
+                incoming_conn,
+                incoming_axis,
+                node_depth,
+                logical_path,
+            )
 
     def add_hinge_joint(
         self,
         parent_xml: ET.Element,
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
+        incoming_axis: Optional[Tuple[float, float, float]],
         node_depth: int,
+        logical_path: Tuple[int, ...],
     ):
         joint_name = self.new_joint_name(node.name)
         joint = ET.SubElement(parent_xml, "joint")
         joint.set("type", "hinge")
         joint.set("name", joint_name)
         joint.set("pos", "0 0 0")
-        joint_axis = incoming_conn.axis if incoming_conn else node.joint_axis
+        joint_axis = incoming_axis if incoming_axis is not None else node.joint_axis
         joint.set("axis", vec_to_str(joint_axis))
 
         if incoming_conn is None or incoming_conn.motor_enabled:
-            self.add_motor(joint_name, incoming_conn, node_depth)
+            self.add_motor(
+                joint_name,
+                incoming_conn,
+                node_depth,
+                logical_path,
+            )
 
     def add_motor(
         self,
         joint_name: str,
         incoming_conn: Optional[ConnectionGene],
         node_depth: int,
+        logical_path: Tuple[int, ...],
     ):
         if self.actuator_xml is None:
             raise RuntimeError("actuator_xml must be initialized before adding motors")
@@ -212,7 +258,10 @@ class PhenotypeBuilder:
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
         control_freq = incoming_conn.control_freq if incoming_conn else 4.0
-        control_order = len(self.actuator_controllers)
+        control_order = self.control_orders.setdefault(
+            logical_path,
+            len(self.control_orders),
+        )
         control_phase = (
             incoming_conn.phase_for(node_depth, control_order)
             if incoming_conn
@@ -263,32 +312,56 @@ class PhenotypeBuilder:
         node: NodeGene,
         current_depths: Dict[str, int],
         geom_center: tuple[float, float, float],
+        reflection: Tuple[float, float, float],
+        logical_path: Tuple[int, ...],
     ):
-        for conn in node.children:
+        for connection_index, conn in enumerate(node.children):
             child_node = self.genotype.nodes[conn.child]
             if not self.can_add_child(child_node, current_depths):
                 continue
 
-            child_body_pos, child_geom_center = _surface_attachment_transform(
+            base_body_pos, base_geom_center = _surface_attachment_transform(
                 parent_size=node.size,
                 parent_geom_center=geom_center,
                 child_size=child_node.size,
                 parent_face=conn.parent_face,
                 surface_uv=conn.surface_uv,
             )
-            child_body = self.create_body(
-                parent_xml,
-                child_node,
-                vec_to_str(child_body_pos),
-            )
+            child_logical_path = (*logical_path, connection_index)
+            for local_reflection in _symmetry_reflections(conn.symmetry):
+                child_reflection = _compose_reflections(
+                    reflection,
+                    local_reflection,
+                )
+                child_body_pos = _reflect_point(
+                    base_body_pos,
+                    geom_center,
+                    child_reflection,
+                )
+                child_geom_center = _reflect_vector(
+                    base_geom_center,
+                    child_reflection,
+                )
+                child_axis = _reflect_axial_vector(
+                    conn.axis,
+                    child_reflection,
+                )
+                child_body = self.create_body(
+                    parent_xml,
+                    child_node,
+                    vec_to_str(child_body_pos),
+                )
 
-            self.add_node_to_body(
-                parent_xml=child_body,
-                node=child_node,
-                incoming_conn=conn,
-                current_depths=current_depths,
-                geom_center=child_geom_center,
-            )
+                self.add_node_to_body(
+                    parent_xml=child_body,
+                    node=child_node,
+                    incoming_conn=conn,
+                    incoming_axis=child_axis,
+                    current_depths=current_depths,
+                    geom_center=child_geom_center,
+                    reflection=child_reflection,
+                    logical_path=child_logical_path,
+                )
 
     def can_add_child(
         self,
@@ -297,6 +370,57 @@ class PhenotypeBuilder:
     ) -> bool:
         child_depth = current_depths.get(child_node.name, 0)
         return child_depth < child_node.recursive_limit
+
+
+def _symmetry_reflections(
+    symmetry: Sequence[str],
+) -> List[Tuple[float, float, float]]:
+    reflections = [IDENTITY_REFLECTION]
+    for plane in SYMMETRY_PLANES:
+        if plane not in symmetry:
+            continue
+        plane_reflection = PLANE_REFLECTIONS[plane]
+        reflections += [
+            _compose_reflections(reflection, plane_reflection)
+            for reflection in reflections
+        ]
+    return reflections
+
+
+def _compose_reflections(
+    first: Sequence[float],
+    second: Sequence[float],
+) -> Tuple[float, float, float]:
+    return tuple(a * b for a, b in zip(first, second))
+
+
+def _reflect_point(
+    point: Sequence[float],
+    origin: Sequence[float],
+    reflection: Sequence[float],
+) -> Tuple[float, float, float]:
+    return tuple(
+        center + sign * (coordinate - center)
+        for coordinate, center, sign in zip(point, origin, reflection)
+    )
+
+
+def _reflect_vector(
+    vector: Sequence[float],
+    reflection: Sequence[float],
+) -> Tuple[float, float, float]:
+    return tuple(component * sign for component, sign in zip(vector, reflection))
+
+
+def _reflect_axial_vector(
+    vector: Sequence[float],
+    reflection: Sequence[float],
+) -> Tuple[float, float, float]:
+    determinant = reflection[0] * reflection[1] * reflection[2]
+    return tuple(
+        determinant * component * sign
+        for component, sign in zip(vector, reflection)
+    )
 
 
 def _surface_attachment_transform(

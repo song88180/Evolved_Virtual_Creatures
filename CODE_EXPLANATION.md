@@ -41,6 +41,7 @@ class ConnectionGene:
     axis: Tuple[float, float, float]
     parent_face: str = "+x"
     surface_uv: Tuple[float, float] = (0.0, 0.0)
+    symmetry: Tuple[str, ...] = ()
     scale: float = 1.0
     terminal_only: bool = False
     motor_enabled: bool = True
@@ -58,6 +59,7 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `child`: the name of the child node to attach.
 - `parent_face`: the parent box face where the child hinge is attached.
 - `surface_uv`: normalized coordinates from `-1` to `1` along the two remaining axes in X/Y/Z order.
+- `symmetry`: any subset of `"xy"`, `"xz"`, and `"yz"`; every selected plane doubles the child subtree.
 - `axis`: the hinge axis used when this connection creates a hinge joint.
 - `scale`: a future extension point for resizing child parts.
 - `terminal_only`: a future extension point for only adding a child at the end of a recursive chain.
@@ -65,7 +67,9 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
 - `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters.
 
-The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe.
+The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, frequency, and phase. Their hinge axes are reflected so equal controls produce mirror-symmetric motion.
+
+With all three symmetry planes selected, one connection generates `2 ** 3 = 8` mirrored child subtrees. Copies are retained even when an attachment lies directly on a symmetry plane.
 
 ### `NodeGene`
 
@@ -109,7 +113,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
+Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
 
 The method prints the mutation details as it applies them:
 
@@ -158,11 +162,15 @@ The key recursive detail is this connection:
 
 Because `segment` connects to another `segment`, the genotype can expand into a chain. The `recursive_limit=10` on the `segment` node prevents that self-connection from expanding forever, producing up to ten segment bodies along that branch.
 
-Each segment also creates two limbs, one at positive Y and one at negative Y:
+Each segment creates a limb at positive Y and mirrors its full subtree across the XZ plane to create the negative-Y limb:
 
 ```python
-segment.children.append(ConnectionGene(child="limb", axis=(1, 0, 0), parent_face="+y"))
-segment.children.append(ConnectionGene(child="limb", axis=(1, 0, 0), parent_face="-y"))
+segment.children.append(ConnectionGene(
+    child="limb",
+    axis=(1, 0, 0),
+    parent_face="+y",
+    symmetry=("xz",),
+))
 ```
 
 ## `PhenotypeBuilder`
@@ -304,14 +312,26 @@ For the self-recursive `segment` node, this check stops expansion after ten segm
 For each allowed connection, the code creates a nested MuJoCo `<body>`:
 
 ```python
-child_body_pos, child_geom_center = _surface_attachment_transform(
+base_body_pos, base_geom_center = _surface_attachment_transform(
     parent_size=node.size,
     parent_geom_center=geom_center,
     child_size=child_node.size,
     parent_face=conn.parent_face,
     surface_uv=conn.surface_uv,
 )
-child_body = self.create_body(parent_xml, child_node, vec_to_str(child_body_pos))
+child_logical_path = (*logical_path, connection_index)
+for local_reflection in _symmetry_reflections(conn.symmetry):
+    child_reflection = _compose_reflections(reflection, local_reflection)
+    child_body_pos = _reflect_point(
+        base_body_pos, geom_center, child_reflection
+    )
+    child_geom_center = _reflect_vector(
+        base_geom_center, child_reflection
+    )
+    child_axis = _reflect_axial_vector(conn.axis, child_reflection)
+    child_body = self.create_body(
+        parent_xml, child_node, vec_to_str(child_body_pos)
+    )
 ```
 
 Then it recursively calls `add_node_to_body()` for that child:
@@ -320,11 +340,16 @@ Then it recursively calls `add_node_to_body()` for that child:
 self.add_node_to_body(
     parent_xml=child_body,
     node=child_node,
+    incoming_conn=conn,
+    incoming_axis=child_axis,
     current_depths=current_depths,
+    geom_center=child_geom_center,
+    reflection=child_reflection,
+    logical_path=child_logical_path,
 )
 ```
 
-This recursive nesting is what turns the compact genotype graph into a full MuJoCo body hierarchy.
+This recursive nesting turns the compact genotype graph into a full MuJoCo body hierarchy. Reflection state propagates into descendants, while mirrored actuators share a logical path so their controller signals remain identical.
 
 ## Utility Function
 

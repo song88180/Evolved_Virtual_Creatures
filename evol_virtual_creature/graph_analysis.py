@@ -89,10 +89,11 @@ class GenotypeGraphAnalyzer:
             if child_depth >= child_node.recursive_limit:
                 continue
 
-            total_nodes += self._count_expanded_nodes(
+            child_subtree_count = self._count_expanded_nodes(
                 child_node.name,
                 next_depths,
             )
+            total_nodes += (2 ** len(connection.symmetry)) * child_subtree_count
             if total_nodes > self.max_node:
                 raise PhenotypeNodeLimitExceeded(
                     "Maximum allowed number of phenotype nodes exceeded during "

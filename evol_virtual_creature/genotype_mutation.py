@@ -4,7 +4,12 @@ from typing import Any, ClassVar, List, Optional, Tuple
 import copy
 import random
 
-from .genes import ATTACHMENT_FACES, ConnectionGene, NodeGene
+from .genes import (
+    ATTACHMENT_FACES,
+    SYMMETRY_PLANES,
+    ConnectionGene,
+    NodeGene,
+)
 
 
 class GenotypeMutationMixin:
@@ -94,6 +99,7 @@ class GenotypeMutationMixin:
         connection_mutation_specs = (
             "parent_face",
             "surface_uv",
+            "symmetry",
             "axis",
             "scale",
             "terminal_only",
@@ -125,11 +131,15 @@ class GenotypeMutationMixin:
                     mutable_parameters.append(("connection_destination_node_replacement", connection))
                     mutable_parameters.append(("connection_removal", connection))
                 for field_name in connection_mutation_specs:
-                    self._add_mutable_parameter_paths(
-                        mutable_parameters,
-                        owner=connection,
-                        base_path=("connection", connection, field_name),
-                    )
+                    base_path = ("connection", connection, field_name)
+                    if field_name == "symmetry":
+                        mutable_parameters.append(base_path)
+                    else:
+                        self._add_mutable_parameter_paths(
+                            mutable_parameters,
+                            owner=connection,
+                            base_path=base_path,
+                        )
 
         return mutable_parameters
 
@@ -317,6 +327,7 @@ class GenotypeMutationMixin:
                 self.MIN_SURFACE_COORD_MUTATION_STD,
                 False,
             ),
+            "symmetry": ("symmetry_planes", 0.0, False),
             "axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
             "scale": ("positive", self.MIN_SCALE_MUTATION_STD, False),
             "terminal_only": ("boolean", 0.0, False),
@@ -351,6 +362,19 @@ class GenotypeMutationMixin:
         if mutation_kind == "attachment_face":
             return random_source.choice(
                 [face for face in ATTACHMENT_FACES if face != value]
+            )
+
+        if mutation_kind == "symmetry_planes":
+            plane = random_source.choice(SYMMETRY_PLANES)
+            selected_planes = set(value)
+            if plane in selected_planes:
+                selected_planes.remove(plane)
+            else:
+                selected_planes.add(plane)
+            return tuple(
+                candidate
+                for candidate in SYMMETRY_PLANES
+                if candidate in selected_planes
             )
 
         if mutation_kind == "boolean":
@@ -500,6 +524,7 @@ class GenotypeMutationMixin:
         connection_fields = (
             "parent_face",
             "surface_uv",
+            "symmetry",
             "axis",
             "scale",
             "terminal_only",
@@ -662,6 +687,11 @@ class GenotypeMutationMixin:
             surface_uv=(
                 random_source.uniform(-1.0, 1.0),
                 random_source.uniform(-1.0, 1.0),
+            ),
+            symmetry=tuple(
+                plane
+                for plane in SYMMETRY_PLANES
+                if random_source.choice((False, True))
             ),
             scale=random_source.uniform(0.5, 1.5),
             terminal_only=random_source.choice((False, True)),
@@ -881,6 +911,7 @@ class GenotypeMutationMixin:
         mutable_fields = (
             "parent_face",
             "surface_uv",
+            "symmetry",
             "axis",
             "scale",
             "terminal_only",
@@ -897,7 +928,7 @@ class GenotypeMutationMixin:
         base_path = ("connection", connection, field_name)
         value = getattr(connection, field_name)
 
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, (list, tuple)) and field_name != "symmetry":
             base_path = (*base_path, random_source.randrange(len(value)))
 
         return self._mutate_parameter_path(base_path, random_source)

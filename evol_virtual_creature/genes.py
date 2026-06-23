@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 
 ATTACHMENT_FACES = ("+x", "-x", "+y", "-y", "+z", "-z")
+SYMMETRY_PLANES = ("xy", "xz", "yz")
 
 
 @dataclass
@@ -14,6 +15,7 @@ class ConnectionGene:
     axis: Tuple[float, float, float]
     parent_face: str = "+x"
     surface_uv: Tuple[float, float] = (0.0, 0.0)
+    symmetry: Tuple[str, ...] = ()
     scale: float = 1.0
     terminal_only: bool = False
     motor_enabled: bool = True
@@ -40,6 +42,20 @@ class ConnectionGene:
             raise ValueError("surface_uv coordinates must be finite")
         if any(value < -1.0 or value > 1.0 for value in self.surface_uv):
             raise ValueError("surface_uv coordinates must be between -1 and 1")
+
+        unknown_planes = set(self.symmetry) - set(SYMMETRY_PLANES)
+        if unknown_planes:
+            valid_planes = ", ".join(SYMMETRY_PLANES)
+            unknown = ", ".join(sorted(unknown_planes))
+            raise ValueError(
+                f"Unknown symmetry plane(s) {unknown}; expected any subset of "
+                f"{valid_planes}"
+            )
+        if len(set(self.symmetry)) != len(self.symmetry):
+            raise ValueError("symmetry planes must not contain duplicates")
+        self.symmetry = tuple(
+            plane for plane in SYMMETRY_PLANES if plane in self.symmetry
+        )
 
     def phase_for(self, depth: int, order: int) -> float:
         return (
