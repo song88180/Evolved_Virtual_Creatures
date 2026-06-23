@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from .genes import ATTACHMENT_FACES
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .graph_analysis import (
     GenotypeGraphAnalyzer,
     PhenotypeNodeLimitExceeded,
 )
+
+
+FACE_NORMALS = {
+    "+x": (1.0, 0.0, 0.0),
+    "-x": (-1.0, 0.0, 0.0),
+    "+y": (0.0, 1.0, 0.0),
+    "-y": (0.0, -1.0, 0.0),
+    "+z": (0.0, 0.0, 1.0),
+    "-z": (0.0, 0.0, -1.0),
+}
 
 
 @dataclass
@@ -67,6 +78,7 @@ class PhenotypeBuilder:
             node=root_node,
             incoming_conn=None,
             current_depths={},
+            geom_center=(0.0, 0.0, 0.0),
         )
 
         ET.indent(self.mujoco_xml, space="  ")
@@ -141,6 +153,7 @@ class PhenotypeBuilder:
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
         current_depths: Dict[str, int],
+        geom_center: tuple[float, float, float],
     ):
         """
         Add one phenotype body part from one genotype node.
@@ -149,10 +162,10 @@ class PhenotypeBuilder:
         node_depth = current_depths.get(node.name, 0) + 1
 
         self.add_joint(parent_xml, node, incoming_conn, node_depth)
-        self.add_geom(parent_xml, node)
+        self.add_geom(parent_xml, node, geom_center)
 
         next_depths = self.next_depths(current_depths, node.name, node_depth)
-        self.add_children(parent_xml, node, next_depths)
+        self.add_children(parent_xml, node, next_depths, geom_center)
 
     def add_joint(
         self,
@@ -179,6 +192,7 @@ class PhenotypeBuilder:
         joint = ET.SubElement(parent_xml, "joint")
         joint.set("type", "hinge")
         joint.set("name", joint_name)
+        joint.set("pos", "0 0 0")
         joint_axis = incoming_conn.axis if incoming_conn else node.joint_axis
         joint.set("axis", vec_to_str(joint_axis))
 
@@ -221,10 +235,16 @@ class PhenotypeBuilder:
             )
         )
 
-    def add_geom(self, parent_xml: ET.Element, node: NodeGene):
+    def add_geom(
+        self,
+        parent_xml: ET.Element,
+        node: NodeGene,
+        geom_center: tuple[float, float, float],
+    ):
         geom = ET.SubElement(parent_xml, "geom")
         geom.set("name", f"{parent_xml.get('name')}_geom")
         geom.set("size", vec_to_str(node.size))
+        geom.set("pos", vec_to_str(geom_center))
         geom.set("rgba", "0.6 0.7 0.9 1")
 
     def next_depths(
@@ -242,16 +262,24 @@ class PhenotypeBuilder:
         parent_xml: ET.Element,
         node: NodeGene,
         current_depths: Dict[str, int],
+        geom_center: tuple[float, float, float],
     ):
         for conn in node.children:
             child_node = self.genotype.nodes[conn.child]
             if not self.can_add_child(child_node, current_depths):
                 continue
 
+            child_body_pos, child_geom_center = _surface_attachment_transform(
+                parent_size=node.size,
+                parent_geom_center=geom_center,
+                child_size=child_node.size,
+                parent_face=conn.parent_face,
+                surface_uv=conn.surface_uv,
+            )
             child_body = self.create_body(
                 parent_xml,
                 child_node,
-                vec_to_str(conn.pos),
+                vec_to_str(child_body_pos),
             )
 
             self.add_node_to_body(
@@ -259,6 +287,7 @@ class PhenotypeBuilder:
                 node=child_node,
                 incoming_conn=conn,
                 current_depths=current_depths,
+                geom_center=child_geom_center,
             )
 
     def can_add_child(
@@ -268,6 +297,35 @@ class PhenotypeBuilder:
     ) -> bool:
         child_depth = current_depths.get(child_node.name, 0)
         return child_depth < child_node.recursive_limit
+
+
+def _surface_attachment_transform(
+    parent_size: Sequence[float],
+    parent_geom_center: Sequence[float],
+    child_size: Sequence[float],
+    parent_face: str,
+    surface_uv: Sequence[float],
+) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    try:
+        normal = FACE_NORMALS[parent_face]
+    except KeyError as exc:
+        valid_faces = ", ".join(ATTACHMENT_FACES)
+        raise ValueError(
+            f"Unknown parent face {parent_face!r}; expected one of {valid_faces}"
+        ) from exc
+
+    normal_axis = next(index for index, value in enumerate(normal) if value)
+    tangent_axes = [axis for axis in range(3) if axis != normal_axis]
+    joint_pos = list(parent_geom_center)
+    joint_pos[normal_axis] += normal[normal_axis] * parent_size[normal_axis]
+    for coordinate, axis in zip(surface_uv, tangent_axes):
+        joint_pos[axis] += coordinate * parent_size[axis]
+
+    child_geom_center = tuple(
+        normal[axis] * child_size[axis]
+        for axis in range(3)
+    )
+    return tuple(joint_pos), child_geom_center
 
 
 def vec_to_str(v):

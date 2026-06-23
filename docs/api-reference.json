@@ -18,17 +18,22 @@
       "ConnectionGene": {
         "Purpose": "Describes how a parent genotype node attaches a child node and how the generated hinge actuator should be controlled.",
         "Constructor": {
-          "Signature": "ConnectionGene(child: str, pos: Tuple[float, float, float], axis: Tuple[float, float, float], scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0)",
+          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0)",
           "Parameters": {
             "child": {
               "Type": "str",
               "Default": "required",
               "Description": "Name of the child node in Genotype.nodes."
             },
-            "pos": {
-              "Type": "Tuple[float, float, float]",
-              "Default": "required",
-              "Description": "Child body position relative to the parent body."
+            "parent_face": {
+              "Type": "str",
+              "Default": "\"+x\"",
+              "Description": "Parent box face containing the child hinge and attachment point."
+            },
+            "surface_uv": {
+              "Type": "Tuple[float, float]",
+              "Default": "(0.0, 0.0)",
+              "Description": "Normalized coordinates from -1 to 1 along the two remaining axes in X/Y/Z order."
             },
             "axis": {
               "Type": "Tuple[float, float, float]",
@@ -86,11 +91,12 @@
               "Description": "Additional phase offset multiplied by actuator order."
             }
           },
-          "Raises": []
+          "Raises": ["ValueError"]
         },
         "Attributes": {
           "child": {"Type": "str", "Description": "Name of the child node."},
-          "pos": {"Type": "Tuple[float, float, float]", "Description": "Relative child body position."},
+          "parent_face": {"Type": "str", "Description": "Selected parent attachment face."},
+          "surface_uv": {"Type": "Tuple[float, float]", "Description": "Normalized coordinates on the selected face."},
           "axis": {"Type": "Tuple[float, float, float]", "Description": "Hinge axis for the connection."},
           "scale": {"Type": "float", "Description": "Connection scale parameter."},
           "terminal_only": {"Type": "bool", "Description": "Connection typing flag."},
@@ -119,7 +125,7 @@
             "Example": "phase = connection.phase_for(depth=2, order=0)"
           }
         },
-        "Example": "connection = ConnectionGene(child=\"tail\", pos=(0.2, 0.0, 0.0), axis=(0.0, 1.0, 0.0))"
+        "Example": "connection = ConnectionGene(child=\"tail\", axis=(0.0, 1.0, 0.0), parent_face=\"-x\", surface_uv=(0.0, 0.0))"
       },
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph.",
@@ -578,17 +584,18 @@
             "Example": "body = builder.create_body(worldbody, root_node, \"0 0 0.6\")"
           },
           "add_node_to_body": {
-            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], current_depths: Dict[str, int]) -> None",
+            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], current_depths: Dict[str, int], geom_center: Tuple[float, float, float]) -> None",
             "Purpose": "Add joint, geom, and recursive children for one node body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element to populate."},
               "node": {"Type": "NodeGene", "Description": "Node gene represented by the body."},
               "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection used to reach this node, if any."},
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Current recursive depth by node name."}
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Current recursive depth by node name."},
+              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["RuntimeError", "PhenotypeNodeLimitExceeded"],
-            "Example": "builder.add_node_to_body(root_body, root_node, None, {})"
+            "Example": "builder.add_node_to_body(root_body, root_node, None, {}, (0.0, 0.0, 0.0))"
           },
           "add_joint": {
             "Signature": "add_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], node_depth: int) -> None",
@@ -629,15 +636,16 @@
             "Example": "builder.add_motor(\"tail_joint_1\", connection, 2)"
           },
           "add_geom": {
-            "Signature": "add_geom(parent_xml: ET.Element, node: NodeGene) -> None",
+            "Signature": "add_geom(parent_xml: ET.Element, node: NodeGene, geom_center: Tuple[float, float, float]) -> None",
             "Purpose": "Add a box geom to a generated body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node gene defining geom size."}
+              "node": {"Type": "NodeGene", "Description": "Node gene defining geom size."},
+              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."}
             },
             "Returns": {"Type": "None", "Description": "Mutates the body XML element."},
             "Raises": [],
-            "Example": "builder.add_geom(body, node)"
+            "Example": "builder.add_geom(body, node, (0.0, 0.0, 0.0))"
           },
           "next_depths": {
             "Signature": "next_depths(current_depths: Dict[str, int], node_name: str, node_depth: int) -> Dict[str, int]",
@@ -652,16 +660,17 @@
             "Example": "depths = builder.next_depths({}, \"segment\", 1)"
           },
           "add_children": {
-            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int]) -> None",
+            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int], geom_center: Tuple[float, float, float]) -> None",
             "Purpose": "Recursively add child bodies for each allowed outgoing connection.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Parent body XML element."},
               "node": {"Type": "NodeGene", "Description": "Node whose children are expanded."},
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Depth map used to enforce recursive limits."}
+              "current_depths": {"Type": "Dict[str, int]", "Description": "Depth map used to enforce recursive limits."},
+              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Parent box center in the current body frame."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["KeyError", "RuntimeError", "PhenotypeNodeLimitExceeded"],
-            "Example": "builder.add_children(body, node, depths)"
+            "Example": "builder.add_children(body, node, depths, geom_center)"
           },
           "can_add_child": {
             "Signature": "can_add_child(child_node: NodeGene, current_depths: Dict[str, int]) -> bool",

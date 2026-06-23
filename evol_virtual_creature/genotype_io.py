@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Sequence
 from dataclasses import asdict
 import json
 
@@ -39,7 +39,11 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
                 raise KeyError(
                     f"Node '{node_name}' connects to unknown child '{child_name}'"
                 )
-            nodes[node_name].children.append(ConnectionGene(**connection_spec))
+            connection_data = _normalize_connection_data(
+                connection_spec,
+                nodes[node_name].size,
+            )
+            nodes[node_name].children.append(ConnectionGene(**connection_data))
 
     return Genotype(root=root, nodes=nodes)
 
@@ -54,7 +58,7 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         spec=genotype_data["nodes"],
     )
     genotype.archived_connections = [
-        ConnectionGene(**connection)
+        ConnectionGene(**_normalize_connection_data(connection))
         for connection in genotype_data.get("archived_connections", [])
     ]
     genotype.archived_nodes = [
@@ -108,7 +112,73 @@ def _node_from_dict(node_data: Mapping[str, Any]) -> NodeGene:
     }
     node = NodeGene(**node_kwargs)
     node.children = [
-        ConnectionGene(**connection)
+        ConnectionGene(**_normalize_connection_data(connection, node.size))
         for connection in node_data.get("children", [])
     ]
     return node
+
+
+def _normalize_connection_data(
+    connection_data: Mapping[str, Any],
+    parent_size: Sequence[float] | None = None,
+) -> Dict[str, Any]:
+    normalized = dict(connection_data)
+    legacy_pos = normalized.pop("pos", None)
+    if "parent_face" in normalized or "surface_uv" in normalized:
+        normalized.setdefault("parent_face", "+x")
+        normalized.setdefault("surface_uv", (0.0, 0.0))
+        return normalized
+
+    if legacy_pos is None:
+        normalized.setdefault("parent_face", "+x")
+        normalized.setdefault("surface_uv", (0.0, 0.0))
+        return normalized
+
+    if parent_size is None:
+        normalized["parent_face"] = _legacy_pos_to_face(legacy_pos)
+        normalized["surface_uv"] = (0.0, 0.0)
+        return normalized
+
+    parent_face, surface_uv = _legacy_pos_to_surface(legacy_pos, parent_size)
+    normalized.setdefault("parent_face", parent_face)
+    normalized.setdefault("surface_uv", surface_uv)
+    return normalized
+
+
+def _legacy_pos_to_face(pos: Sequence[float]) -> str:
+    if len(pos) != 3:
+        raise ValueError("Legacy connection pos must contain exactly three coordinates")
+
+    normal_axis = max(range(3), key=lambda axis: abs(float(pos[axis])))
+    sign = "+" if float(pos[normal_axis]) >= 0.0 else "-"
+    return f"{sign}{'xyz'[normal_axis]}"
+
+
+def _legacy_pos_to_surface(
+    pos: Sequence[float],
+    parent_size: Sequence[float],
+) -> tuple[str, tuple[float, float]]:
+    if len(pos) != 3:
+        raise ValueError("Legacy connection pos must contain exactly three coordinates")
+    if len(parent_size) != 3:
+        raise ValueError("Parent size must contain exactly three coordinates")
+
+    normalized_distances = [
+        abs(float(position)) / max(float(half_size), 1e-12)
+        for position, half_size in zip(pos, parent_size)
+    ]
+    normal_axis = max(range(3), key=normalized_distances.__getitem__)
+    sign = "+" if float(pos[normal_axis]) >= 0.0 else "-"
+    parent_face = f"{sign}{'xyz'[normal_axis]}"
+    tangent_axes = [axis for axis in range(3) if axis != normal_axis]
+    surface_uv = tuple(
+        max(
+            -1.0,
+            min(
+                1.0,
+                float(pos[axis]) / max(float(parent_size[axis]), 1e-12),
+            ),
+        )
+        for axis in tangent_axes
+    )
+    return parent_face, surface_uv

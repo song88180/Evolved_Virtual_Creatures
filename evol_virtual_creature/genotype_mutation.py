@@ -4,7 +4,7 @@ from typing import Any, ClassVar, List, Optional, Tuple
 import copy
 import random
 
-from .genes import ConnectionGene, NodeGene
+from .genes import ATTACHMENT_FACES, ConnectionGene, NodeGene
 
 
 class GenotypeMutationMixin:
@@ -12,7 +12,7 @@ class GenotypeMutationMixin:
     MIN_SIZE_MUTATION_STD: ClassVar[float] = 0.01
     MIN_AXIS_MUTATION_STD: ClassVar[float] = 0.01
     MIN_INTEGER_MUTATION_STD: ClassVar[float] = 1.0
-    MIN_POS_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_SURFACE_COORD_MUTATION_STD: ClassVar[float] = 0.05
     MIN_SCALE_MUTATION_STD: ClassVar[float] = 0.01
     MIN_MOTOR_GEAR_MUTATION_STD: ClassVar[float] = 0.1
     MIN_CTRLRANGE_MUTATION_STD: ClassVar[float] = 0.01
@@ -92,7 +92,8 @@ class GenotypeMutationMixin:
             "recursive_limit",
         )
         connection_mutation_specs = (
-            "pos",
+            "parent_face",
+            "surface_uv",
             "axis",
             "scale",
             "terminal_only",
@@ -310,7 +311,12 @@ class GenotypeMutationMixin:
                 self.MIN_INTEGER_MUTATION_STD,
                 False,
             ),
-            "pos": ("relative", self.MIN_POS_MUTATION_STD, False),
+            "parent_face": ("attachment_face", 0.0, False),
+            "surface_uv": (
+                "bounded_surface_coordinate",
+                self.MIN_SURFACE_COORD_MUTATION_STD,
+                False,
+            ),
             "axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
             "scale": ("positive", self.MIN_SCALE_MUTATION_STD, False),
             "terminal_only": ("boolean", 0.0, False),
@@ -341,6 +347,11 @@ class GenotypeMutationMixin:
         min_mutation_std: float,
     ) -> Any:
         mutation_kind = mutation_kind.lower()
+
+        if mutation_kind == "attachment_face":
+            return random_source.choice(
+                [face for face in ATTACHMENT_FACES if face != value]
+            )
 
         if mutation_kind == "boolean":
             return not value
@@ -379,6 +390,19 @@ class GenotypeMutationMixin:
                 value,
                 min_mutation_std,
                 random_source,
+            )
+
+        if mutation_kind == "bounded_surface_coordinate":
+            return max(
+                -1.0,
+                min(
+                    1.0,
+                    value + self._normal_mutation_delta(
+                        value,
+                        min_mutation_std,
+                        random_source,
+                    ),
+                ),
             )
 
         raise ValueError(f"Unknown mutation kind: {mutation_kind}")
@@ -474,7 +498,8 @@ class GenotypeMutationMixin:
         source_label = self._describe_connection_source(source_connection)
         destination = connection.child
         connection_fields = (
-            "pos",
+            "parent_face",
+            "surface_uv",
             "axis",
             "scale",
             "terminal_only",
@@ -632,12 +657,12 @@ class GenotypeMutationMixin:
         ctrlrange_limit = random_source.uniform(0.5, 2.0)
         return ConnectionGene(
             child=destination_node.name,
-            pos=(
-                random_source.uniform(-0.30, 0.30),
-                random_source.uniform(-0.20, 0.20),
-                random_source.uniform(-0.20, 0.20),
-            ),
             axis=self._random_axis(random_source),
+            parent_face=random_source.choice(ATTACHMENT_FACES),
+            surface_uv=(
+                random_source.uniform(-1.0, 1.0),
+                random_source.uniform(-1.0, 1.0),
+            ),
             scale=random_source.uniform(0.5, 1.5),
             terminal_only=random_source.choice((False, True)),
             motor_enabled=random_source.random() < 0.85,
@@ -673,8 +698,9 @@ class GenotypeMutationMixin:
             if use_template:
                 new_connection = ConnectionGene(
                     child=destination_node.name,
-                    pos=(0.1, 0.0, 0.0),
                     axis=(0.0, 1.0, 0.0),
+                    parent_face="+x",
+                    surface_uv=(0.0, 0.0),
                 )
                 source_label = "default connection coding"
                 should_mutate_connection = True
@@ -853,7 +879,8 @@ class GenotypeMutationMixin:
         random_source: random.Random,
     ) -> str:
         mutable_fields = (
-            "pos",
+            "parent_face",
+            "surface_uv",
             "axis",
             "scale",
             "terminal_only",

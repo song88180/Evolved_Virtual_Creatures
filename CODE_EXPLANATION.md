@@ -38,8 +38,9 @@ The genotype section defines three dataclasses: `ConnectionGene`, `NodeGene`, an
 @dataclass
 class ConnectionGene:
     child: str
-    pos: Tuple[float, float, float]
     axis: Tuple[float, float, float]
+    parent_face: str = "+x"
+    surface_uv: Tuple[float, float] = (0.0, 0.0)
     scale: float = 1.0
     terminal_only: bool = False
     motor_enabled: bool = True
@@ -55,7 +56,8 @@ class ConnectionGene:
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
 
 - `child`: the name of the child node to attach.
-- `pos`: the child body's position relative to its parent.
+- `parent_face`: the parent box face where the child hinge is attached.
+- `surface_uv`: normalized coordinates from `-1` to `1` along the two remaining axes in X/Y/Z order.
 - `axis`: the hinge axis used when this connection creates a hinge joint.
 - `scale`: a future extension point for resizing child parts.
 - `terminal_only`: a future extension point for only adding a child at the end of a recursive chain.
@@ -107,7 +109,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `pos`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
+Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
 
 The method prints the mutation details as it applies them:
 
@@ -120,10 +122,10 @@ Applying 2 genotype mutation(s):
 For tuple or list fields, the output names the mutated element and also shows the final full field value:
 
 ```text
-connection 'segment' -> 'segment' #0.pos[0]: 0.22 -> 0.2028811290482366 (final pos: [0.2028811290482366, 0.0, 0.0])
+connection 'segment' -> 'segment' #0.surface_uv[0]: 0.0 -> 0.05 (final surface_uv: (0.05, 0.0))
 ```
 
-Positive numeric fields are nudged by a small relative amount and clamped above zero. Boolean fields are flipped. Relative fields, such as positions, axes, phases, and control ranges, receive a random additive perturbation.
+Positive numeric fields are nudged by a small relative amount and clamped above zero. Boolean fields are flipped. Relative fields, such as surface coordinates, axes, phases, and control ranges, receive a random additive perturbation.
 
 ## Example Genotype
 
@@ -135,8 +137,7 @@ body -> segment -> segment -> ... -> segment
             limbs      limbs          limbs
 ```
 
-JSON arrays are used for vector values such as `size`, `pos`, `axis`, and
-`joint_axis`.
+JSON arrays are used for vector values such as `size`, `surface_uv`, `axis`, and `joint_axis`.
 
 The file defines three node types:
 
@@ -149,8 +150,9 @@ The key recursive detail is this connection:
 ```json
 {
   "child": "segment",
-  "pos": [0.22, 0.0, 0.0],
-  "axis": [0, 1, 0]
+  "axis": [0, 1, 0],
+  "parent_face": "-x",
+  "surface_uv": [0.0, 0.0]
 }
 ```
 
@@ -159,8 +161,8 @@ Because `segment` connects to another `segment`, the genotype can expand into a 
 Each segment also creates two limbs, one at positive Y and one at negative Y:
 
 ```python
-segment.children.append(ConnectionGene(child="limb", pos=(0.0, 0.14, 0.0), axis=(1, 0, 0)))
-segment.children.append(ConnectionGene(child="limb", pos=(0.0, -0.14, 0.0), axis=(1, 0, 0)))
+segment.children.append(ConnectionGene(child="limb", axis=(1, 0, 0), parent_face="+y"))
+segment.children.append(ConnectionGene(child="limb", axis=(1, 0, 0), parent_face="-y"))
 ```
 
 ## `PhenotypeBuilder`
@@ -302,9 +304,14 @@ For the self-recursive `segment` node, this check stops expansion after ten segm
 For each allowed connection, the code creates a nested MuJoCo `<body>`:
 
 ```python
-child_body = ET.SubElement(parent_xml, "body")
-child_body.set("name", self.new_body_name(child_node.name))
-child_body.set("pos", vec_to_str(conn.pos))
+child_body_pos, child_geom_center = _surface_attachment_transform(
+    parent_size=node.size,
+    parent_geom_center=geom_center,
+    child_size=child_node.size,
+    parent_face=conn.parent_face,
+    surface_uv=conn.surface_uv,
+)
+child_body = self.create_body(parent_xml, child_node, vec_to_str(child_body_pos))
 ```
 
 Then it recursively calls `add_node_to_body()` for that child:

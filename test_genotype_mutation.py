@@ -38,8 +38,8 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert child.size != (0.1, 0.05, 0.05)
     assert child.joint_axis != (0.0, 1.0, 0.0)
 
-    assert -0.30 <= connection.pos[0] <= 0.30
-    assert all(-0.20 <= value <= 0.20 for value in connection.pos[1:])
+    assert connection.parent_face in {"+x", "-x", "+y", "-y", "+z", "-z"}
+    assert all(-1.0 <= value <= 1.0 for value in connection.surface_uv)
     assert all(-1.0 <= value <= 1.0 for value in connection.axis)
     assert 0.5 <= connection.scale <= 1.5
     assert 20.0 <= connection.motor_gear <= 200.0
@@ -50,7 +50,10 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert -3.141592653589793 <= connection.control_phase <= 3.141592653589793
     assert -2.0 <= connection.control_phase_depth_scale <= 2.0
     assert -2.0 <= connection.control_phase_order_scale <= 2.0
-    assert connection.pos != (0.1, 0.0, 0.0)
+    assert (connection.parent_face, connection.surface_uv) != (
+        "+x",
+        (0.0, 0.0),
+    )
     assert connection.axis != (0.0, 1.0, 0.0)
 
 

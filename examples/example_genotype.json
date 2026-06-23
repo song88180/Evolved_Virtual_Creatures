@@ -8,8 +8,9 @@
       "children": [
         {
           "child": "segment",
-          "pos": [-0.25, 0.0, 0.0],
           "axis": [0, 1, 0],
+          "parent_face": "-x",
+          "surface_uv": [0.0, 0.0],
           "control_phase": 0.3
         }
       ]
@@ -22,21 +23,24 @@
       "children": [
         {
           "child": "segment",
-          "pos": [-0.18, 0.0, 0.0],
           "axis": [0, 1, 0],
+          "parent_face": "-x",
+          "surface_uv": [0.0, 0.0],
           "control_phase_depth_scale": -0.8
         },
         {
           "child": "limb",
-          "pos": [0.0, 0.14, 0.0],
           "axis": [1, 0, 0],
+          "parent_face": "+y",
+          "surface_uv": [0.0, 0.0],
           "control_phase": 1.4,
           "motor_enabled": true
         },
         {
           "child": "limb",
-          "pos": [0.0, -0.14, 0.0],
           "axis": [1, 0, 0],
+          "parent_face": "-y",
+          "surface_uv": [0.0, 0.0],
           "control_phase": -1.4,
           "motor_enabled": true
         }

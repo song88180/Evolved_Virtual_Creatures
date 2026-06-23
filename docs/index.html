@@ -113,15 +113,15 @@
       "size": [0.15, 0.08, 0.06],
       "joint_type": "free",
       "children": [
-        {"child": "segment", "pos": [0.18, 0, 0], "axis": [0, 1, 0]}
+        {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]}
       ]
     },
     "segment": {
       "size": [0.12, 0.05, 0.04],
       "recursive_limit": 10,
       "children": [
-        {"child": "segment", "pos": [0.22, 0, 0], "axis": [0, 1, 0]},
-        {"child": "limb", "pos": [0, 0.14, 0], "axis": [1, 0, 0]}
+        {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]},
+        {"child": "limb", "axis": [1, 0, 0], "parent_face": "+y", "surface_uv": [0, 0]}
       ]
     },
     "limb": {
