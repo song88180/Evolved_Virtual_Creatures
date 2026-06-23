@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mutations",
         type=int,
-        default=50,
+        default=0,
         help="Number of random mutations to apply.",
     )
     parser.add_argument(
