@@ -84,6 +84,7 @@ class GenotypeMutationMixin:
             mutable_parameters.extend((
                 ("connection_addition",),
                 ("connection_new_node_addition",),
+                ("fresh_node_connection_addition",),
             ))
         node_mutation_specs = (
             "size",
@@ -196,6 +197,8 @@ class GenotypeMutationMixin:
             return self._mutate_connection_addition(random_source)
         if parameter_type == "connection_new_node_addition":
             return self._mutate_connection_new_node_addition(random_source)
+        if parameter_type == "fresh_node_connection_addition":
+            return self._mutate_fresh_node_connection_addition(random_source)
         if parameter_type == "connection_removal":
             return self._mutate_connection_removal(parameter_path[1])
 
@@ -587,34 +590,117 @@ class GenotypeMutationMixin:
             f"#{new_index} from {source_label}; {mutated_connection_description}"
         )
 
+    def _mutate_fresh_node_connection_addition(
+        self,
+        random_source: random.Random,
+    ) -> str:
+        possible_origins = list(self.nodes.values())
+        if not possible_origins:
+            return "fresh node-connection addition: unchanged; no valid origin node"
+
+        origin_node = random_source.choice(possible_origins)
+        new_node = self._random_fresh_node(random_source)
+        self.nodes[new_node.name] = new_node
+        new_index, source_label, connection_description = self._add_new_connection(
+            origin_node,
+            new_node,
+            random_source,
+            use_template=False,
+        )
+
+        return (
+            f"fresh node-connection addition: created randomized node "
+            f"{new_node.name!r}; created randomized connection "
+            f"{origin_node.name!r} -> {new_node.name!r} #{new_index} "
+            f"from {source_label}; {connection_description}"
+        )
+
+    def _random_fresh_node(self, random_source: random.Random) -> NodeGene:
+        return NodeGene(
+            name=self._new_node_name("node"),
+            size=tuple(random_source.uniform(0.04, 0.30) for _ in range(3)),
+            joint_type="hinge",
+            joint_axis=self._random_axis(random_source),
+            recursive_limit=random_source.randint(1, 8),
+        )
+
+    def _random_fresh_connection(
+        self,
+        destination_node: NodeGene,
+        random_source: random.Random,
+    ) -> ConnectionGene:
+        ctrlrange_limit = random_source.uniform(0.5, 2.0)
+        return ConnectionGene(
+            child=destination_node.name,
+            pos=(
+                random_source.uniform(-0.30, 0.30),
+                random_source.uniform(-0.20, 0.20),
+                random_source.uniform(-0.20, 0.20),
+            ),
+            axis=self._random_axis(random_source),
+            scale=random_source.uniform(0.5, 1.5),
+            terminal_only=random_source.choice((False, True)),
+            motor_enabled=random_source.random() < 0.85,
+            motor_gear=random_source.uniform(20.0, 200.0),
+            ctrlrange=(-ctrlrange_limit, ctrlrange_limit),
+            control_amp=random_source.uniform(0.02, 0.50),
+            control_freq=random_source.uniform(1.0, 15.0),
+            control_phase=random_source.uniform(-3.141592653589793, 3.141592653589793),
+            control_phase_depth_scale=random_source.uniform(-2.0, 2.0),
+            control_phase_order_scale=random_source.uniform(-2.0, 2.0),
+        )
+
+    def _random_axis(self, random_source: random.Random) -> Tuple[float, float, float]:
+        axis = tuple(random_source.uniform(-1.0, 1.0) for _ in range(3))
+        if all(abs(component) < 1e-6 for component in axis):
+            return (0.0, 1.0, 0.0)
+        return axis
+
     def _add_new_connection(
         self,
         origin_node: NodeGene,
         destination_node: NodeGene,
         random_source: random.Random,
+        use_template: bool = True,
     ) -> Tuple[int, str, str]:
-        source_connection = self._random_connection_template(random_source)
+        source_connection = (
+            self._random_connection_template(random_source)
+            if use_template
+            else None
+        )
 
         if source_connection is None:
-            new_connection = ConnectionGene(
-                child=destination_node.name,
-                pos=(0.1, 0.0, 0.0),
-                axis=(0.0, 1.0, 0.0),
-            )
-            source_label = "default connection coding"
+            if use_template:
+                new_connection = ConnectionGene(
+                    child=destination_node.name,
+                    pos=(0.1, 0.0, 0.0),
+                    axis=(0.0, 1.0, 0.0),
+                )
+                source_label = "default connection coding"
+                connection_description = self._mutate_new_connection(
+                    new_connection,
+                    random_source,
+                )
+            else:
+                new_connection = self._random_fresh_connection(
+                    destination_node,
+                    random_source,
+                )
+                source_label = "fresh randomized connection coding"
+                connection_description = "randomized all connection fields"
         else:
             new_connection = copy.deepcopy(source_connection)
             new_connection.child = destination_node.name
             source_label = self._describe_connection_source(source_connection)
+            connection_description = self._mutate_new_connection(
+                new_connection,
+                random_source,
+            )
 
         origin_node.children.append(new_connection)
         new_index = len(origin_node.children) - 1
-        mutation_description = self._mutate_new_connection(
-            new_connection,
-            random_source,
-        )
 
-        return new_index, source_label, mutation_description
+        return new_index, source_label, connection_description
 
     def _mutate_connection_removal(
         self,
