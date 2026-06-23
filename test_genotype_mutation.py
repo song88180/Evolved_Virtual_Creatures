@@ -72,3 +72,28 @@ def test_fresh_node_connection_addition_is_available_as_topology_mutation():
     )
 
     assert ("fresh_node_connection_addition",) in mutable_parameters
+
+
+def test_template_new_node_addition_attaches_connection_before_mutating_it():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+                recursive_limit=1,
+            ),
+            "segment": NodeGene(
+                name="segment",
+                size=(0.12, 0.06, 0.06),
+                joint_type="hinge",
+                recursive_limit=1,
+            ),
+        },
+    )
+
+    description = genotype._mutate_connection_new_node_addition(random.Random(1))
+
+    assert "connection new-node addition" in description
+    assert any(node.children for node in genotype.nodes.values())

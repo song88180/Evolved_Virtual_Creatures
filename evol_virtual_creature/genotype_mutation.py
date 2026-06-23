@@ -677,28 +677,29 @@ class GenotypeMutationMixin:
                     axis=(0.0, 1.0, 0.0),
                 )
                 source_label = "default connection coding"
-                connection_description = self._mutate_new_connection(
-                    new_connection,
-                    random_source,
-                )
+                should_mutate_connection = True
             else:
                 new_connection = self._random_fresh_connection(
                     destination_node,
                     random_source,
                 )
                 source_label = "fresh randomized connection coding"
-                connection_description = "randomized all connection fields"
+                should_mutate_connection = False
         else:
             new_connection = copy.deepcopy(source_connection)
             new_connection.child = destination_node.name
             source_label = self._describe_connection_source(source_connection)
+            should_mutate_connection = True
+
+        origin_node.children.append(new_connection)
+        new_index = len(origin_node.children) - 1
+        if should_mutate_connection:
             connection_description = self._mutate_new_connection(
                 new_connection,
                 random_source,
             )
-
-        origin_node.children.append(new_connection)
-        new_index = len(origin_node.children) - 1
+        else:
+            connection_description = "randomized all connection fields"
 
         return new_index, source_label, connection_description
 
