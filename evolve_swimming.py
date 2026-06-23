@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-import contextlib
-import copy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime
-import io
 from itertools import repeat
 import json
-import os
 from pathlib import Path
 import random
-from statistics import mean
-from typing import Any
 
 from evol_virtual_creature.evaluation import (
     SwimmingEvaluationConfig,
     evaluate_x_axis_swimming,
+)
+from evol_virtual_creature.evolve import (
+    EvaluatedCreature,
+    best_of,
+    default_thread_count,
+    generation_summary,
+    initial_population,
+    next_population,
+    write_json,
 )
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.genotype_io import (
@@ -34,14 +37,6 @@ DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype
 DEFAULT_RUNS_DIR = Path(__file__).with_name("runs")
 
 
-@dataclass
-class EvaluatedCreature:
-    """A genotype paired with its swimming fitness score and evaluation metrics."""
-
-    genotype: Genotype
-    fitness: float
-    metrics: dict[str, Any]
-
 
 def main() -> None:
     """Run the full evolutionary loop and write results to the run directory."""
@@ -51,7 +46,7 @@ def main() -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Snapshot CLI settings so each run can be reproduced from config.json.
-    _write_json(run_dir / "config.json", vars(args))
+    write_json(run_dir / "config.json", vars(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
     config = SwimmingEvaluationConfig(
@@ -60,7 +55,7 @@ def main() -> None:
         body_count_weight=args.body_count_weight,
     )
 
-    population = _initial_population(
+    population = initial_population(
         seed_genotype=seed_genotype,
         population_size=args.population_size,
         initial_mutations=args.initial_mutations,
@@ -86,9 +81,9 @@ def main() -> None:
             evaluated = _evaluate_population(population, config, executor)
             evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
             best = evaluated[0]
-            best_so_far = _best_of(best_so_far, best)
+            best_so_far = best_of(best_so_far, best)
 
-            summary = _generation_summary(generation, evaluated, best_so_far)
+            summary = generation_summary(generation, evaluated, best_so_far)
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
             _save_generation_best(run_dir, generation, best, best_so_far, args.max_node)
@@ -105,7 +100,7 @@ def main() -> None:
             if generation == args.generations:
                 break
 
-            population = _next_population(
+            population = next_population(
                 evaluated=evaluated,
                 population_size=args.population_size,
                 elite_count=args.elite_count,
@@ -155,7 +150,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--threads",
         type=int,
-        default=_default_thread_count(),
+        default=default_thread_count(),
         help=(
             "Number of concurrent population-evaluation worker processes. "
             "Uses half of the available CPU cores by default."
@@ -252,30 +247,6 @@ def _default_run_dir() -> Path:
     return DEFAULT_RUNS_DIR / f"swimming_{timestamp}"
 
 
-def _default_thread_count() -> int:
-    """Use half of the CPU cores available to this process, with a minimum of one."""
-    if hasattr(os, "sched_getaffinity"):
-        available_cores = len(os.sched_getaffinity(0))
-    else:
-        available_cores = os.cpu_count() or 1
-    return max(1, available_cores // 2)
-
-
-def _initial_population(
-    seed_genotype: Genotype,
-    population_size: int,
-    initial_mutations: int,
-    rng: random.Random,
-) -> list[Genotype]:
-    """Build the starting population from the seed genotype and random mutations."""
-    population = [copy.deepcopy(seed_genotype)]
-    while len(population) < population_size:
-        genotype = copy.deepcopy(seed_genotype)
-        _mutate_quietly(genotype, initial_mutations, rng)
-        population.append(genotype)
-    return population
-
-
 def _evaluate_population(
     population: list[Genotype],
     config: SwimmingEvaluationConfig,
@@ -313,90 +284,6 @@ def _evaluate_creature(
     return EvaluatedCreature(genotype=genotype, fitness=fitness, metrics=metrics)
 
 
-def _next_population(
-    evaluated: list[EvaluatedCreature],
-    population_size: int,
-    elite_count: int,
-    tournament_size: int,
-    min_mutations: int,
-    max_mutations: int,
-    rng: random.Random,
-) -> list[Genotype]:
-    """Select elites and tournament winners, then mutate them into the next generation."""
-    next_population = [
-        copy.deepcopy(creature.genotype)
-        for creature in evaluated[:elite_count]
-    ]
-
-    while len(next_population) < population_size:
-        parent = _tournament_select(evaluated, tournament_size, rng)
-        child = copy.deepcopy(parent.genotype)
-        mutation_count = rng.randint(min_mutations, max_mutations)
-        _mutate_quietly(child, mutation_count, rng)
-        next_population.append(child)
-
-    return next_population
-
-
-def _tournament_select(
-    evaluated: list[EvaluatedCreature],
-    tournament_size: int,
-    rng: random.Random,
-) -> EvaluatedCreature:
-    """Pick the fittest creature from a random subset of the population."""
-    sample_size = min(tournament_size, len(evaluated))
-    candidates = rng.sample(evaluated, k=sample_size)
-    return max(candidates, key=lambda creature: creature.fitness)
-
-
-def _mutate_quietly(
-    genotype: Genotype,
-    mutation_count: int,
-    rng: random.Random,
-) -> None:
-    """Apply genotype mutations while suppressing mutation log output."""
-    if mutation_count == 0:
-        return
-    with contextlib.redirect_stdout(io.StringIO()):
-        genotype.mutation(num_mutations=mutation_count, rng=rng)
-
-
-def _best_of(
-    current_best: EvaluatedCreature | None,
-    candidate: EvaluatedCreature,
-) -> EvaluatedCreature:
-    """Return the higher-fitness creature, keeping the incumbent when tied or better."""
-    if current_best is None or candidate.fitness > current_best.fitness:
-        return copy.deepcopy(candidate)
-    return current_best
-
-
-def _generation_summary(
-    generation: int,
-    evaluated: list[EvaluatedCreature],
-    best_so_far: EvaluatedCreature,
-) -> dict[str, Any]:
-    """Summarize generation fitness statistics for logging and metrics output."""
-    fitnesses = [creature.fitness for creature in evaluated]
-    build_failures = sum(
-        1
-        for creature in evaluated
-        if creature.metrics.get("build_failed", False)
-    )
-    return {
-        "generation": generation,
-        "best_fitness": evaluated[0].fitness,
-        "best_ever_fitness": best_so_far.fitness,
-        "mean_fitness": mean(fitnesses),
-        "worst_fitness": fitnesses[-1],
-        "build_failures": build_failures,
-        "best_body_count": evaluated[0].metrics.get("body_count", 0),
-        "best_ever_body_count": best_so_far.metrics.get("body_count", 0),
-        "best_metrics": evaluated[0].metrics,
-        "best_ever_metrics": best_so_far.metrics,
-    }
-
-
 def _save_generation_best(
     run_dir: Path,
     generation: int,
@@ -407,7 +294,7 @@ def _save_generation_best(
     """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
     save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
-    _write_json(run_dir / "best_metrics.json", best_so_far.metrics)
+    write_json(run_dir / "best_metrics.json", best_so_far.metrics)
     _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, max_node)
 
     generation_dir = run_dir / "generation_bests"
@@ -425,14 +312,6 @@ def _write_best_xml(path: Path, genotype: Genotype, max_node: int) -> None:
     except PhenotypeBuildAbort:
         return
     path.write_text(mjcf)
-
-
-def _write_json(path: Path, data: Any) -> None:
-    """Write a JSON-serializable object to ``path``, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
-        json.dump(data, f, indent=2, default=str)
-        f.write("\n")
 
 
 if __name__ == "__main__":

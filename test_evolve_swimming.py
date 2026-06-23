@@ -4,24 +4,25 @@ import sys
 import pytest
 
 import evolve_swimming
+from evol_virtual_creature import evolve
 import evaluate_swimming
 import generate_model
 
 
 def test_default_thread_count_uses_half_available_affinity(monkeypatch):
     monkeypatch.setattr(
-        evolve_swimming.os, "sched_getaffinity", lambda _pid: set(range(10))
+        evolve.os, "sched_getaffinity", lambda _pid: set(range(10))
     )
 
-    assert evolve_swimming._default_thread_count() == 5
+    assert evolve.default_thread_count() == 5
 
 
 def test_default_thread_count_has_minimum_of_one(monkeypatch):
     monkeypatch.setattr(
-        evolve_swimming.os, "sched_getaffinity", lambda _pid: {0}
+        evolve.os, "sched_getaffinity", lambda _pid: {0}
     )
 
-    assert evolve_swimming._default_thread_count() == 1
+    assert evolve.default_thread_count() == 1
 
 
 def test_parse_args_accepts_thread_override(monkeypatch):
@@ -55,6 +56,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
         evaluated[0].fitness,
     ]
 
+
 @pytest.mark.parametrize(
     ("parse_args", "expected_defaults"),
     [
@@ -76,7 +78,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
                 "default: examples/example_genotype.json",
                 "default: runs/swimming_<timestamp>",
                 "default: 100",
-                f"default: {evolve_swimming._default_thread_count()}",
+                f"default: {evolve.default_thread_count()}",
                 "default: 5",
                 "default: 4",
                 "default: 1",
