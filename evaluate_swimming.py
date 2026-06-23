@@ -72,6 +72,8 @@ def main():
                 fps=args.fps,
                 width=args.width,
                 height=args.height,
+                track_root=args.track_root,
+                speed=args.speed,
             )
         except RuntimeError as error:
             print(error)
@@ -139,9 +141,22 @@ def parse_args() -> argparse.Namespace:
         default=544,
         help="Video height in pixels.",
     )
+    parser.add_argument(
+        "--track-root",
+        action="store_true",
+        help="Keep the video camera centered on the creature's root body.",
+    )
+    parser.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="Video playback speed multiplier (for example, 1.25 or 0.8).",
+    )
     args = parser.parse_args()
     if args.body_count_weight < 0.0:
         parser.error("--body-count-weight must be non-negative")
+    if args.speed <= 0.0:
+        parser.error("--speed must be greater than zero")
     return args
 
 

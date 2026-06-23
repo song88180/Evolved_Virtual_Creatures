@@ -18,6 +18,8 @@ def save_x_axis_swimming_video(
     fps: int,
     width: int,
     height: int,
+    track_root: bool = False,
+    speed: float = 1.0,
 ):
     try:
         import imageio.v3 as iio
@@ -40,7 +42,25 @@ def save_x_axis_swimming_video(
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []
     next_frame_time = 0.0
-    frame_interval = 1.0 / fps
+    frame_interval = speed / fps
+    camera = -1
+
+    if track_root:
+        root_body_name = f"{genotype.root}_1"
+        root_body_id = mujoco.mj_name2id(
+            model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            root_body_name,
+        )
+        if root_body_id < 0:
+            raise RuntimeError(
+                f"Cannot track root body because {root_body_name!r} was not found."
+            )
+
+        camera = mujoco.MjvCamera()
+        mujoco.mjv_defaultFreeCamera(model, camera)
+        camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+        camera.trackbodyid = root_body_id
 
     with mujoco.Renderer(model, height=height, width=width) as renderer:
         while data.time < config.episode_seconds:
@@ -52,7 +72,7 @@ def save_x_axis_swimming_video(
             mujoco.mj_step(model, data)
 
             if data.time >= next_frame_time:
-                renderer.update_scene(data)
+                renderer.update_scene(data, camera=camera)
                 frames.append(renderer.render())
                 next_frame_time += frame_interval
 
