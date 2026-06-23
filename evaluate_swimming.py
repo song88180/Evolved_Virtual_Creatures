@@ -28,7 +28,7 @@ from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_swimming_video
 
 
-DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("example_genotype.json")
+DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
 DEFAULT_VIDEO_PATH = Path(__file__).with_name("example_swimming.mp4")
 
 
@@ -97,7 +97,7 @@ def parse_args() -> argparse.Namespace:
         "--genotype",
         type=Path,
         default=DEFAULT_GENOTYPE_PATH,
-        help="Genotype JSON path. (default: example_genotype.json)",
+        help="Genotype JSON path. (default: examples/example_genotype.json)",
     )
     parser.add_argument(
         "--duration",

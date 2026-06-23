@@ -9,7 +9,7 @@ from evol_virtual_creature.phenotype import PhenotypeBuilder
 from evol_virtual_creature.viewer import launch_viewer
 
 
-DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("example_genotype.json")
+DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
 OUTPUT_XML_PATH = Path(__file__).with_name("generated_creature.xml")
 MAX_N_NODES = 500
 
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
         "--genotype",
         type=Path,
         default=DEFAULT_GENOTYPE_PATH,
-        help="Source genotype JSON path. (default: example_genotype.json)",
+        help="Source genotype JSON path. (default: examples/example_genotype.json)",
     )
     parser.add_argument(
         "--output",

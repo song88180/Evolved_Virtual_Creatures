@@ -239,7 +239,7 @@
         },
         "Returns": {"Type": "Genotype", "Description": "Loaded genotype object."},
         "Raises": ["KeyError", "json.JSONDecodeError", "OSError"],
-        "Example": "genotype = load_genotype_from_json(\"example_genotype.json\")"
+        "Example": "genotype = load_genotype_from_json(\"examples/example_genotype.json\")"
       },
       "save_genotype_to_json": {
         "Signature": "save_genotype_to_json(genotype: Genotype, path: str | Path) -> None",

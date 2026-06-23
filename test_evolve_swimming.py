@@ -61,7 +61,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
         (
             evaluate_swimming.parse_args,
             (
-                "default: example_genotype.json",
+                "default: examples/example_genotype.json",
                 "default: 6.0",
                 "default: 0.001",
                 "default: disabled",
@@ -73,7 +73,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
         (
             evolve_swimming.parse_args,
             (
-                "default: example_genotype.json",
+                "default: examples/example_genotype.json",
                 "default: runs/swimming_<timestamp>",
                 "default: 100",
                 f"default: {evolve_swimming._default_thread_count()}",
@@ -90,7 +90,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
         (
             generate_model.parse_args,
             (
-                "default: example_genotype.json",
+                "default: examples/example_genotype.json",
                 "default: generated_creature.xml",
                 "default: 50",
                 "default: 500",

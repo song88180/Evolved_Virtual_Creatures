@@ -30,7 +30,7 @@ from evol_virtual_creature.graph_analysis import PhenotypeBuildAbort
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 
-DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("example_genotype.json")
+DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
 DEFAULT_RUNS_DIR = Path(__file__).with_name("runs")
 
 
@@ -138,7 +138,7 @@ def parse_args() -> argparse.Namespace:
         "--genotype",
         type=Path,
         default=DEFAULT_GENOTYPE_PATH,
-        help="Seed genotype JSON path. (default: example_genotype.json)",
+        help="Seed genotype JSON path. (default: examples/example_genotype.json)",
     )
     parser.add_argument(
         "--output-dir",

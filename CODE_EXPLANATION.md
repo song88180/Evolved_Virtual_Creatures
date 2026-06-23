@@ -127,7 +127,7 @@ Positive numeric fields are nudged by a small relative amount and clamped above 
 
 ## Example Genotype
 
-The `example_genotype.json` file stores a simple creature recipe:
+The `examples/example_genotype.json` file stores a simple creature recipe:
 
 ```text
 body -> segment -> segment -> ... -> segment
@@ -386,7 +386,7 @@ viewer.sync()
 Running the script produces `generated_creature.xml`. That file contains:
 
 - One root body with a free joint.
-- A mutated recursive body plan generated from `example_genotype.json`.
+- A mutated recursive body plan generated from `examples/example_genotype.json`.
 - Two limb bodies attached to each segment.
 - One motor for every motor-enabled hinge joint.
 - A floor plane and a light.
