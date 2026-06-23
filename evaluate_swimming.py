@@ -136,7 +136,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--height",
         type=int,
-        default=540,
+        default=544,
         help="Video height in pixels.",
     )
     args = parser.parse_args()

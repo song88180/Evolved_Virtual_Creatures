@@ -67,7 +67,7 @@ def test_evaluate_population_runs_in_processes_and_preserves_order():
                 "default: disabled",
                 "default: 30",
                 "default: 960",
-                "default: 540",
+                "default: 544",
             ),
         ),
         (
