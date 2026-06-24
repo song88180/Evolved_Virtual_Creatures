@@ -39,6 +39,7 @@ def main():
     config = config_type(
         episode_seconds=args.duration,
         body_count_weight=args.body_count_weight,
+        self_collision=args.self_collision,
     )
     result = evaluate_for_task(genotype, config)
 
@@ -120,6 +121,14 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=SwimmingEvaluationConfig.body_count_weight,
         help="Fitness penalty per generated body.",
+    )
+    parser.add_argument(
+        "--self-collision",
+        action="store_true",
+        help=(
+            "Enable collisions between non-parent creature bodies; direct "
+            "parent-child collisions remain filtered."
+        ),
     )
     parser.add_argument(
         "--video",

@@ -51,6 +51,7 @@ def main() -> None:
         episode_seconds=args.duration,
         max_node=args.max_node,
         body_count_weight=args.body_count_weight,
+        self_collision=args.self_collision,
     )
 
     population = initial_population(
@@ -213,6 +214,14 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=SwimmingEvaluationConfig.body_count_weight,
         help="Fitness penalty per generated body.",
+    )
+    parser.add_argument(
+        "--self-collision",
+        action="store_true",
+        help=(
+            "Enable collisions between non-parent creature bodies; direct "
+            "parent-child collisions remain filtered."
+        ),
     )
     parser.add_argument(
         "--seed",

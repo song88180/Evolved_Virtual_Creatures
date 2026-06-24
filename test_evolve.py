@@ -26,9 +26,16 @@ def test_default_thread_count_has_minimum_of_one(monkeypatch):
     assert evolve_lib.default_thread_count() == 1
 
 
-def test_evaluate_defaults_to_swimming(monkeypatch):
+def test_evaluate_defaults_to_swimming_without_self_collision(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py"])
-    assert evaluate.parse_args().task == "swimming"
+    args = evaluate.parse_args()
+    assert args.task == "swimming"
+    assert not args.self_collision
+
+
+def test_evaluate_accepts_self_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--self-collision"])
+    assert evaluate.parse_args().self_collision
 
 
 def test_evolve_accepts_walking_and_thread_override(monkeypatch):
@@ -38,6 +45,12 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     args = evolve_cli.parse_args()
     assert args.task == "walking"
     assert args.threads == 3
+    assert not args.self_collision
+
+
+def test_evolve_accepts_self_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--self-collision"])
+    assert evolve_cli.parse_args().self_collision
 
 
 def test_evolve_rejects_nonpositive_threads(monkeypatch):
@@ -62,17 +75,21 @@ def test_evaluate_population_runs_in_processes_and_preserves_order(config):
     assert evaluated[0].fitness == evaluated[1].fitness
 
 
-def test_saved_best_xml_uses_walking_physics(tmp_path):
+def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
     evolve_lib._write_best_xml(
         path,
         genotype,
-        WalkingEvaluationConfig(episode_seconds=0.02),
+        WalkingEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     option = ET.fromstring(path.read_text()).find("option")
     assert option is not None
     assert option.get("gravity") == "0 0 -9.81"
+    default_geom = ET.fromstring(path.read_text()).find("./default/geom")
+    assert default_geom is not None
+    assert default_geom.get("contype") == "2"
+    assert default_geom.get("conaffinity") == "3"
 
 
 def test_default_run_directory_uses_task_name(monkeypatch):

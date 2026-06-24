@@ -18,6 +18,7 @@ class SwimmingEvaluationConfig:
 
     episode_seconds: float = 10.0
     max_node: int = 500
+    self_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
     energy_weight: float = 0.001
@@ -36,6 +37,7 @@ class WalkingEvaluationConfig:
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
     max_node: int = 500
+    self_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
     energy_weight: float = 0.001
@@ -186,7 +188,12 @@ def settle_walking_model(
 
 def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
     try:
-        builder = PhenotypeBuilder(genotype, max_node=config.max_node, task=task)
+        builder = PhenotypeBuilder(
+            genotype,
+            max_node=config.max_node,
+            task=task,
+            self_collision=config.self_collision,
+        )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
         return str(error)

@@ -95,7 +95,10 @@ def _write_best_xml(
     """Write the best creature's MJCF to disk, skipping output if the build aborts."""
     try:
         mjcf = PhenotypeBuilder(
-            genotype, max_node=config.max_node, task=task_for_config(config)
+            genotype,
+            max_node=config.max_node,
+            task=task_for_config(config),
+            self_collision=config.self_collision,
         ).build()
     except PhenotypeBuildAbort:
         return

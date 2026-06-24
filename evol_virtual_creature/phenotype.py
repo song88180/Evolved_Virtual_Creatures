@@ -47,6 +47,7 @@ class PhenotypeBuilder:
         genotype: Genotype,
         max_node: int,
         task: str = "swimming",
+        self_collision: bool = False,
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
@@ -56,6 +57,7 @@ class PhenotypeBuilder:
         self.genotype = genotype
         self.max_node = max_node
         self.task = task
+        self.self_collision = self_collision
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
@@ -135,12 +137,15 @@ class PhenotypeBuilder:
         geom_default.set("density", "500")
         if self.task == "swimming":
             geom_default.set("friction", "1.0 0.5 0.5")
-            geom_default.set("contype", "0")
-            geom_default.set("conaffinity", "0")
+            collision_mask = "2" if self.self_collision else "0"
+            geom_default.set("contype", collision_mask)
+            geom_default.set("conaffinity", collision_mask)
         else:
             geom_default.set("friction", "1 0.005 0.0001")
-            geom_default.set("contype", "1")
-            geom_default.set("conaffinity", "1")
+            geom_default.set("contype", "2")
+            geom_default.set(
+                "conaffinity", "3" if self.self_collision else "1"
+            )
 
         joint_default = ET.SubElement(default, "joint")
         joint_default.set("limited", "true")
@@ -156,6 +161,12 @@ class PhenotypeBuilder:
         floor.set("type", "plane")
         floor.set("size", "5 5 0.1")
         floor.set("pos", "0 0 -0.05")
+        if self.task == "walking":
+            floor.set("contype", "1")
+            floor.set("conaffinity", "2")
+        else:
+            floor.set("contype", "0")
+            floor.set("conaffinity", "0")
 
         light = ET.SubElement(worldbody, "light")
         light.set("pos", "0 0 3")

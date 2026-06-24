@@ -38,7 +38,12 @@ def save_x_axis_video(
 
     task = task_for_config(config)
     try:
-        builder = PhenotypeBuilder(genotype, max_node=config.max_node, task=task)
+        builder = PhenotypeBuilder(
+            genotype,
+            max_node=config.max_node,
+            task=task,
+            self_collision=config.self_collision,
+        )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
         raise RuntimeError(
