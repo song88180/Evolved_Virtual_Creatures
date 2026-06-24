@@ -4,6 +4,7 @@ generated_creature.xml
 *.mp4
 .DS_Store
 runs/
+videos/
 *.swp
 MUJOCO_LOG.TXT
 .codex/
