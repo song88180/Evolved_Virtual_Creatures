@@ -61,6 +61,7 @@ def _evaluate_creature(
             "simulated_seconds": 0.0,
             "actuator_count": 0,
             "body_count": 0,
+            "total_volume": 0.0,
             "build_failed": True,
             "disqualified": False,
             "failure_reason": str(error),

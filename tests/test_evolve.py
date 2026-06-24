@@ -41,6 +41,14 @@ def test_evaluate_accepts_disallow_collision(monkeypatch):
     assert not args.self_collision
 
 
+def test_evaluate_accepts_volume_weight(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evaluate.py", "--volume-weight", "0.25"]
+    )
+    assert evaluate.parse_args().volume_weight == pytest.approx(0.25)
+
+
+
 def test_evaluate_accepts_self_collision(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "--self-collision"])
     assert evaluate.parse_args().self_collision
@@ -54,6 +62,14 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     assert args.task == "walking"
     assert args.threads == 3
     assert not args.self_collision
+
+
+def test_evolve_accepts_volume_weight(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evolve.py", "--volume-weight", "0.25"]
+    )
+    assert evolve_cli.parse_args().volume_weight == pytest.approx(0.25)
+
 
 
 def test_evolve_accepts_self_collision(monkeypatch):

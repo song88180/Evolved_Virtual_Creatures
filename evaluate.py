@@ -39,6 +39,7 @@ def main():
     config = config_type(
         episode_seconds=args.duration,
         body_count_weight=args.body_count_weight,
+        volume_weight=args.volume_weight,
         self_collision=args.self_collision,
         disallow_collision=args.disallow_collision,
     )
@@ -69,6 +70,7 @@ def main():
     print(f"Mean angular speed: {result.mean_angular_speed:.6f}")
     print(f"Simulated seconds: {result.simulated_seconds:.2f}")
     print(f"Actuators: {result.actuator_count}")
+    print(f"Total volume: {result.total_volume:.6f}")
     print(f"Bodies: {result.body_count}")
 
     if args.video:
@@ -129,6 +131,12 @@ def parse_args() -> argparse.Namespace:
         help="Fitness penalty per generated body.",
     )
     parser.add_argument(
+        "--volume-weight",
+        type=float,
+        default=SwimmingEvaluationConfig.volume_weight,
+        help="Fitness penalty per cubic meter of generated creature volume.",
+    )
+    parser.add_argument(
         "--self-collision",
         action="store_true",
         help=(
@@ -177,6 +185,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.duration <= 0.0:
         parser.error("--duration must be greater than zero")
+    if args.volume_weight < 0.0:
+        parser.error("--volume-weight must be non-negative")
     if args.body_count_weight < 0.0:
         parser.error("--body-count-weight must be non-negative")
     if args.fps < 1:

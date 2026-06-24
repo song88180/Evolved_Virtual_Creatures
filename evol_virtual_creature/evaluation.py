@@ -31,6 +31,7 @@ class SwimmingEvaluationConfig:
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
     body_count_weight: float = 0.001
+    volume_weight: float = 0.1
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
@@ -54,6 +55,7 @@ class WalkingEvaluationConfig:
     upright_weight: float = 0.2
     height_loss_weight: float = 0.2
     body_count_weight: float = 0.001
+    volume_weight: float = 0.1
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
@@ -75,6 +77,7 @@ class SwimmingEvaluationResult:
     simulated_seconds: float
     actuator_count: int
     body_count: int
+    total_volume: float
     build_failed: bool = False
     disqualified: bool = False
     failure_reason: str | None = None
@@ -93,6 +96,7 @@ class WalkingEvaluationResult:
     simulated_seconds: float
     actuator_count: int
     body_count: int
+    total_volume: float
     build_failed: bool = False
     disqualified: bool = False
     failure_reason: str | None = None
@@ -120,6 +124,7 @@ def evaluate_x_axis_swimming(
         - config.vertical_drift_weight * metrics["vertical_drift"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
+        - config.volume_weight * metrics["total_volume"]
     )
     if not math.isfinite(fitness):
         return _failed_swimming(config, "Simulation produced a non-finite fitness.")
@@ -166,6 +171,7 @@ def evaluate_x_axis_walking(
         - config.upright_weight * walking_metrics["mean_upright_error"]
         - config.height_loss_weight * walking_metrics["height_loss"]
         - config.body_count_weight * walking_metrics["body_count"]
+        - config.volume_weight * walking_metrics["total_volume"]
     )
     if not math.isfinite(fitness):
         return _failed_walking(config, "Simulation produced a non-finite fitness.")
@@ -231,10 +237,15 @@ def _run_controlled_episode(
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
     body_count = max(model.nbody - 1, 0)
+    total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
     initial_position = data.qpos[:3].copy()
     previous_time = data.time
     control_energy = 0.0
+    actuator_gear_norms = np.linalg.norm(
+        model.actuator_gear[actuator_ids],
+        axis=1,
+    )
     angular_speed_sum = 0.0
     upright_error_sum = 0.0
     sample_count = 0
@@ -260,7 +271,8 @@ def _run_controlled_episode(
 
         dt = data.time - previous_time
         previous_time = data.time
-        control_energy += float(dt * (ctrl @ ctrl))
+        control_effort = ctrl[actuator_ids] * actuator_gear_norms
+        control_energy += float(dt * (control_effort @ control_effort))
         if model.nv >= 6:
             angular_speed_sum += float(np.linalg.norm(data.qvel[3:6]))
         if root_body_id >= 0:
@@ -284,6 +296,7 @@ def _run_controlled_episode(
         "simulated_seconds": simulated_seconds,
         "actuator_count": len(actuator_ids),
         "body_count": body_count,
+        "total_volume": total_volume,
     }
     if root_body_id >= 0:
         metrics["height_loss"] = max(0.0, float(initial_position[2] - final_position[2]))
@@ -303,6 +316,7 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
         simulated_seconds=0.0,
         actuator_count=0,
         body_count=0,
+        total_volume=0.0,
         build_failed=reason != DISALLOWED_COLLISION_REASON,
         disqualified=reason == DISALLOWED_COLLISION_REASON,
         failure_reason=reason,
@@ -322,6 +336,7 @@ def _failed_walking(config: WalkingEvaluationConfig, reason: str):
         simulated_seconds=0.0,
         actuator_count=0,
         body_count=0,
+        total_volume=0.0,
         build_failed=reason != DISALLOWED_COLLISION_REASON,
         disqualified=reason == DISALLOWED_COLLISION_REASON,
         failure_reason=reason,
@@ -335,6 +350,18 @@ def _normalized_target_direction(target_direction: Sequence[float]):
     if norm == 0.0:
         raise ValueError("target_direction must be non-zero")
     return tuple(component / norm for component in target_direction)
+
+
+def _creature_volume(model: mujoco.MjModel) -> float:
+    total_volume = 0.0
+    for geom_id in range(model.ngeom):
+        if model.geom_bodyid[geom_id] == 0:
+            continue
+        if model.geom_type[geom_id] != mujoco.mjtGeom.mjGEOM_BOX:
+            continue
+        total_volume += 8.0 * float(np.prod(model.geom_size[geom_id, :3]))
+    return total_volume
+
 
 
 def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):

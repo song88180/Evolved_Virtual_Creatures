@@ -1,3 +1,4 @@
+import math
 import xml.etree.ElementTree as ET
 
 import mujoco
@@ -8,11 +9,12 @@ from evol_virtual_creature.evaluation import (
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
     _has_nonparent_self_collision,
+    _creature_volume,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
     simulation_failure_reason,
 )
-from evol_virtual_creature.genotype_io import load_genotype_from_json
+from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 
@@ -284,3 +286,72 @@ def test_evaluation_rejects_numerical_instability(monkeypatch):
     assert result.fitness == -1_000.0
     assert result.build_failed
     assert result.failure_reason == NUMERICAL_INSTABILITY_REASON
+
+def test_creature_volume_sums_generated_box_volumes_only():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <geom type="plane" size="5 5 0.1"/>
+            <body>
+              <freejoint/>
+              <geom type="box" size="1 2 3"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    assert _creature_volume(model) == pytest.approx(48.0)
+
+
+def test_volume_weight_reduces_fitness_by_total_volume():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    without_penalty = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=0.0),
+    )
+    with_penalty = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=1.0),
+    )
+
+    assert with_penalty.total_volume > 0.0
+    assert without_penalty.fitness - with_penalty.fitness == pytest.approx(
+        with_penalty.total_volume
+    )
+
+
+def _single_motor_genotype(motor_gear):
+    return build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.1, 0.1),
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": (0, 1, 0),
+                    "motor_gear": motor_gear,
+                    "control_amp": 0.1,
+                    "control_freq": 0.0,
+                    "control_phase": math.pi / 2.0,
+                }],
+            },
+            "limb": {"size": (0.1, 0.05, 0.05)},
+        },
+    )
+
+
+def test_control_energy_scales_with_squared_motor_gear():
+    low_gear = evaluate_x_axis_swimming(
+        _single_motor_genotype(10.0),
+        SwimmingEvaluationConfig(episode_seconds=0.01),
+    )
+    high_gear = evaluate_x_axis_swimming(
+        _single_motor_genotype(20.0),
+        SwimmingEvaluationConfig(episode_seconds=0.01),
+    )
+
+    assert low_gear.control_energy > 0.0
+    assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)

@@ -747,7 +747,7 @@
       "SwimmingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
+          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, volume_weight: float = 0.1, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
           "Parameters": {
             "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
             "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
@@ -760,6 +760,7 @@
             "vertical_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for z-axis drift."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."},
             "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for generated body count."},
+            "volume_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for total generated creature volume in cubic meters."},
             "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned when build or simulation fails."},
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Position/state magnitude threshold used to detect numerical instability."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Absolute generalized-velocity limit used to reject unstable simulations."},
@@ -779,6 +780,7 @@
           "vertical_drift_weight": {"Type": "float", "Description": "Vertical drift penalty weight."},
           "angular_speed_weight": {"Type": "float", "Description": "Angular speed penalty weight."},
           "body_count_weight": {"Type": "float", "Description": "Body count penalty weight."},
+          "volume_weight": {"Type": "float", "Description": "Total creature volume penalty weight."},
           "build_failure_fitness": {"Type": "float", "Description": "Fallback fitness for failed evaluations."},
           "max_abs_state_value": {"Type": "float", "Description": "Position/state numerical stability threshold."},
           "max_abs_velocity": {"Type": "float", "Description": "Generalized-velocity numerical stability threshold."},
@@ -790,14 +792,14 @@
       "SwimmingEvaluationResult": {
         "Purpose": "Frozen dataclass containing final fitness and diagnostic metrics.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
+          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
           "Parameters": {
             "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
             "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
             "average_forward_speed": {"Type": "float", "Default": "required", "Description": "Forward distance divided by simulated seconds."},
             "sideways_drift": {"Type": "float", "Default": "required", "Description": "Absolute y-axis lateral drift."},
             "vertical_drift": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement."},
-            "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared actuator control."},
+            "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared commanded joint effort, including motor gear magnitude."},
             "mean_angular_speed": {"Type": "float", "Default": "required", "Description": "Mean root angular speed."},
             "simulated_seconds": {"Type": "float", "Default": "required", "Description": "Actual simulated duration."},
             "actuator_count": {"Type": "int", "Default": "required", "Description": "Number of generated actuators used."},
@@ -814,7 +816,7 @@
           "average_forward_speed": {"Type": "float", "Description": "Forward movement speed."},
           "sideways_drift": {"Type": "float", "Description": "Sideways drift metric."},
           "vertical_drift": {"Type": "float", "Description": "Vertical drift metric."},
-          "control_energy": {"Type": "float", "Description": "Control effort metric."},
+          "control_energy": {"Type": "float", "Description": "Gear-aware integrated squared joint effort metric."},
           "mean_angular_speed": {"Type": "float", "Description": "Tumbling metric."},
           "simulated_seconds": {"Type": "float", "Description": "Actual simulated time."},
           "actuator_count": {"Type": "int", "Description": "Actuator count."},

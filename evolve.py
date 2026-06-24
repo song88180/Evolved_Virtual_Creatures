@@ -51,6 +51,7 @@ def main() -> None:
         episode_seconds=args.duration,
         max_node=args.max_node,
         body_count_weight=args.body_count_weight,
+        volume_weight=args.volume_weight,
         self_collision=args.self_collision,
         disallow_collision=args.disallow_collision,
     )
@@ -225,6 +226,12 @@ def parse_args() -> argparse.Namespace:
         help="Fitness penalty per generated body.",
     )
     parser.add_argument(
+        "--volume-weight",
+        type=float,
+        default=SwimmingEvaluationConfig.volume_weight,
+        help="Fitness penalty per cubic meter of generated creature volume.",
+    )
+    parser.add_argument(
         "--self-collision",
         action="store_true",
         help=(
@@ -279,6 +286,8 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--duration must be greater than zero")
     if args.max_node < 1:
         raise ValueError("--max-node must be at least 1")
+    if args.volume_weight < 0.0:
+        raise ValueError("--volume-weight must be non-negative")
     if args.body_count_weight < 0.0:
         raise ValueError("--body-count-weight must be non-negative")
 
