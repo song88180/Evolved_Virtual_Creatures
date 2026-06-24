@@ -12,6 +12,9 @@ from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import ActuatorController, PhenotypeBuilder
 
 
+DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
+
+
 @dataclass(frozen=True)
 class SwimmingEvaluationConfig:
     """Weights and simulation settings for x-axis swimming fitness."""
@@ -19,6 +22,7 @@ class SwimmingEvaluationConfig:
     episode_seconds: float = 10.0
     max_node: int = 500
     self_collision: bool = False
+    disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
     energy_weight: float = 0.001
@@ -38,6 +42,7 @@ class WalkingEvaluationConfig:
     settle_seconds: float = 1.0
     max_node: int = 500
     self_collision: bool = False
+    disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
     energy_weight: float = 0.001
@@ -66,6 +71,7 @@ class SwimmingEvaluationResult:
     actuator_count: int
     body_count: int
     build_failed: bool = False
+    disqualified: bool = False
     failure_reason: str | None = None
 
 
@@ -83,6 +89,7 @@ class WalkingEvaluationResult:
     actuator_count: int
     body_count: int
     build_failed: bool = False
+    disqualified: bool = False
     failure_reason: str | None = None
 
 
@@ -181,6 +188,11 @@ def settle_walking_model(
     settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
     for _ in range(settle_steps):
         mujoco.mj_step(model, data)
+        if (
+            config.disallow_collision
+            and _has_nonparent_self_collision(model, data)
+        ):
+            return DISALLOWED_COLLISION_REASON
         if not _simulation_state_is_stable(data, config.max_abs_state_value):
             return "Simulation became numerically unstable while settling."
     return None
@@ -192,7 +204,9 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
             genotype,
             max_node=config.max_node,
             task=task,
-            self_collision=config.self_collision,
+            self_collision=(
+                config.self_collision or config.disallow_collision
+            ),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
@@ -228,6 +242,11 @@ def _run_controlled_episode(
         _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
         ctrl = data.ctrl.copy()
         mujoco.mj_step(model, data)
+        if (
+            config.disallow_collision
+            and _has_nonparent_self_collision(model, data)
+        ):
+            return DISALLOWED_COLLISION_REASON
         if not _simulation_state_is_stable(data, config.max_abs_state_value):
             return "Simulation became numerically unstable."
 
@@ -276,7 +295,8 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
         simulated_seconds=0.0,
         actuator_count=0,
         body_count=0,
-        build_failed=True,
+        build_failed=reason != DISALLOWED_COLLISION_REASON,
+        disqualified=reason == DISALLOWED_COLLISION_REASON,
         failure_reason=reason,
     )
 
@@ -294,7 +314,8 @@ def _failed_walking(config: WalkingEvaluationConfig, reason: str):
         simulated_seconds=0.0,
         actuator_count=0,
         body_count=0,
-        build_failed=True,
+        build_failed=reason != DISALLOWED_COLLISION_REASON,
+        disqualified=reason == DISALLOWED_COLLISION_REASON,
         failure_reason=reason,
     )
 
@@ -313,6 +334,26 @@ def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):
         mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, controller.motor_name)
         for controller in controllers
     ]
+
+
+def _has_nonparent_self_collision(
+    model: mujoco.MjModel, data: mujoco.MjData
+) -> bool:
+    for contact in data.contact:
+        first_geom, second_geom = map(int, contact.geom)
+        if first_geom < 0 or second_geom < 0:
+            continue
+        first_body = int(model.geom_bodyid[first_geom])
+        second_body = int(model.geom_bodyid[second_geom])
+        if first_body == 0 or second_body == 0 or first_body == second_body:
+            continue
+        if (
+            model.body_parentid[first_body] == second_body
+            or model.body_parentid[second_body] == first_body
+        ):
+            continue
+        return True
+    return False
 
 
 def _simulation_state_is_stable(data: mujoco.MjData, max_abs_state_value: float):

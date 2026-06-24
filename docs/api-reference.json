@@ -743,11 +743,12 @@
       "SwimmingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0)",
+          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0)",
           "Parameters": {
             "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
             "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
             "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable collision between non-parent creature bodies."},
+            "disallow_collision": {"Type": "bool", "Default": "false", "Description": "Assign failure fitness when a non-parent collision occurs."},
             "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction used to measure forward progress."},
             "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average forward speed."},
             "energy_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for control energy."},
@@ -764,6 +765,7 @@
           "episode_seconds": {"Type": "float", "Description": "Simulation duration."},
           "max_node": {"Type": "int", "Description": "Phenotype node budget."},
           "self_collision": {"Type": "bool", "Description": "Whether non-parent creature bodies can collide."},
+          "disallow_collision": {"Type": "bool", "Description": "Whether non-parent collisions disqualify the evaluation."},
           "target_direction": {"Type": "Sequence[float]", "Description": "Target movement direction."},
           "forward_speed_weight": {"Type": "float", "Description": "Forward speed reward weight."},
           "energy_weight": {"Type": "float", "Description": "Control energy penalty weight."},
@@ -780,7 +782,7 @@
       "SwimmingEvaluationResult": {
         "Purpose": "Frozen dataclass containing final fitness and diagnostic metrics.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, build_failed: bool = False, failure_reason: str | None = None)",
+          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
           "Parameters": {
             "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
             "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
@@ -793,6 +795,7 @@
             "actuator_count": {"Type": "int", "Default": "required", "Description": "Number of generated actuators used."},
             "body_count": {"Type": "int", "Default": "required", "Description": "Number of generated bodies excluding world."},
             "build_failed": {"Type": "bool", "Default": "False", "Description": "Whether this result represents a build or simulation failure."},
+            "disqualified": {"Type": "bool", "Default": "False", "Description": "Whether a prohibited non-parent collision assigned failure fitness."},
             "failure_reason": {"Type": "str | None", "Default": "None", "Description": "Failure detail when build_failed is True."}
           },
           "Raises": []
@@ -809,6 +812,7 @@
           "actuator_count": {"Type": "int", "Description": "Actuator count."},
           "body_count": {"Type": "int", "Description": "Body count."},
           "build_failed": {"Type": "bool", "Description": "Failure flag."},
+          "disqualified": {"Type": "bool", "Description": "Collision-disqualification flag."},
           "failure_reason": {"Type": "str | None", "Description": "Failure explanation."}
         },
         "Methods": {},

@@ -31,6 +31,14 @@ def test_evaluate_defaults_to_swimming_without_self_collision(monkeypatch):
     args = evaluate.parse_args()
     assert args.task == "swimming"
     assert not args.self_collision
+    assert not args.disallow_collision
+
+
+def test_evaluate_accepts_disallow_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--disallow-collision"])
+    args = evaluate.parse_args()
+    assert args.disallow_collision
+    assert not args.self_collision
 
 
 def test_evaluate_accepts_self_collision(monkeypatch):
@@ -51,6 +59,13 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
 def test_evolve_accepts_self_collision(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--self-collision"])
     assert evolve_cli.parse_args().self_collision
+
+
+def test_evolve_accepts_disallow_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--disallow-collision"])
+    args = evolve_cli.parse_args()
+    assert args.disallow_collision
+    assert not args.self_collision
 
 
 def test_evolve_rejects_nonpositive_threads(monkeypatch):
@@ -90,6 +105,18 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     assert default_geom is not None
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "3"
+
+
+def test_generation_summary_counts_disqualifications():
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    creature = evolve_lib.EvaluatedCreature(
+        genotype=genotype,
+        fitness=-1_000.0,
+        metrics={"disqualified": True, "body_count": 1},
+    )
+    summary = evolve_lib.generation_summary(0, [creature], creature)
+    assert summary["disqualifications"] == 1
+    assert summary["build_failures"] == 0
 
 
 def test_default_run_directory_uses_task_name(monkeypatch):
@@ -152,3 +179,35 @@ def test_help_describes_parameter_defaults(
     normalized_help = " ".join(capsys.readouterr().out.split())
     for expected_default in expected_defaults:
         assert expected_default in normalized_help
+
+
+def test_evaluate_accepts_disallow_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--disallow-collision"])
+    args = evaluate.parse_args()
+    assert args.disallow_collision
+    assert not args.self_collision
+
+
+def test_evolve_accepts_disallow_collision(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--disallow-collision"])
+    args = evolve_cli.parse_args()
+    assert args.disallow_collision
+    assert not args.self_collision
+
+
+def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        SwimmingEvaluationConfig(
+            episode_seconds=0.02,
+            self_collision=False,
+            disallow_collision=True,
+        ),
+    )
+    default_geom = ET.fromstring(path.read_text()).find("./default/geom")
+    assert default_geom is not None
+    assert default_geom.get("contype") == "2"
+    assert default_geom.get("conaffinity") == "2"

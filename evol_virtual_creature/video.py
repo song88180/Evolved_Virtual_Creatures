@@ -9,6 +9,8 @@ from .evaluation import (
     EvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
+    DISALLOWED_COLLISION_REASON,
+    _has_nonparent_self_collision,
     settle_walking_model,
     task_for_config,
 )
@@ -42,7 +44,9 @@ def save_x_axis_video(
             genotype,
             max_node=config.max_node,
             task=task,
-            self_collision=config.self_collision,
+            self_collision=(
+                config.self_collision or config.disallow_collision
+            ),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
@@ -90,6 +94,11 @@ def save_x_axis_video(
                 actuator_controllers=builder.actuator_controllers,
             )
             mujoco.mj_step(model, data)
+            if (
+                config.disallow_collision
+                and _has_nonparent_self_collision(model, data)
+            ):
+                raise RuntimeError(DISALLOWED_COLLISION_REASON)
             if data.time >= next_frame_time:
                 renderer.update_scene(data, camera=camera)
                 frames.append(renderer.render())

@@ -52,6 +52,7 @@ def main() -> None:
         max_node=args.max_node,
         body_count_weight=args.body_count_weight,
         self_collision=args.self_collision,
+        disallow_collision=args.disallow_collision,
     )
 
     population = initial_population(
@@ -93,7 +94,8 @@ def main() -> None:
                 f"best_ever={best_so_far.fitness:.6f} "
                 f"mean={summary['mean_fitness']:.6f} "
                 f"bodies={summary['best_body_count']} "
-                f"failures={summary['build_failures']}"
+                f"failures={summary['build_failures']} "
+                f"disqualified={summary['disqualifications']}"
             )
 
             if generation == args.generations:
@@ -221,6 +223,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Enable collisions between non-parent creature bodies; direct "
             "parent-child collisions remain filtered."
+        ),
+    )
+    parser.add_argument(
+        "--disallow-collision",
+        action="store_true",
+        help=(
+            "Assign low fitness if any non-parent creature bodies collide; "
+            "self-collision detection is enabled automatically."
         ),
     )
     parser.add_argument(

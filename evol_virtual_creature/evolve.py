@@ -62,6 +62,7 @@ def _evaluate_creature(
             "actuator_count": 0,
             "body_count": 0,
             "build_failed": True,
+            "disqualified": False,
             "failure_reason": str(error),
         }
         fitness = config.build_failure_fitness
@@ -98,7 +99,9 @@ def _write_best_xml(
             genotype,
             max_node=config.max_node,
             task=task_for_config(config),
-            self_collision=config.self_collision,
+            self_collision=(
+                config.self_collision or config.disallow_collision
+            ),
         ).build()
     except PhenotypeBuildAbort:
         return
@@ -206,6 +209,11 @@ def generation_summary(
         "mean_fitness": mean(fitnesses),
         "worst_fitness": fitnesses[-1],
         "build_failures": build_failures,
+        "disqualifications": sum(
+            1
+            for creature in evaluated
+            if creature.metrics.get("disqualified", False)
+        ),
         "best_body_count": evaluated[0].metrics.get("body_count", 0),
         "best_ever_body_count": best_so_far.metrics.get("body_count", 0),
         "best_metrics": evaluated[0].metrics,

@@ -158,7 +158,8 @@
                 Swimming and walking tasks reward forward speed while applying task-specific
                 physics and penalties for inefficient or unstable movement. Optional
                 self-collision includes non-parent body pairs while MuJoCo filters
-                direct parent-child pairs.
+                direct parent-child pairs. <code>--disallow-collision</code> enables
+                that detection and assigns low fitness when such contact occurs.
               </p>
             </section>
             <section>
@@ -192,12 +193,12 @@
                 <tr>
                   <td><code>evaluate.py</code></td>
                   <td>Score one genotype on the selected swimming or walking task.</td>
-                  <td><code>--task</code>, <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--self-collision</code>, <code>--video</code>.</td>
+                  <td><code>--task</code>, <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--video</code>.</td>
                 </tr>
                 <tr>
                   <td><code>evolve.py</code></td>
                   <td>Run population-based mutation search for the selected task.</td>
-                  <td><code>--task</code>, <code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--self-collision</code>, <code>--seed</code>, <code>--max-node</code>.</td>
+                  <td><code>--task</code>, <code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--seed</code>, <code>--max-node</code>.</td>
                 </tr>
               </tbody>
             </table>

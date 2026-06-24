@@ -40,8 +40,14 @@ def main():
         episode_seconds=args.duration,
         body_count_weight=args.body_count_weight,
         self_collision=args.self_collision,
+        disallow_collision=args.disallow_collision,
     )
     result = evaluate_for_task(genotype, config)
+
+    if result.disqualified:
+        print(f"Disqualified: {result.failure_reason}")
+        print(f"Fitness: {result.fitness:.6f}")
+        return
 
     if result.build_failed:
         print(f"Build failed: {result.failure_reason}")
@@ -128,6 +134,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Enable collisions between non-parent creature bodies; direct "
             "parent-child collisions remain filtered."
+        ),
+    )
+    parser.add_argument(
+        "--disallow-collision",
+        action="store_true",
+        help=(
+            "Assign low fitness if any non-parent creature bodies collide; "
+            "self-collision detection is enabled automatically."
         ),
     )
     parser.add_argument(

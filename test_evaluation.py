@@ -5,6 +5,7 @@ import mujoco
 from evol_virtual_creature.evaluation import (
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
+    _has_nonparent_self_collision,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
 )
@@ -148,3 +149,53 @@ def test_both_tasks_return_finite_results():
     assert walking.simulated_seconds == 0.02
     assert walking.mean_upright_error >= 0.0
     assert walking.height_loss >= 0.0
+
+
+def test_detects_nonparent_contact_but_parent_filter_remains_enabled():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom name="root_geom" type="sphere" size="0.1" pos="0 0 1"/>
+              <body name="first_child">
+                <joint type="hinge" axis="1 0 0"/>
+                <geom name="first_geom" type="sphere" size="0.2"/>
+              </body>
+              <body name="second_child">
+                <joint type="hinge" axis="0 1 0"/>
+                <geom name="second_geom" type="sphere" size="0.2"/>
+              </body>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    assert data.ncon == 1
+    assert _has_nonparent_self_collision(model, data)
+
+
+def test_disallowed_collision_assigns_low_fitness(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    monkeypatch.setattr(
+        evaluation, "_has_nonparent_self_collision", lambda _model, _data: True
+    )
+    result = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(
+            episode_seconds=0.02,
+            disallow_collision=True,
+        ),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.disqualified
+    assert not result.build_failed
+    assert "self-collision" in result.failure_reason
