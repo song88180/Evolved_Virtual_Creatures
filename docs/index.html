@@ -45,7 +45,7 @@
             <h1>Evol Virtual Creature</h1>
             <p class="lede">
               A compact reference for building genotype recipes, expanding them
-              into MuJoCo MJCF creatures, evaluating swimming fitness, and
+              into MuJoCo MJCF creatures, evaluating swimming or walking fitness, and
               running mutation-based evolution.
             </p>
             <div class="hero-actions" aria-label="Primary actions">
@@ -64,7 +64,7 @@
             <div class="map-node accent">MJCF creature</div>
             <div class="map-branches">
               <span>Viewer</span>
-              <span>Swimming evaluation</span>
+              <span>Task evaluation</span>
               <span>Evolution runs</span>
             </div>
           </div>
@@ -83,12 +83,12 @@
               <pre><code>conda run -n mujoco --no-capture-output python generate_model.py</code></pre>
             </figure>
             <figure>
-              <figcaption>Evaluate swimming fitness</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evaluate_swimming.py --video</code></pre>
+              <figcaption>Evaluate locomotion fitness</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output python evaluate.py --task walking --video</code></pre>
             </figure>
             <figure>
               <figcaption>Run evolution</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evolve_swimming.py \
+              <pre><code>conda run -n mujoco --no-capture-output python evolve.py --task walking \
   --population-size 100 \
   --generations 100 \
   --seed 7</code></pre>
@@ -155,8 +155,8 @@
             <section>
               <h3>Evaluation</h3>
               <p>
-                The x-axis swimming task rewards forward speed while penalizing
-                control energy, drift, tumbling, and excessive body complexity.
+                Swimming and walking tasks reward forward speed while applying task-specific
+                physics and penalties for inefficient or unstable movement.
               </p>
             </section>
             <section>
@@ -188,14 +188,14 @@
                   <td>Uses <code>examples/example_genotype.json</code> and writes <code>generated_creature.xml</code>.</td>
                 </tr>
                 <tr>
-                  <td><code>evaluate_swimming.py</code></td>
-                  <td>Score one genotype on the x-axis swimming task.</td>
-                  <td><code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--video</code>.</td>
+                  <td><code>evaluate.py</code></td>
+                  <td>Score one genotype on the selected swimming or walking task.</td>
+                  <td><code>--task</code>, <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--video</code>.</td>
                 </tr>
                 <tr>
-                  <td><code>evolve_swimming.py</code></td>
-                  <td>Run population-based mutation search for better swimmers.</td>
-                  <td><code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--seed</code>, <code>--max-node</code>.</td>
+                  <td><code>evolve.py</code></td>
+                  <td>Run population-based mutation search for the selected task.</td>
+                  <td><code>--task</code>, <code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--seed</code>, <code>--max-node</code>.</td>
                 </tr>
               </tbody>
             </table>

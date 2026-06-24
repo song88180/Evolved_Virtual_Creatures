@@ -15,7 +15,7 @@ import random
 from statistics import mean
 from typing import Any
 
-from .evaluation import SwimmingEvaluationConfig, evaluate_x_axis_swimming
+from .evaluation import EvaluationConfig, evaluate_for_task, task_for_config
 from .genotype import Genotype
 from .genotype_io import save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort
@@ -33,7 +33,7 @@ class EvaluatedCreature:
 
 def _evaluate_population(
     population: list[Genotype],
-    config: SwimmingEvaluationConfig,
+    config: EvaluationConfig,
     executor: ProcessPoolExecutor,
 ) -> list[EvaluatedCreature]:
     """Simulate and score every genotype concurrently, preserving input order."""
@@ -42,11 +42,11 @@ def _evaluate_population(
 
 def _evaluate_creature(
     genotype: Genotype,
-    config: SwimmingEvaluationConfig,
+    config: EvaluationConfig,
 ) -> EvaluatedCreature:
     """Evaluate one genotype, returning a failure score if simulation raises."""
     try:
-        result = evaluate_x_axis_swimming(genotype, config)
+        result = evaluate_for_task(genotype, config)
         metrics = asdict(result)
         fitness = result.fitness
     except Exception as error:
@@ -73,13 +73,13 @@ def _save_generation_best(
     generation: int,
     generation_best: EvaluatedCreature,
     best_so_far: EvaluatedCreature,
-    max_node: int,
+    config: EvaluationConfig,
 ) -> None:
     """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
     save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
     write_json(run_dir / "best_metrics.json", best_so_far.metrics)
-    _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, max_node)
+    _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, config)
 
     generation_dir = run_dir / "generation_bests"
     generation_dir.mkdir(exist_ok=True)
@@ -89,10 +89,14 @@ def _save_generation_best(
     )
 
 
-def _write_best_xml(path: Path, genotype: Genotype, max_node: int) -> None:
+def _write_best_xml(
+    path: Path, genotype: Genotype, config: EvaluationConfig
+) -> None:
     """Write the best creature's MJCF to disk, skipping output if the build aborts."""
     try:
-        mjcf = PhenotypeBuilder(genotype, max_node=max_node).build()
+        mjcf = PhenotypeBuilder(
+            genotype, max_node=config.max_node, task=task_for_config(config)
+        ).build()
     except PhenotypeBuildAbort:
         return
     path.write_text(mjcf)

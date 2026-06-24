@@ -1,0 +1,137 @@
+from concurrent.futures import ProcessPoolExecutor
+import sys
+import xml.etree.ElementTree as ET
+
+import pytest
+
+import evaluate
+import evolve as evolve_cli
+from evol_virtual_creature import evolve as evolve_lib
+from evol_virtual_creature.evaluation import (
+    SwimmingEvaluationConfig,
+    WalkingEvaluationConfig,
+)
+import generate_model
+
+
+def test_default_thread_count_uses_half_available_affinity(monkeypatch):
+    monkeypatch.setattr(
+        evolve_lib.os, "sched_getaffinity", lambda _pid: set(range(10))
+    )
+    assert evolve_lib.default_thread_count() == 5
+
+
+def test_default_thread_count_has_minimum_of_one(monkeypatch):
+    monkeypatch.setattr(evolve_lib.os, "sched_getaffinity", lambda _pid: {0})
+    assert evolve_lib.default_thread_count() == 1
+
+
+def test_evaluate_defaults_to_swimming(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py"])
+    assert evaluate.parse_args().task == "swimming"
+
+
+def test_evolve_accepts_walking_and_thread_override(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evolve.py", "--task", "walking", "--threads", "3"]
+    )
+    args = evolve_cli.parse_args()
+    assert args.task == "walking"
+    assert args.threads == 3
+
+
+def test_evolve_rejects_nonpositive_threads(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--threads", "0"])
+    with pytest.raises(ValueError, match="--threads must be at least 1"):
+        evolve_cli.parse_args()
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        SwimmingEvaluationConfig(episode_seconds=0.02),
+        WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
+    ],
+)
+def test_evaluate_population_runs_in_processes_and_preserves_order(config):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    population = [genotype, genotype]
+    with ProcessPoolExecutor(max_workers=2) as executor:
+        evaluated = evolve_lib._evaluate_population(population, config, executor)
+    assert len(evaluated) == len(population)
+    assert evaluated[0].fitness == evaluated[1].fitness
+
+
+def test_saved_best_xml_uses_walking_physics(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        WalkingEvaluationConfig(episode_seconds=0.02),
+    )
+    option = ET.fromstring(path.read_text()).find("option")
+    assert option is not None
+    assert option.get("gravity") == "0 0 -9.81"
+
+
+def test_default_run_directory_uses_task_name(monkeypatch):
+    class FixedDateTime:
+        @classmethod
+        def now(cls):
+            return cls()
+
+        def strftime(self, _format):
+            return "20260102_030405"
+
+    monkeypatch.setattr(evolve_cli, "datetime", FixedDateTime)
+    assert str(evolve_cli._default_run_dir("walking")).endswith(
+        "runs/walking_20260102_030405"
+    )
+
+
+@pytest.mark.parametrize(
+    ("parse_args", "expected_defaults"),
+    [
+        (
+            evaluate.parse_args,
+            (
+                "default: swimming",
+                "default: examples/example_genotype.json",
+                "default: 6.0",
+                "default: disabled",
+                "default: 30",
+            ),
+        ),
+        (
+            evolve_cli.parse_args,
+            (
+                "default: swimming",
+                "default: examples/example_genotype.json",
+                "default: runs/<task>_<timestamp>",
+                "default: 100",
+                f"default: {evolve_lib.default_thread_count()}",
+                "default: 10.0",
+                "default: 500",
+            ),
+        ),
+        (
+            generate_model.parse_args,
+            (
+                "default: examples/example_genotype.json",
+                "default: generated_creature.xml",
+                "default: 50",
+                "default: 500",
+            ),
+        ),
+    ],
+)
+def test_help_describes_parameter_defaults(
+    monkeypatch, capsys, parse_args, expected_defaults
+):
+    monkeypatch.setattr(sys, "argv", ["program", "--help"])
+    with pytest.raises(SystemExit, match="0"):
+        parse_args()
+    normalized_help = " ".join(capsys.readouterr().out.split())
+    for expected_default in expected_defaults:
+        assert expected_default in normalized_help

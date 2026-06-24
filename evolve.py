@@ -1,4 +1,4 @@
-"""Evolve virtual creatures for the x-axis swimming task."""
+"""Evolve virtual creatures for a selected locomotion task."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ import json
 from pathlib import Path
 import random
 
-from evol_virtual_creature.evaluation import SwimmingEvaluationConfig
+from evol_virtual_creature.evaluation import (
+    SwimmingEvaluationConfig,
+    WalkingEvaluationConfig,
+)
 from evol_virtual_creature.evolve import (
     EvaluatedCreature,
     _evaluate_population,
@@ -34,14 +37,17 @@ def main() -> None:
     """Run the full evolutionary loop and write results to the run directory."""
     args = parse_args()
     rng = random.Random(args.seed)
-    run_dir = args.output_dir or _default_run_dir()
+    run_dir = args.output_dir or _default_run_dir(args.task)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Snapshot CLI settings so each run can be reproduced from config.json.
     write_json(run_dir / "config.json", vars(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
-    config = SwimmingEvaluationConfig(
+    config_type = (
+        WalkingEvaluationConfig if args.task == "walking" else SwimmingEvaluationConfig
+    )
+    config = config_type(
         episode_seconds=args.duration,
         max_node=args.max_node,
         body_count_weight=args.body_count_weight,
@@ -78,7 +84,7 @@ def main() -> None:
             summary = generation_summary(generation, evaluated, best_so_far)
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
-            _save_generation_best(run_dir, generation, best, best_so_far, args.max_node)
+            _save_generation_best(run_dir, generation, best, best_so_far, config)
 
             print(
                 f"gen={generation:04d} "
@@ -118,8 +124,14 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments for the evolution run."""
     parser = argparse.ArgumentParser(
-        description="Run mutation-based evolution for x-axis swimming creatures.",
+        description="Run mutation-based evolution for swimming or walking creatures.",
         formatter_class=_HelpFormatter,
+    )
+    parser.add_argument(
+        "--task",
+        choices=("swimming", "walking"),
+        default="swimming",
+        help="Locomotion task used for fitness evaluation.",
     )
     parser.add_argument(
         "--genotype",
@@ -131,7 +143,7 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=None,
-        help="Run output directory. (default: runs/swimming_<timestamp>)",
+        help="Run output directory. (default: runs/<task>_<timestamp>)",
     )
     parser.add_argument(
         "--population-size",
@@ -229,14 +241,18 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-mutations must be >= --min-mutations >= 0")
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
+    if args.duration <= 0.0:
+        raise ValueError("--duration must be greater than zero")
+    if args.max_node < 1:
+        raise ValueError("--max-node must be at least 1")
     if args.body_count_weight < 0.0:
         raise ValueError("--body-count-weight must be non-negative")
 
 
-def _default_run_dir() -> Path:
-    """Return a timestamped directory under ``runs/`` for this evolution run."""
+def _default_run_dir(task: str) -> Path:
+    """Return a task-specific timestamped directory under ``runs/``."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return DEFAULT_RUNS_DIR / f"swimming_{timestamp}"
+    return DEFAULT_RUNS_DIR / f"{task}_{timestamp}"
 
 
 if __name__ == "__main__":

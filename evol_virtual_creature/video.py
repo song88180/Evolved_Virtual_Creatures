@@ -5,22 +5,29 @@ from pathlib import Path
 
 import mujoco
 
-from .evaluation import SwimmingEvaluationConfig
+from .evaluation import (
+    EvaluationConfig,
+    SwimmingEvaluationConfig,
+    WalkingEvaluationConfig,
+    settle_walking_model,
+    task_for_config,
+)
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import ActuatorController, PhenotypeBuilder
 
 
-def save_x_axis_swimming_video(
+def save_x_axis_video(
     genotype: Genotype,
     output_path: Path,
-    config: SwimmingEvaluationConfig,
+    config: EvaluationConfig,
     fps: int,
     width: int,
     height: int,
     track_root: bool = False,
     speed: float = 1.0,
 ):
+    """Render a swimming or walking evaluation episode to MP4."""
     try:
         import imageio.v3 as iio
     except ImportError as error:
@@ -29,16 +36,25 @@ def save_x_axis_swimming_video(
             "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
         ) from error
 
+    task = task_for_config(config)
     try:
-        builder = PhenotypeBuilder(genotype, max_node=config.max_node)
+        builder = PhenotypeBuilder(genotype, max_node=config.max_node, task=task)
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
-        raise RuntimeError(f"Cannot record video because phenotype build failed: {error}") from error
+        raise RuntimeError(
+            f"Cannot record video because phenotype build failed: {error}"
+        ) from error
 
     model = mujoco.MjModel.from_xml_string(mjcf)
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
+    if isinstance(config, WalkingEvaluationConfig):
+        failure = settle_walking_model(model, data, config)
+        if failure is not None:
+            raise RuntimeError(f"Cannot record video: {failure}")
+        data.time = 0.0
+
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []
     next_frame_time = 0.0
@@ -56,7 +72,6 @@ def save_x_axis_swimming_video(
             raise RuntimeError(
                 f"Cannot track root body because {root_body_name!r} was not found."
             )
-
         camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(model, camera)
         camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -70,7 +85,6 @@ def save_x_axis_swimming_video(
                 actuator_controllers=builder.actuator_controllers,
             )
             mujoco.mj_step(model, data)
-
             if data.time >= next_frame_time:
                 renderer.update_scene(data, camera=camera)
                 frames.append(renderer.render())
@@ -83,6 +97,22 @@ def save_x_axis_swimming_video(
             "Saving MP4 video requires imageio and imageio-ffmpeg. Install them with:\n"
             "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
         ) from error
+
+
+def save_x_axis_swimming_video(
+    genotype: Genotype,
+    output_path: Path,
+    config: SwimmingEvaluationConfig,
+    fps: int,
+    width: int,
+    height: int,
+    track_root: bool = False,
+    speed: float = 1.0,
+):
+    """Compatibility wrapper for callers that explicitly render swimming."""
+    return save_x_axis_video(
+        genotype, output_path, config, fps, width, height, track_root, speed
+    )
 
 
 def actuator_ids_for_controllers(

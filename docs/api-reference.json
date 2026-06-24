@@ -503,10 +503,11 @@
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
         "Constructor": {
-          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int)",
+          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, task: str = \"swimming\")",
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
-            "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."}
+            "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},
+            "task": {"Type": "str", "Default": "swimming", "Description": "Physics environment: swimming or walking."}
           },
           "Raises": ["ValueError"]
         },
@@ -723,9 +724,9 @@
   },
   "evol_virtual_creature.evaluation": {
     "Overview": {
-      "Purpose": "Scores genotypes on an x-axis swimming task using MuJoCo simulation and open-loop actuator control.",
+      "Purpose": "Scores genotypes on x-axis swimming and walking tasks using MuJoCo simulation and open-loop actuator control.",
       "Main_Use_Cases": [
-        "Evaluate a genotype's swimming fitness",
+        "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
         "Convert phenotype build failures or unstable simulations into failed evaluation results"
       ],
@@ -837,9 +838,9 @@
   },
   "evol_virtual_creature.video": {
     "Overview": {
-      "Purpose": "Renders x-axis swimming simulations to MP4 video and exposes controller helpers shared with rendering.",
+      "Purpose": "Renders x-axis swimming or walking simulations to MP4 video and exposes controller helpers shared with rendering.",
       "Main_Use_Cases": [
-        "Build a genotype phenotype and record a swimming episode",
+        "Build a genotype phenotype and record a selected-task episode",
         "Map generated actuator controllers to MuJoCo actuator IDs",
         "Apply open-loop sine controls during video rendering"
       ],
@@ -852,20 +853,20 @@
     },
     "Classes": {},
     "Functions": {
-      "save_x_axis_swimming_video": {
-        "Signature": "save_x_axis_swimming_video(genotype: Genotype, output_path: Path, config: SwimmingEvaluationConfig, fps: int, width: int, height: int) -> None",
-        "Purpose": "Render a swimming episode to MP4 using MuJoCo's offscreen renderer and imageio.",
+      "save_x_axis_video": {
+        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, config: EvaluationConfig, fps: int, width: int, height: int) -> None",
+        "Purpose": "Render a swimming or walking episode to MP4 using MuJoCo's offscreen renderer and imageio.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
           "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
-          "config": {"Type": "SwimmingEvaluationConfig", "Default": "required", "Description": "Simulation settings and max_node budget."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Swimming or walking simulation settings and max_node budget."},
           "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
           "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
           "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."}
         },
         "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
         "Raises": ["RuntimeError", "OSError"],
-        "Example": "save_x_axis_swimming_video(genotype, Path(\"swim.mp4\"), config, fps=30, width=1280, height=720)"
+        "Example": "save_x_axis_video(genotype, Path(\"locomotion.mp4\"), config, fps=30, width=1280, height=720)"
       },
       "actuator_ids_for_controllers": {
         "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
