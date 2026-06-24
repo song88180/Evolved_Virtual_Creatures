@@ -4,6 +4,7 @@ import pytest
 
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
+from evol_virtual_creature.phenotype import PhenotypeBuilder
 from evol_virtual_creature.graph_analysis import (
     GenotypeGraphAnalyzer,
     GenotypeGraphError,
@@ -190,3 +191,175 @@ def test_template_new_node_addition_attaches_connection_before_mutating_it():
 
     assert "connection new-node addition" in description
     assert any(node.children for node in genotype.nodes.values())
+
+MUTABLE_NODE_FIELDS = {"size", "joint_type", "recursive_limit"}
+MUTABLE_CONNECTION_FIELDS = {
+    "parent_face",
+    "surface_uv",
+    "symmetry",
+    "axis",
+    "scale",
+    "terminal_only",
+    "motor_enabled",
+    "motor_gear",
+    "ctrlrange",
+    "control_amp",
+    "control_freq",
+    "control_phase",
+    "control_phase_depth_scale",
+    "control_phase_order_scale",
+}
+
+
+def _phenotype_and_controller_snapshot(genotype):
+    builder = PhenotypeBuilder(genotype, max_node=100)
+    mjcf = builder.build()
+    controllers = tuple(
+        (controller.amp, controller.freq, controller.phase)
+        for controller in builder.actuator_controllers
+    )
+    return mjcf, controllers
+
+
+def _mutable_effect_genotype(field_name):
+    target = ConnectionGene(
+        child="limb",
+        axis=(0.3, 0.4, 0.5),
+        parent_face="+x",
+        surface_uv=(0.2, -0.3),
+        motor_gear=80.0,
+        ctrlrange=(-0.8, 1.2),
+        control_amp=0.2,
+        control_freq=6.0,
+        control_phase=0.4,
+    )
+    body_children = [target]
+    nodes = {
+        "body": NodeGene(
+            name="body",
+            size=(0.3, 0.2, 0.1),
+            joint_type="free",
+            children=body_children,
+        ),
+        "limb": NodeGene(
+            name="limb",
+            size=(0.12, 0.08, 0.04),
+            joint_type="hinge",
+        ),
+    }
+
+    if field_name == "recursive_limit":
+        target = ConnectionGene(child="segment", axis=(0.3, 0.4, 0.5))
+        recursive = ConnectionGene(child="segment", axis=(0.2, 0.5, 0.4))
+        nodes["body"].children = [target]
+        nodes["segment"] = NodeGene(
+            name="segment",
+            size=(0.12, 0.08, 0.04),
+            recursive_limit=1,
+            children=[recursive],
+        )
+    elif field_name in {"scale", "control_phase_depth_scale"}:
+        target = ConnectionGene(
+            child="segment",
+            axis=(0.3, 0.4, 0.5),
+            scale=0.8,
+            control_phase_depth_scale=0.3,
+        )
+        nodes["body"].children = [
+            ConnectionGene(child="segment", axis=(0.1, 0.6, 0.2))
+        ]
+        nodes["segment"] = NodeGene(
+            name="segment",
+            size=(0.12, 0.08, 0.04),
+            recursive_limit=3,
+            children=[target],
+        )
+    elif field_name == "terminal_only":
+        recursive = ConnectionGene(child="segment", axis=(0.2, 0.5, 0.4))
+        target = ConnectionGene(child="limb", axis=(0.3, 0.4, 0.5))
+        nodes["body"].children = [ConnectionGene(child="segment", axis=(0, 1, 0))]
+        nodes["segment"] = NodeGene(
+            name="segment",
+            size=(0.12, 0.08, 0.04),
+            recursive_limit=2,
+            children=[recursive, target],
+        )
+    elif field_name == "control_phase_order_scale":
+        anchor = ConnectionGene(child="anchor", axis=(0, 1, 0))
+        target.control_phase_order_scale = 0.3
+        nodes["body"].children = [anchor, target]
+        nodes["anchor"] = NodeGene(name="anchor", size=(0.05, 0.05, 0.05))
+
+    return Genotype(root="body", nodes=nodes), target
+
+
+def test_effect_cases_cover_every_registered_mutable_gene_field():
+    genotype, _ = _mutable_effect_genotype("axis")
+    paths = genotype._collect_mutable_parameters(allow_topology_mutations=False)
+    node_fields = {path[2] for path in paths if path[0] == "node"}
+    connection_fields = {path[2] for path in paths if path[0] == "connection"}
+
+    assert node_fields == MUTABLE_NODE_FIELDS
+    assert connection_fields == MUTABLE_CONNECTION_FIELDS
+
+
+MUTABLE_EFFECT_CASES = [
+    pytest.param("node", "size", index, id=f"node-size-{index}")
+    for index in range(3)
+] + [
+    pytest.param("node", "joint_type", None, id="node-joint-type"),
+    pytest.param("node", "recursive_limit", None, id="node-recursive-limit"),
+] + [
+    pytest.param("connection", "parent_face", None, id="connection-parent-face"),
+    pytest.param("connection", "surface_uv", 0, id="connection-surface-u"),
+    pytest.param("connection", "surface_uv", 1, id="connection-surface-v"),
+    pytest.param("connection", "symmetry", None, id="connection-symmetry"),
+] + [
+    pytest.param("connection", "axis", index, id=f"connection-axis-{index}")
+    for index in range(3)
+] + [
+    pytest.param("connection", "scale", None, id="connection-scale"),
+    pytest.param("connection", "terminal_only", None, id="connection-terminal-only"),
+    pytest.param("connection", "motor_enabled", None, id="connection-motor-enabled"),
+    pytest.param("connection", "motor_gear", None, id="connection-motor-gear"),
+    pytest.param("connection", "ctrlrange", 0, id="connection-ctrlrange-min"),
+    pytest.param("connection", "ctrlrange", 1, id="connection-ctrlrange-max"),
+    pytest.param("connection", "control_amp", None, id="connection-control-amp"),
+    pytest.param("connection", "control_freq", None, id="connection-control-freq"),
+    pytest.param("connection", "control_phase", None, id="connection-control-phase"),
+    pytest.param(
+        "connection",
+        "control_phase_depth_scale",
+        None,
+        id="connection-control-phase-depth-scale",
+    ),
+    pytest.param(
+        "connection",
+        "control_phase_order_scale",
+        None,
+        id="connection-control-phase-order-scale",
+    ),
+]
+
+
+@pytest.mark.parametrize("owner_type,field_name,index", MUTABLE_EFFECT_CASES)
+def test_every_mutable_gene_field_can_change_phenotype_or_controller(
+    owner_type,
+    field_name,
+    index,
+):
+    genotype, connection = _mutable_effect_genotype(field_name)
+    before = _phenotype_and_controller_snapshot(genotype)
+
+    if owner_type == "node":
+        node_name = "segment" if field_name == "recursive_limit" else "limb"
+        path = ("node", node_name, field_name)
+    else:
+        path = ("connection", connection, field_name)
+    if index is not None:
+        path = (*path, index)
+
+    genotype._mutate_parameter_path(path, random.Random(7))
+    after = _phenotype_and_controller_snapshot(genotype)
+
+    assert after != before
