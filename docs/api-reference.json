@@ -136,12 +136,11 @@
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", joint_axis: Tuple[float, float, float] = (0, 1, 0), recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list))",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list))",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "MuJoCo box half-size for generated geometry."},
             "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
-            "joint_axis": {"Type": "Tuple[float, float, float]", "Default": "(0, 1, 0)", "Description": "Default articulated-joint axis when no incoming connection supplies one."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
             "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."}
           },
@@ -151,7 +150,6 @@
           "name": {"Type": "str", "Description": "Symbolic node name."},
           "size": {"Type": "Tuple[float, float, float]", "Description": "Generated box geometry size."},
           "joint_type": {"Type": "str", "Description": "Generated joint type."},
-          "joint_axis": {"Type": "Tuple[float, float, float]", "Description": "Default joint axis."},
           "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
           "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."}
         },

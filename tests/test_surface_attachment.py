@@ -40,6 +40,11 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
             "pos": [0.0, 0.0, -0.4],
             "axis": [1, 0, 0],
         }],
+        "archived_nodes": [{
+            "name": "archived_limb",
+            "size": [0.04, 0.04, 0.04],
+            "joint_axis": [0, 0, 1],
+        }],
         "nodes": {
             "body": {
                 "size": [0.25, 0.15, 0.1],
@@ -50,12 +55,17 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
                     "axis": [1, 0, 0],
                 }],
             },
-            "limb": {"size": [0.05, 0.08, 0.02]},
+            "limb": {
+                "size": [0.05, 0.08, 0.02],
+                "joint_axis": [1, 0, 0],
+            },
         },
     }))
 
     genotype = load_genotype_from_json(genotype_path)
     connection = genotype.nodes["body"].children[0]
+    assert not hasattr(genotype.nodes["limb"], "joint_axis")
+    assert not hasattr(genotype.archived_nodes[0], "joint_axis")
 
     assert connection.parent_face == "-y"
     assert connection.surface_uv == pytest.approx((0.0, 0.5))
@@ -69,6 +79,9 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
     ][0]
     assert "pos" not in saved_connection
     assert saved_connection["parent_face"] == "-y"
+    saved_data = json.loads(migrated_path.read_text())
+    assert "joint_axis" not in saved_data["nodes"]["limb"]
+    assert "joint_axis" not in saved_data["archived_nodes"][0]
 
 
 def test_child_hinge_and_geom_meet_parent_surface():

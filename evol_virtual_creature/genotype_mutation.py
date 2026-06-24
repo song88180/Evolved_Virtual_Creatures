@@ -95,7 +95,6 @@ class GenotypeMutationMixin:
         node_mutation_specs = (
             "size",
             "joint_type",
-            "joint_axis",
             "recursive_limit",
         )
         connection_mutation_specs = (
@@ -330,7 +329,6 @@ class GenotypeMutationMixin:
         field_specs = {
             "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
             "joint_type": ("articulated_joint_type", 0.0, False),
-            "joint_axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
             "recursive_limit": (
                 "positive_integer",
                 self.MIN_INTEGER_MUTATION_STD,
@@ -698,7 +696,6 @@ class GenotypeMutationMixin:
             name=self._new_node_name("node"),
             size=tuple(random_source.uniform(0.04, 0.30) for _ in range(3)),
             joint_type=random_source.choice(ARTICULATED_JOINT_TYPES),
-            joint_axis=self._random_axis(random_source),
             recursive_limit=random_source.randint(1, 8),
         )
 
@@ -881,7 +878,6 @@ class GenotypeMutationMixin:
         mutable_fields = (
             "size",
             "joint_type",
-            "joint_axis",
             "recursive_limit",
         )
         field_name = random_source.choice(mutable_fields)

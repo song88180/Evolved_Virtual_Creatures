@@ -79,7 +79,6 @@ class NodeGene:
     name: str
     size: Tuple[float, float, float]
     joint_type: str = "hinge"
-    joint_axis: Tuple[float, float, float] = (0, 1, 0)
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
 ```
@@ -89,7 +88,6 @@ A `NodeGene` describes one reusable body-part type. It includes:
 - `name`: a symbolic name such as `"body"`, `"segment"`, or `"limb"`.
 - `size`: the MuJoCo box geometry size for this body part.
 - `joint_type`: `"free"` for the root body, or `"hinge"`, `"slide"`, or `"ball"` for articulated parts.
-- `joint_axis`: the fallback axis used for hinge and slide joints and as the ball motor torque axis.
 - `recursive_limit`: how many times this node type can appear along one recursive path.
 - `children`: connections from this node to other nodes.
 
@@ -113,7 +111,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_axis`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
+Mutable parameters include node fields such as `size`, `joint_type`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
 
 The method prints the mutation details as it applies them:
 
@@ -141,7 +139,7 @@ body -> segment -> segment -> ... -> segment
             limbs      limbs          limbs
 ```
 
-JSON arrays are used for vector values such as `size`, `surface_uv`, `axis`, and `joint_axis`.
+JSON arrays are used for vector values such as `size`, `surface_uv`, and `axis`.
 
 The file defines three node types:
 

@@ -39,10 +39,8 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     child = genotype.nodes[child_name]
     assert child.joint_type == "hinge"
     assert all(0.04 <= value <= 0.30 for value in child.size)
-    assert all(-1.0 <= value <= 1.0 for value in child.joint_axis)
     assert 1 <= child.recursive_limit <= 8
     assert child.size != (0.1, 0.05, 0.05)
-    assert child.joint_axis != (0.0, 1.0, 0.0)
 
     assert connection.parent_face in {"+x", "-x", "+y", "-y", "+z", "-z"}
     assert all(-1.0 <= value <= 1.0 for value in connection.surface_uv)

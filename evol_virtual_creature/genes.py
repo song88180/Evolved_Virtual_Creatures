@@ -74,7 +74,6 @@ class NodeGene:
     name: str
     size: Tuple[float, float, float]
     joint_type: str = "hinge"
-    joint_axis: Tuple[float, float, float] = (0, 1, 0)
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
 

@@ -18,7 +18,6 @@
     "segment": {
       "size": [0.18, 0.08, 0.08],
       "joint_type": "hinge",
-      "joint_axis": [0, 1, 0],
       "recursive_limit": 7,
       "children": [
         {
@@ -42,7 +41,6 @@
     "limb": {
       "size": [0.06, 0.08, 0.01],
       "joint_type": "hinge",
-      "joint_axis": [1, 0, 0],
       "recursive_limit": 1
     }
   }

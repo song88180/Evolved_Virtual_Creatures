@@ -10,6 +10,9 @@ from .genotype import ConnectionGene, Genotype, NodeGene
 
 GenotypeSpec = Mapping[str, Mapping[str, Any]]
 
+# NodeGene.joint_axis was removed; accept and discard it when migrating old JSON.
+LEGACY_NODE_FIELDS = {"joint_axis"}
+
 
 def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
     """
@@ -24,7 +27,7 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
         node_kwargs = {
             key: value
             for key, value in node_spec.items()
-            if key != "children"
+            if key != "children" and key not in LEGACY_NODE_FIELDS
         }
         nodes[node_name] = NodeGene(name=node_name, **node_kwargs)
 
@@ -108,7 +111,7 @@ def _node_from_dict(node_data: Mapping[str, Any]) -> NodeGene:
     node_kwargs = {
         key: value
         for key, value in node_data.items()
-        if key not in {"children"}
+        if key != "children" and key not in LEGACY_NODE_FIELDS
     }
     node = NodeGene(**node_kwargs)
     node.children = [

@@ -28,6 +28,7 @@ PLANE_REFLECTIONS = {
     "yz": (-1.0, 1.0, 1.0),
 }
 IDENTITY_REFLECTION = (1.0, 1.0, 1.0)
+DEFAULT_ARTICULATED_ROOT_AXIS = (0.0, 1.0, 0.0)
 
 
 @dataclass
@@ -269,7 +270,11 @@ class PhenotypeBuilder:
         joint.set("type", node.joint_type)
         joint.set("name", joint_name)
         joint.set("pos", "0 0 0")
-        joint_axis = incoming_axis if incoming_axis is not None else node.joint_axis
+        joint_axis = (
+            incoming_axis
+            if incoming_axis is not None
+            else DEFAULT_ARTICULATED_ROOT_AXIS
+        )
         if node.joint_type != "ball":
             joint.set("axis", vec_to_str(joint_axis))
         if node.joint_type == "slide":
