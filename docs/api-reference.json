@@ -747,7 +747,7 @@
       "SwimmingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0)",
+          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
           "Parameters": {
             "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
             "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
@@ -761,7 +761,9 @@
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."},
             "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for generated body count."},
             "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned when build or simulation fails."},
-            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "State magnitude threshold used to detect numerical instability."}
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Position/state magnitude threshold used to detect numerical instability."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Absolute generalized-velocity limit used to reject unstable simulations."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Absolute generalized-acceleration limit used to reject unstable simulations before MuJoCo resets state."}
           },
           "Raises": []
         },
@@ -778,7 +780,9 @@
           "angular_speed_weight": {"Type": "float", "Description": "Angular speed penalty weight."},
           "body_count_weight": {"Type": "float", "Description": "Body count penalty weight."},
           "build_failure_fitness": {"Type": "float", "Description": "Fallback fitness for failed evaluations."},
-          "max_abs_state_value": {"Type": "float", "Description": "Numerical stability threshold."}
+          "max_abs_state_value": {"Type": "float", "Description": "Position/state numerical stability threshold."},
+          "max_abs_velocity": {"Type": "float", "Description": "Generalized-velocity numerical stability threshold."},
+          "max_abs_acceleration": {"Type": "float", "Description": "Generalized-acceleration numerical stability threshold."}
         },
         "Methods": {},
         "Example": "config = SwimmingEvaluationConfig(episode_seconds=6.0, body_count_weight=0.002)"
@@ -840,7 +844,7 @@
       "_failed_evaluation": "Builds a SwimmingEvaluationResult with build_failed=True and fallback fitness.",
       "_normalized_target_direction": "Validates and normalizes a three-component target direction.",
       "_actuator_ids": "Maps ActuatorController motor names to MuJoCo actuator IDs.",
-      "_simulation_state_is_stable": "Checks qpos, qvel, and qacc for finite bounded values.",
+      "simulation_failure_reason": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond configured limits.",
       "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude.",
       "_apply_open_loop_controller": "Writes sine-wave control values to MuJoCo actuator slots."
     },

@@ -13,6 +13,7 @@ from .phenotype import ActuatorController, PhenotypeBuilder
 
 
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
+NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,8 @@ class SwimmingEvaluationConfig:
     body_count_weight: float = 0.001
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,8 @@ class WalkingEvaluationConfig:
     body_count_weight: float = 0.001
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
 
 
 EvaluationConfig: TypeAlias = SwimmingEvaluationConfig | WalkingEvaluationConfig
@@ -187,14 +192,16 @@ def settle_walking_model(
     """Let a walking creature fall onto the floor before controls and scoring."""
     settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
     for _ in range(settle_steps):
+        previous_time = float(data.time)
         mujoco.mj_step(model, data)
         if (
             config.disallow_collision
             and _has_nonparent_self_collision(model, data)
         ):
             return DISALLOWED_COLLISION_REASON
-        if not _simulation_state_is_stable(data, config.max_abs_state_value):
-            return "Simulation became numerically unstable while settling."
+        failure = simulation_failure_reason(data, previous_time, config)
+        if failure is not None:
+            return f"{failure} while settling."
     return None
 
 
@@ -247,8 +254,9 @@ def _run_controlled_episode(
             and _has_nonparent_self_collision(model, data)
         ):
             return DISALLOWED_COLLISION_REASON
-        if not _simulation_state_is_stable(data, config.max_abs_state_value):
-            return "Simulation became numerically unstable."
+        failure = simulation_failure_reason(data, previous_time, config)
+        if failure is not None:
+            return failure
 
         dt = data.time - previous_time
         previous_time = data.time
@@ -356,11 +364,20 @@ def _has_nonparent_self_collision(
     return False
 
 
-def _simulation_state_is_stable(data: mujoco.MjData, max_abs_state_value: float):
-    return all(
-        _array_is_stable(values, max_abs_state_value)
-        for values in (data.qpos, data.qvel, data.qacc)
-    )
+def simulation_failure_reason(
+    data: mujoco.MjData,
+    previous_time: float,
+    config: EvaluationConfig,
+) -> str | None:
+    if not math.isfinite(float(data.time)) or data.time <= previous_time:
+        return NUMERICAL_INSTABILITY_REASON
+    if not _array_is_stable(data.qpos, config.max_abs_state_value):
+        return NUMERICAL_INSTABILITY_REASON
+    if not _array_is_stable(data.qvel, config.max_abs_velocity):
+        return NUMERICAL_INSTABILITY_REASON
+    if not _array_is_stable(data.qacc, config.max_abs_acceleration):
+        return NUMERICAL_INSTABILITY_REASON
+    return None
 
 
 def _array_is_stable(values, max_abs_value: float):

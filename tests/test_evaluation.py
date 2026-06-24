@@ -1,13 +1,16 @@
 import xml.etree.ElementTree as ET
 
 import mujoco
+import pytest
 
 from evol_virtual_creature.evaluation import (
+    NUMERICAL_INSTABILITY_REASON,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
     _has_nonparent_self_collision,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
+    simulation_failure_reason,
 )
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.phenotype import PhenotypeBuilder
@@ -199,3 +202,85 @@ def test_disallowed_collision_assigns_low_fitness(monkeypatch):
     assert result.disqualified
     assert not result.build_failed
     assert "self-collision" in result.failure_reason
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("qvel", 1_001.0),
+        ("qacc", 100_001.0),
+    ],
+)
+def test_excessive_velocity_or_acceleration_is_rejected(field_name, value):
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body>
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.time = 0.01
+    getattr(data, field_name)[0] = value
+
+    failure = simulation_failure_reason(
+        data,
+        previous_time=0.0,
+        config=SwimmingEvaluationConfig(),
+    )
+
+    assert failure == NUMERICAL_INSTABILITY_REASON
+
+
+def test_simulation_time_reset_is_rejected():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body>
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    data.time = 0.01
+
+    failure = simulation_failure_reason(
+        data,
+        previous_time=0.06,
+        config=SwimmingEvaluationConfig(),
+    )
+
+    assert failure == NUMERICAL_INSTABILITY_REASON
+
+
+def test_evaluation_rejects_numerical_instability(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    original_step = evaluation.mujoco.mj_step
+
+    def inject_excessive_acceleration(model, data):
+        original_step(model, data)
+        data.qacc[0] = 100_001.0
+
+    monkeypatch.setattr(
+        evaluation.mujoco,
+        "mj_step",
+        inject_excessive_acceleration,
+    )
+    result = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(episode_seconds=0.02),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert result.failure_reason == NUMERICAL_INSTABILITY_REASON

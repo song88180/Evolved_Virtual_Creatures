@@ -12,6 +12,7 @@ from .evaluation import (
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
     settle_walking_model,
+    simulation_failure_reason,
     task_for_config,
 )
 from .genotype import Genotype
@@ -88,6 +89,7 @@ def save_x_axis_video(
 
     with mujoco.Renderer(model, height=height, width=width) as renderer:
         while data.time < config.episode_seconds:
+            previous_time = float(data.time)
             apply_open_loop_controller(
                 data=data,
                 actuator_ids=actuator_ids,
@@ -99,6 +101,9 @@ def save_x_axis_video(
                 and _has_nonparent_self_collision(model, data)
             ):
                 raise RuntimeError(DISALLOWED_COLLISION_REASON)
+            failure = simulation_failure_reason(data, previous_time, config)
+            if failure is not None:
+                raise RuntimeError(f"Cannot record video: {failure}")
             if data.time >= next_frame_time:
                 renderer.update_scene(data, camera=camera)
                 frames.append(renderer.render())
