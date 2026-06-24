@@ -128,7 +128,29 @@ class PhenotypeBuilder:
             option.set("viscosity", "0")
         option.set("timestep", "0.01")
 
+        self.add_assets()
         self.add_defaults()
+
+    def add_assets(self):
+        if self.mujoco_xml is None:
+            raise RuntimeError("mujoco_xml must be initialized before adding assets")
+
+        asset = ET.SubElement(self.mujoco_xml, "asset")
+        texture = ET.SubElement(asset, "texture")
+        texture.set("name", "floor_checker")
+        texture.set("type", "2d")
+        texture.set("builtin", "checker")
+        texture.set("rgb1", "0.2 0.3 0.4")
+        texture.set("rgb2", "0.8 0.8 0.8")
+        texture.set("width", "512")
+        texture.set("height", "512")
+
+        material = ET.SubElement(asset, "material")
+        material.set("name", "floor_material")
+        material.set("texture", "floor_checker")
+        material.set("texrepeat", "10 10")
+        material.set("reflectance", "0.2")
+
 
     def add_defaults(self):
         if self.mujoco_xml is None:
@@ -165,6 +187,7 @@ class PhenotypeBuilder:
         floor.set("type", "plane")
         floor.set("size", "5 5 0.1")
         floor.set("pos", "0 0 -0.05")
+        floor.set("material", "floor_material")
         if self.task == "walking":
             floor.set("contype", "1")
             floor.set("conaffinity", "2")

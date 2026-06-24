@@ -213,7 +213,7 @@ It then adds standard MuJoCo sections:
 - `<worldbody>`: contains the floor, light, and creature bodies.
 - `<actuator>`: contains motors for motor-enabled hinge, slide, and ball joints.
 
-The default geometry settings make body parts box-shaped, moderately dense, and frictional. They also set `contype` and `conaffinity` to `0`, which disables contacts for geoms that inherit these defaults. The floor and light are added directly to the world:
+The default geometry settings make body parts box-shaped, moderately dense, and frictional. They also set `contype` and `conaffinity` to `0`, which disables contacts for geoms that inherit these defaults. A built-in checker texture and tiled material are assigned to the floor for visual scale and motion reference. The floor and light are added directly to the world:
 
 ```python
 floor = ET.SubElement(worldbody, "geom")
