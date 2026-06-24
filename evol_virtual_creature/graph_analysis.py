@@ -40,6 +40,7 @@ class GenotypeGraphAnalyzer:
             )
 
         self._validate_recursive_limits()
+        self._validate_terminal_connections()
         return self._count_expanded_nodes(self.genotype.root, {})
 
     def _validate_recursive_limits(self):
@@ -53,6 +54,15 @@ class GenotypeGraphAnalyzer:
                     f"Node {node.name!r} has invalid recursive_limit "
                     f"{node.recursive_limit!r}; use a positive integer."
                 )
+
+    def _validate_terminal_connections(self):
+        for node in self.genotype.nodes.values():
+            for connection in node.children:
+                if connection.terminal_only and connection.child == node.name:
+                    raise GenotypeGraphError(
+                        "Terminal-only connection cannot point to its own node: "
+                        f"{node.name!r} -> {connection.child!r}."
+                    )
 
     def _count_expanded_nodes(
         self,
@@ -78,6 +88,9 @@ class GenotypeGraphAnalyzer:
         self.active_states.add(state)
         total_nodes = 1
         for connection in node.children:
+            if connection.terminal_only and node_depth < node.recursive_limit:
+                continue
+
             child_node = self.genotype.nodes.get(connection.child)
             if child_node is None:
                 raise GenotypeGraphError(

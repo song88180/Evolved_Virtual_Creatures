@@ -7,6 +7,8 @@ from typing import List, Tuple
 
 ATTACHMENT_FACES = ("+x", "-x", "+y", "-y", "+z", "-z")
 SYMMETRY_PLANES = ("xy", "xz", "yz")
+ARTICULATED_JOINT_TYPES = ("hinge", "slide", "ball")
+JOINT_TYPES = ("free", *ARTICULATED_JOINT_TYPES)
 
 
 @dataclass
@@ -56,6 +58,8 @@ class ConnectionGene:
         self.symmetry = tuple(
             plane for plane in SYMMETRY_PLANES if plane in self.symmetry
         )
+        if not math.isfinite(self.scale) or self.scale <= 0.0:
+            raise ValueError("scale must be finite and greater than zero")
 
     def phase_for(self, depth: int, order: int) -> float:
         return (
@@ -73,5 +77,13 @@ class NodeGene:
     joint_axis: Tuple[float, float, float] = (0, 1, 0)
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.joint_type not in JOINT_TYPES:
+            valid_types = ", ".join(JOINT_TYPES)
+            raise ValueError(
+                f"Unknown joint type {self.joint_type!r}; expected one of "
+                f"{valid_types}"
+            )
 
 

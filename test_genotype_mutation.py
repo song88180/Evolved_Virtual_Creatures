@@ -1,7 +1,13 @@
 import random
 
-from evol_virtual_creature.genes import NodeGene
+import pytest
+
+from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
+from evol_virtual_creature.graph_analysis import (
+    GenotypeGraphAnalyzer,
+    GenotypeGraphError,
+)
 
 
 def test_fresh_node_connection_addition_can_grow_single_free_root():
@@ -76,6 +82,91 @@ def test_fresh_node_connection_addition_is_available_as_topology_mutation():
     )
 
     assert ("fresh_node_connection_addition",) in mutable_parameters
+
+
+def test_terminal_only_mutation_cannot_enable_on_self_connection():
+    connection = ConnectionGene(child="segment", axis=(0, 1, 0))
+    genotype = Genotype(
+        root="segment",
+        nodes={
+            "segment": NodeGene(
+                name="segment",
+                size=(0.2, 0.1, 0.1),
+                joint_type="free",
+                recursive_limit=2,
+                children=[connection],
+            ),
+        },
+    )
+
+    description = genotype._mutate_parameter_path(
+        ("connection", connection, "terminal_only"),
+        random.Random(1),
+    )
+
+    assert not connection.terminal_only
+    assert "cannot be terminal-only" in description
+
+
+def test_terminal_only_self_connection_is_rejected_during_build_analysis():
+    genotype = Genotype(
+        root="segment",
+        nodes={
+            "segment": NodeGene(
+                name="segment",
+                size=(0.2, 0.1, 0.1),
+                joint_type="free",
+                children=[
+                    ConnectionGene(
+                        child="segment",
+                        axis=(0, 1, 0),
+                        terminal_only=True,
+                    )
+                ],
+            ),
+        },
+    )
+
+    with pytest.raises(GenotypeGraphError, match="cannot point to its own node"):
+        GenotypeGraphAnalyzer(genotype, max_node=10).validate()
+
+
+def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    mutable_parameters = genotype._collect_mutable_parameters(
+        allow_topology_mutations=False
+    )
+    assert ("node", "body", "joint_type") not in mutable_parameters
+    assert ("node", "limb", "joint_type") in mutable_parameters
+
+    description = genotype._mutate_parameter_path(
+        ("node", "limb", "joint_type"),
+        random.Random(1),
+    )
+    assert genotype.nodes["body"].joint_type == "free"
+    assert genotype.nodes["limb"].joint_type in {"slide", "ball"}
+    assert "joint_type" in description
+
+
+def test_node_rejects_unknown_joint_type():
+    with pytest.raises(ValueError, match="Unknown joint type"):
+        NodeGene(name="bad", size=(0.1, 0.1, 0.1), joint_type="fixed")
 
 
 def test_template_new_node_addition_attaches_connection_before_mutating_it():

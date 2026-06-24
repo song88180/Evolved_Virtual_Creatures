@@ -57,13 +57,13 @@ class ConnectionGene:
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
 
 - `child`: the name of the child node to attach.
-- `parent_face`: the parent box face where the child hinge is attached.
+- `parent_face`: the parent box face where the child joint is attached.
 - `surface_uv`: normalized coordinates from `-1` to `1` along the two remaining axes in X/Y/Z order.
 - `symmetry`: any subset of `"xy"`, `"xz"`, and `"yz"`; every selected plane doubles the child subtree.
-- `axis`: the hinge axis used when this connection creates a hinge joint.
-- `scale`: a future extension point for resizing child parts.
-- `terminal_only`: a future extension point for only adding a child at the end of a recursive chain.
-- `motor_enabled`: whether a hinge on this connection gets a motor.
+- `axis`: the translation axis for slide joints, rotation axis for hinge joints, or motor torque axis for ball joints.
+- `scale`: geometric scale applied by connection hierarchy order: `node.size * scale ** (order - 1)`. Symmetry siblings created from the same parent share an order.
+- `terminal_only`: adds the child only on the terminal occurrence of the parent node. A terminal-only connection cannot point back to its own node.
+- `motor_enabled`: whether the articulated joint on this connection gets a motor.
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
 - `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters.
 
@@ -88,8 +88,8 @@ A `NodeGene` describes one reusable body-part type. It includes:
 
 - `name`: a symbolic name such as `"body"`, `"segment"`, or `"limb"`.
 - `size`: the MuJoCo box geometry size for this body part.
-- `joint_type`: either `"free"` for the root body or `"hinge"` for articulated parts.
-- `joint_axis`: the axis used for hinge joints.
+- `joint_type`: `"free"` for the root body, or `"hinge"`, `"slide"`, or `"ball"` for articulated parts.
+- `joint_axis`: the fallback axis used for hinge and slide joints and as the ball motor torque axis.
 - `recursive_limit`: how many times this node type can appear along one recursive path.
 - `children`: connections from this node to other nodes.
 
@@ -213,7 +213,7 @@ It then adds standard MuJoCo sections:
 - `<option>`: sets simulation options, including zero gravity plus density and viscosity values.
 - `<default>`: defines default geometry, joint, and motor properties.
 - `<worldbody>`: contains the floor, light, and creature bodies.
-- `<actuator>`: contains motors for hinge joints.
+- `<actuator>`: contains motors for motor-enabled hinge, slide, and ball joints.
 
 The default geometry settings make body parts box-shaped, moderately dense, and frictional. They also set `contype` and `conaffinity` to `0`, which disables contacts for geoms that inherit these defaults. The floor and light are added directly to the world:
 
@@ -256,22 +256,23 @@ if node.joint_type == "free":
 
 A free joint gives the root body six degrees of freedom, allowing it to translate and rotate in the world.
 
-If a node uses a hinge joint, the script creates both a hinge joint and a motor attached to that joint:
+If a node uses a hinge, slide, or ball joint, the script creates that joint and an optional motor. Hinge and slide joints use the connection axis directly. A ball joint has three rotational degrees of freedom and its single motor applies torque about the normalized connection axis:
 
 ```python
-elif node.joint_type == "hinge":
+elif node.joint_type in {"hinge", "slide", "ball"}:
     joint_name = self.new_joint_name(node.name)
     joint = ET.SubElement(parent_xml, "joint")
-    joint.set("type", "hinge")
+    joint.set("type", node.joint_type)
     joint.set("name", joint_name)
-    joint.set("axis", vec_to_str(node.joint_axis))
+    if node.joint_type != "ball":
+        joint.set("axis", vec_to_str(joint_axis))
 
     motor = ET.SubElement(self.actuator_xml, "motor")
     motor.set("name", self.new_motor_name(joint_name))
     motor.set("joint", joint_name)
 ```
 
-This is why the generated XML contains one actuator motor for every hinge joint.
+Each motor-enabled articulated joint receives one actuator. For ball joints, the motor gear is a three-component torque axis.
 
 ### Adding Geometry
 
@@ -343,6 +344,8 @@ self.add_node_to_body(
     incoming_conn=conn,
     incoming_axis=child_axis,
     current_depths=current_depths,
+    connection_orders=child_connection_orders,
+    effective_size=child_size,
     geom_center=child_geom_center,
     reflection=child_reflection,
     logical_path=child_logical_path,
@@ -420,7 +423,7 @@ Running the script produces `generated_creature.xml`. That file contains:
 - One root body with a free joint.
 - A mutated recursive body plan generated from `examples/example_genotype.json`.
 - Two limb bodies attached to each segment.
-- One motor for every motor-enabled hinge joint.
+- One motor for every motor-enabled hinge, slide, or ball joint.
 - A floor plane and a light.
 
 The exact XML can differ from run to run because the genotype is randomly mutated before expansion. The resulting creature is not controlled by a learned policy. It uses deterministic sinusoidal controllers whose parameters may also be affected by mutation.
@@ -429,9 +432,7 @@ The exact XML can differ from run to run because the genotype is randomly mutate
 
 The current script is intentionally minimal, but it leaves several natural places to grow:
 
-- Use `ConnectionGene.scale` to resize child body parts.
 - Use `ConnectionGene.axis` to influence child orientation, not just joint axes.
-- Implement `terminal_only` so some children appear only at the end of recursive chains.
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
 - Add a fitness function, such as forward distance traveled.

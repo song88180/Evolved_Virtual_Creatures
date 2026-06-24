@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
@@ -98,6 +99,8 @@ class PhenotypeBuilder:
             incoming_conn=None,
             incoming_axis=None,
             current_depths={},
+            connection_orders={},
+            effective_size=root_node.size,
             geom_center=(0.0, 0.0, 0.0),
             reflection=IDENTITY_REFLECTION,
             logical_path=(),
@@ -195,6 +198,8 @@ class PhenotypeBuilder:
         incoming_conn: Optional[ConnectionGene],
         incoming_axis: Optional[Tuple[float, float, float]],
         current_depths: Dict[str, int],
+        connection_orders: Dict[int, int],
+        effective_size: Tuple[float, float, float],
         geom_center: tuple[float, float, float],
         reflection: Tuple[float, float, float],
         logical_path: Tuple[int, ...],
@@ -213,13 +218,15 @@ class PhenotypeBuilder:
             node_depth,
             logical_path,
         )
-        self.add_geom(parent_xml, node, geom_center)
+        self.add_geom(parent_xml, effective_size, geom_center)
 
         next_depths = self.next_depths(current_depths, node.name, node_depth)
         self.add_children(
             parent_xml,
             node,
             next_depths,
+            connection_orders,
+            effective_size,
             geom_center,
             reflection,
             logical_path,
@@ -238,8 +245,8 @@ class PhenotypeBuilder:
             joint = ET.SubElement(parent_xml, "joint")
             joint.set("type", "free")
             joint.set("name", self.new_joint_name(node.name))
-        elif node.joint_type == "hinge":
-            self.add_hinge_joint(
+        elif node.joint_type in {"hinge", "slide", "ball"}:
+            self.add_articulated_joint(
                 parent_xml,
                 node,
                 incoming_conn,
@@ -248,7 +255,7 @@ class PhenotypeBuilder:
                 logical_path,
             )
 
-    def add_hinge_joint(
+    def add_articulated_joint(
         self,
         parent_xml: ET.Element,
         node: NodeGene,
@@ -259,23 +266,32 @@ class PhenotypeBuilder:
     ):
         joint_name = self.new_joint_name(node.name)
         joint = ET.SubElement(parent_xml, "joint")
-        joint.set("type", "hinge")
+        joint.set("type", node.joint_type)
         joint.set("name", joint_name)
         joint.set("pos", "0 0 0")
         joint_axis = incoming_axis if incoming_axis is not None else node.joint_axis
-        joint.set("axis", vec_to_str(joint_axis))
+        if node.joint_type != "ball":
+            joint.set("axis", vec_to_str(joint_axis))
+        if node.joint_type == "slide":
+            joint.set("range", "-0.5 0.5")
+        else:
+            joint.set("range", "0 45")
 
         if incoming_conn is None or incoming_conn.motor_enabled:
             self.add_motor(
-                joint_name,
-                incoming_conn,
-                node_depth,
-                logical_path,
+                joint_name=joint_name,
+                joint_type=node.joint_type,
+                joint_axis=joint_axis,
+                incoming_conn=incoming_conn,
+                node_depth=node_depth,
+                logical_path=logical_path,
             )
 
     def add_motor(
         self,
         joint_name: str,
+        joint_type: str,
+        joint_axis: Sequence[float],
         incoming_conn: Optional[ConnectionGene],
         node_depth: int,
         logical_path: Tuple[int, ...],
@@ -301,7 +317,14 @@ class PhenotypeBuilder:
         motor = ET.SubElement(self.actuator_xml, "motor")
         motor.set("name", motor_name)
         motor.set("joint", joint_name)
-        motor.set("gear", str(motor_gear))
+        if joint_type == "ball":
+            normalized_axis = _normalized_vector(joint_axis)
+            motor.set(
+                "gear",
+                vec_to_str(component * motor_gear for component in normalized_axis),
+            )
+        else:
+            motor.set("gear", str(motor_gear))
         motor.set("ctrlrange", vec_to_str(ctrlrange))
 
         self.actuator_controllers.append(
@@ -316,12 +339,12 @@ class PhenotypeBuilder:
     def add_geom(
         self,
         parent_xml: ET.Element,
-        node: NodeGene,
+        size: Sequence[float],
         geom_center: tuple[float, float, float],
     ):
         geom = ET.SubElement(parent_xml, "geom")
         geom.set("name", f"{parent_xml.get('name')}_geom")
-        geom.set("size", vec_to_str(node.size))
+        geom.set("size", vec_to_str(size))
         geom.set("pos", vec_to_str(geom_center))
         geom.set("rgba", "0.6 0.7 0.9 1")
 
@@ -340,19 +363,32 @@ class PhenotypeBuilder:
         parent_xml: ET.Element,
         node: NodeGene,
         current_depths: Dict[str, int],
+        connection_orders: Dict[int, int],
+        effective_size: Tuple[float, float, float],
         geom_center: tuple[float, float, float],
         reflection: Tuple[float, float, float],
         logical_path: Tuple[int, ...],
     ):
         for connection_index, conn in enumerate(node.children):
+            if conn.terminal_only and not self.is_terminal_node(node, current_depths):
+                continue
+
             child_node = self.genotype.nodes[conn.child]
             if not self.can_add_child(child_node, current_depths):
                 continue
 
+            connection_key = id(conn)
+            connection_order = connection_orders.get(connection_key, 0) + 1
+            child_size = tuple(
+                dimension * conn.scale ** (connection_order - 1)
+                for dimension in child_node.size
+            )
+            child_connection_orders = dict(connection_orders)
+            child_connection_orders[connection_key] = connection_order
             base_body_pos, base_geom_center = _surface_attachment_transform(
-                parent_size=node.size,
+                parent_size=effective_size,
                 parent_geom_center=geom_center,
-                child_size=child_node.size,
+                child_size=child_size,
                 parent_face=conn.parent_face,
                 surface_uv=conn.surface_uv,
             )
@@ -371,9 +407,10 @@ class PhenotypeBuilder:
                     base_geom_center,
                     child_reflection,
                 )
-                child_axis = _reflect_axial_vector(
-                    conn.axis,
-                    child_reflection,
+                child_axis = (
+                    _reflect_vector(conn.axis, child_reflection)
+                    if child_node.joint_type == "slide"
+                    else _reflect_axial_vector(conn.axis, child_reflection)
                 )
                 child_body = self.create_body(
                     parent_xml,
@@ -387,10 +424,19 @@ class PhenotypeBuilder:
                     incoming_conn=conn,
                     incoming_axis=child_axis,
                     current_depths=current_depths,
+                    connection_orders=child_connection_orders,
+                    effective_size=child_size,
                     geom_center=child_geom_center,
                     reflection=child_reflection,
                     logical_path=child_logical_path,
                 )
+
+    def is_terminal_node(
+        self,
+        node: NodeGene,
+        current_depths: Dict[str, int],
+    ) -> bool:
+        return current_depths.get(node.name, 0) >= node.recursive_limit
 
     def can_add_child(
         self,
@@ -480,6 +526,12 @@ def _surface_attachment_transform(
     )
     return tuple(joint_pos), child_geom_center
 
+
+def _normalized_vector(vector: Sequence[float]) -> Tuple[float, float, float]:
+    norm = math.sqrt(sum(component * component for component in vector))
+    if norm == 0.0:
+        return (0.0, 1.0, 0.0)
+    return tuple(component / norm for component in vector)
 
 def vec_to_str(v):
     return " ".join(str(x) for x in v)

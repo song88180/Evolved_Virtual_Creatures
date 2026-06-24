@@ -5,6 +5,7 @@ import copy
 import random
 
 from .genes import (
+    ARTICULATED_JOINT_TYPES,
     ATTACHMENT_FACES,
     SYMMETRY_PLANES,
     ConnectionGene,
@@ -93,6 +94,7 @@ class GenotypeMutationMixin:
             ))
         node_mutation_specs = (
             "size",
+            "joint_type",
             "joint_axis",
             "recursive_limit",
         )
@@ -115,6 +117,8 @@ class GenotypeMutationMixin:
 
         for node_name, node in self.nodes.items():
             for field_name in node_mutation_specs:
+                if field_name == "joint_type" and node.joint_type == "free":
+                    continue
                 self._add_mutable_parameter_paths(
                     mutable_parameters,
                     owner=node,
@@ -214,6 +218,16 @@ class GenotypeMutationMixin:
             return self._mutate_connection_removal(parameter_path[1])
 
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
+        if (
+            parameter_type == "connection"
+            and field_name == "terminal_only"
+            and not owner.terminal_only
+            and self._connection_is_self_pointing(owner)
+        ):
+            return (
+                f"{self._describe_parameter_target(parameter_path)}.terminal_only: "
+                "unchanged; self-pointing connections cannot be terminal-only"
+            )
         mutation_kind, min_mutation_std, keep_ordered_pair = self._mutation_spec(
             field_name,
         )
@@ -315,6 +329,7 @@ class GenotypeMutationMixin:
     ) -> Tuple[str, float, bool]:
         field_specs = {
             "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
+            "joint_type": ("articulated_joint_type", 0.0, False),
             "joint_axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
             "recursive_limit": (
                 "positive_integer",
@@ -358,6 +373,15 @@ class GenotypeMutationMixin:
         min_mutation_std: float,
     ) -> Any:
         mutation_kind = mutation_kind.lower()
+
+        if mutation_kind == "articulated_joint_type":
+            return random_source.choice(
+                [
+                    joint_type
+                    for joint_type in ARTICULATED_JOINT_TYPES
+                    if joint_type != value
+                ]
+            )
 
         if mutation_kind == "attachment_face":
             return random_source.choice(
@@ -456,6 +480,7 @@ class GenotypeMutationMixin:
             node_name
             for node_name in self.nodes
             if node_name != old_origin
+            and (not connection.terminal_only or node_name != connection.child)
         ]
         if not possible_origins:
             return (
@@ -484,7 +509,9 @@ class GenotypeMutationMixin:
         possible_destinations = [
             node_name
             for node_name, node in self.nodes.items()
-            if node_name != old_destination and node.joint_type != "free"
+            if node_name != old_destination
+            and node.joint_type != "free"
+            and (not connection.terminal_only or node_name != origin)
         ]
         if not possible_destinations:
             return (
@@ -545,6 +572,7 @@ class GenotypeMutationMixin:
         for field_name in connection_fields:
             setattr(connection, field_name, getattr(source_connection, field_name))
         connection.child = destination
+        self._disable_terminal_only_for_self_link(connection, origin)
 
         changed_fields = [
             field_name
@@ -669,7 +697,7 @@ class GenotypeMutationMixin:
         return NodeGene(
             name=self._new_node_name("node"),
             size=tuple(random_source.uniform(0.04, 0.30) for _ in range(3)),
-            joint_type="hinge",
+            joint_type=random_source.choice(ARTICULATED_JOINT_TYPES),
             joint_axis=self._random_axis(random_source),
             recursive_limit=random_source.randint(1, 8),
         )
@@ -748,6 +776,7 @@ class GenotypeMutationMixin:
             should_mutate_connection = True
 
         origin_node.children.append(new_connection)
+        self._disable_terminal_only_for_self_link(new_connection, origin_node.name)
         new_index = len(origin_node.children) - 1
         if should_mutate_connection:
             connection_description = self._mutate_new_connection(
@@ -756,6 +785,8 @@ class GenotypeMutationMixin:
             )
         else:
             connection_description = "randomized all connection fields"
+
+        self._disable_terminal_only_for_self_link(new_connection, origin_node.name)
 
         return new_index, source_label, connection_description
 
@@ -849,6 +880,7 @@ class GenotypeMutationMixin:
     ) -> str:
         mutable_fields = (
             "size",
+            "joint_type",
             "joint_axis",
             "recursive_limit",
         )
@@ -940,6 +972,18 @@ class GenotypeMutationMixin:
             for connection in node.children
         ]
         return active_connections + self.archived_connections
+
+    def _connection_is_self_pointing(self, connection: ConnectionGene) -> bool:
+        origin, _ = self._find_connection_owner(connection)
+        return connection.child == origin
+
+    def _disable_terminal_only_for_self_link(
+        self,
+        connection: ConnectionGene,
+        origin_name: str,
+    ) -> None:
+        if connection.child == origin_name:
+            connection.terminal_only = False
 
     def _random_connection_template(
         self,

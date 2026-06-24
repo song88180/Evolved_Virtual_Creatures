@@ -43,17 +43,17 @@
             "axis": {
               "Type": "Tuple[float, float, float]",
               "Default": "required",
-              "Description": "Hinge axis used for the child joint."
+              "Description": "Joint or actuator axis; translation for slide and rotation/torque for hinge or ball."
             },
             "scale": {
               "Type": "float",
               "Default": "1.0",
-              "Description": "Connection scale parameter available for mutation and serialization."
+              "Description": "Scales child size by scale ** (order - 1) for this connection along each hierarchy path; symmetry siblings with one parent share an order."
             },
             "terminal_only": {
               "Type": "bool",
               "Default": "False",
-              "Description": "Flag available for connection typing and mutation."
+              "Description": "Creates the child only at the terminal occurrence of the parent node; cannot be enabled on a self-pointing connection."
             },
             "motor_enabled": {
               "Type": "bool",
@@ -103,10 +103,10 @@
           "parent_face": {"Type": "str", "Description": "Selected parent attachment face."},
           "surface_uv": {"Type": "Tuple[float, float]", "Description": "Normalized coordinates on the selected face."},
           "symmetry": {"Type": "Tuple[str, ...]", "Description": "Selected parent-local mirror planes."},
-          "axis": {"Type": "Tuple[float, float, float]", "Description": "Hinge axis for the connection."},
-          "scale": {"Type": "float", "Description": "Connection scale parameter."},
-          "terminal_only": {"Type": "bool", "Description": "Connection typing flag."},
-          "motor_enabled": {"Type": "bool", "Description": "Whether to create a motor for the generated hinge joint."},
+          "axis": {"Type": "Tuple[float, float, float]", "Description": "Joint or actuator axis for the connection."},
+          "scale": {"Type": "float", "Description": "Hierarchy scaling factor applied as scale ** (order - 1)."},
+          "terminal_only": {"Type": "bool", "Description": "Whether the child is emitted only on the terminal parent occurrence."},
+          "motor_enabled": {"Type": "bool", "Description": "Whether to create a motor for the generated articulated joint."},
           "motor_gear": {"Type": "float", "Description": "MuJoCo motor gear value."},
           "ctrlrange": {"Type": "Tuple[float, float]", "Description": "MuJoCo motor control range."},
           "control_amp": {"Type": "float", "Description": "Open-loop control amplitude."},
@@ -140,8 +140,8 @@
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "MuJoCo box half-size for generated geometry."},
-            "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body; commonly \"free\" for root or \"hinge\" for children."},
-            "joint_axis": {"Type": "Tuple[float, float, float]", "Default": "(0, 1, 0)", "Description": "Default hinge axis when no incoming connection supplies one."},
+            "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
+            "joint_axis": {"Type": "Tuple[float, float, float]", "Default": "(0, 1, 0)", "Description": "Default articulated-joint axis when no incoming connection supplies one."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
             "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."}
           },
@@ -593,30 +593,32 @@
             "Example": "body = builder.create_body(worldbody, root_node, \"0 0 0.6\")"
           },
           "add_node_to_body": {
-            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], current_depths: Dict[str, int], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], current_depths: Dict[str, int], connection_orders: Dict[int, int], effective_size: Tuple[float, float, float], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
             "Purpose": "Add joint, geom, and recursive children for one node body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element to populate."},
               "node": {"Type": "NodeGene", "Description": "Node gene represented by the body."},
               "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection used to reach this node, if any."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected hinge axis."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
               "current_depths": {"Type": "Dict[str, int]", "Description": "Current recursive depth by node name."},
+              "connection_orders": {"Type": "Dict[int, int]", "Description": "Current hierarchy order for each connection on this ancestry path."},
+              "effective_size": {"Type": "Tuple[float, float, float]", "Description": "Scaled size of this generated body."},
               "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."},
               "reflection": {"Type": "Tuple[float, float, float]", "Description": "Accumulated subtree reflection signs."},
               "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["RuntimeError", "PhenotypeNodeLimitExceeded"],
-            "Example": "builder.add_node_to_body(root_body, root_node, None, None, {}, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), ())"
+            "Example": "builder.add_node_to_body(root_body, root_node, None, None, {}, {}, root_node.size, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), ())"
           },
           "add_joint": {
             "Signature": "add_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], node_depth: int, logical_path: Tuple[int, ...]) -> None",
-            "Purpose": "Add a free or hinge joint for one generated body.",
+            "Purpose": "Add a free, hinge, slide, or ball joint for one generated body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
               "node": {"Type": "NodeGene", "Description": "Node gene defining joint type."},
               "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection for hinge settings."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected hinge axis."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
               "node_depth": {"Type": "int", "Description": "Recursive node depth."},
               "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
             },
@@ -624,26 +626,28 @@
             "Raises": ["RuntimeError"],
             "Example": "builder.add_joint(body, node, incoming_conn, axis, node_depth=1, logical_path=(0,))"
           },
-          "add_hinge_joint": {
-            "Signature": "add_hinge_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], node_depth: int, logical_path: Tuple[int, ...]) -> None",
-            "Purpose": "Add a hinge joint and optional motor for one generated body.",
+          "add_articulated_joint": {
+            "Signature": "add_articulated_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], node_depth: int, logical_path: Tuple[int, ...]) -> None",
+            "Purpose": "Add a hinge, slide, or ball joint and optional motor for one generated body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
               "node": {"Type": "NodeGene", "Description": "Node gene defining fallback axis."},
               "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection defining motor settings."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected hinge axis."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
               "node_depth": {"Type": "int", "Description": "Recursive node depth."},
               "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML and possibly controller list."},
             "Raises": ["RuntimeError"],
-            "Example": "builder.add_hinge_joint(body, node, incoming_conn, axis, 2, (0,))"
+            "Example": "builder.add_articulated_joint(body, node, incoming_conn, axis, 2, (0,))"
           },
           "add_motor": {
-            "Signature": "add_motor(joint_name: str, incoming_conn: Optional[ConnectionGene], node_depth: int, logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_motor(joint_name: str, joint_type: str, joint_axis: Sequence[float], incoming_conn: Optional[ConnectionGene], node_depth: int, logical_path: Tuple[int, ...]) -> None",
             "Purpose": "Add a MuJoCo motor and append matching ActuatorController metadata.",
             "Parameters": {
               "joint_name": {"Type": "str", "Description": "Joint receiving the motor."},
+              "joint_type": {"Type": "str", "Description": "Generated articulated joint type."},
+              "joint_axis": {"Type": "Sequence[float]", "Description": "Axis used to orient ball-joint motor gear."},
               "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection with motor and controller settings."},
               "node_depth": {"Type": "int", "Description": "Recursive node depth for phase calculation."},
               "logical_path": {"Type": "Tuple[int, ...]", "Description": "Path shared by corresponding mirrored actuators."}
@@ -653,16 +657,16 @@
             "Example": "builder.add_motor(\"tail_joint_1\", connection, 2, (0,))"
           },
           "add_geom": {
-            "Signature": "add_geom(parent_xml: ET.Element, node: NodeGene, geom_center: Tuple[float, float, float]) -> None",
+            "Signature": "add_geom(parent_xml: ET.Element, size: Sequence[float], geom_center: Tuple[float, float, float]) -> None",
             "Purpose": "Add a box geom to a generated body.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node gene defining geom size."},
+              "size": {"Type": "Sequence[float]", "Description": "Effective scaled geom size."},
               "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."}
             },
             "Returns": {"Type": "None", "Description": "Mutates the body XML element."},
             "Raises": [],
-            "Example": "builder.add_geom(body, node, (0.0, 0.0, 0.0))"
+            "Example": "builder.add_geom(body, node.size, (0.0, 0.0, 0.0))"
           },
           "next_depths": {
             "Signature": "next_depths(current_depths: Dict[str, int], node_name: str, node_depth: int) -> Dict[str, int]",
@@ -677,19 +681,21 @@
             "Example": "depths = builder.next_depths({}, \"segment\", 1)"
           },
           "add_children": {
-            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int], connection_orders: Dict[int, int], effective_size: Tuple[float, float, float], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
             "Purpose": "Recursively add child bodies for each allowed outgoing connection.",
             "Parameters": {
               "parent_xml": {"Type": "ET.Element", "Description": "Parent body XML element."},
               "node": {"Type": "NodeGene", "Description": "Node whose children are expanded."},
               "current_depths": {"Type": "Dict[str, int]", "Description": "Depth map used to enforce recursive limits."},
+              "connection_orders": {"Type": "Dict[int, int]", "Description": "Current hierarchy order for each connection on this ancestry path."},
+              "effective_size": {"Type": "Tuple[float, float, float]", "Description": "Scaled parent size used for child attachment."},
               "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Parent box center in the current body frame."},
               "reflection": {"Type": "Tuple[float, float, float]", "Description": "Accumulated subtree reflection signs."},
               "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["KeyError", "RuntimeError", "PhenotypeNodeLimitExceeded"],
-            "Example": "builder.add_children(body, node, depths, geom_center, reflection, logical_path)"
+            "Example": "builder.add_children(body, node, depths, orders, effective_size, geom_center, reflection, logical_path)"
           },
           "can_add_child": {
             "Signature": "can_add_child(child_node: NodeGene, current_depths: Dict[str, int]) -> bool",
