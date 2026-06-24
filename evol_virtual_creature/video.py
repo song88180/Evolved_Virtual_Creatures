@@ -19,6 +19,24 @@ from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import ActuatorController, PhenotypeBuilder
 
+_VIDEO_SUN_LIGHT_POS = (0.0, 0.0, 5.0)
+_VIDEO_SUN_LIGHT_DIR = (0.3, 0.2, -1.0)
+_VIDEO_SUN_LIGHT_DIFFUSE = (0.9, 0.85, 0.75)
+_VIDEO_SUN_LIGHT_AMBIENT = (0.15, 0.15, 0.18)
+
+
+def _configure_video_sun_light(model: mujoco.MjModel) -> None:
+    if model.nlight < 1:
+        return
+
+    light_id = 0
+    model.light_type[light_id] = mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+    model.light_castshadow[light_id] = 1
+    model.light_pos[light_id] = _VIDEO_SUN_LIGHT_POS
+    model.light_dir[light_id] = _VIDEO_SUN_LIGHT_DIR
+    model.light_diffuse[light_id] = _VIDEO_SUN_LIGHT_DIFFUSE
+    model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
+
 
 def save_x_axis_video(
     genotype: Genotype,
@@ -56,6 +74,7 @@ def save_x_axis_video(
         ) from error
 
     model = mujoco.MjModel.from_xml_string(mjcf)
+    _configure_video_sun_light(model)
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
