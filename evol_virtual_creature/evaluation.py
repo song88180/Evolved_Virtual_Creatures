@@ -31,7 +31,7 @@ class SwimmingEvaluationConfig:
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
     body_count_weight: float = 0.001
-    volume_weight: float = 0.1
+    volume_weight: float = 0.05
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
@@ -55,7 +55,7 @@ class WalkingEvaluationConfig:
     upright_weight: float = 0.2
     height_loss_weight: float = 0.2
     body_count_weight: float = 0.001
-    volume_weight: float = 0.1
+    volume_weight: float = 0.05
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
