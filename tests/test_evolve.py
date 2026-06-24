@@ -49,6 +49,24 @@ def test_evaluate_accepts_volume_weight(monkeypatch):
 
 
 
+def test_evaluate_accepts_volume_cutoff_and_maximum(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate.py",
+            "--volume-penalty-cutoff",
+            "0.2",
+            "--max-volume",
+            "2.0",
+        ],
+    )
+    args = evaluate.parse_args()
+    assert args.volume_penalty_cutoff == pytest.approx(0.2)
+    assert args.max_volume == pytest.approx(2.0)
+
+
+
 def test_evaluate_accepts_self_collision(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "--self-collision"])
     assert evaluate.parse_args().self_collision
@@ -69,6 +87,24 @@ def test_evolve_accepts_volume_weight(monkeypatch):
         sys, "argv", ["evolve.py", "--volume-weight", "0.25"]
     )
     assert evolve_cli.parse_args().volume_weight == pytest.approx(0.25)
+
+
+
+def test_evolve_accepts_volume_cutoff_and_maximum(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evolve.py",
+            "--volume-penalty-cutoff",
+            "0.2",
+            "--max-volume",
+            "2.0",
+        ],
+    )
+    args = evolve_cli.parse_args()
+    assert args.volume_penalty_cutoff == pytest.approx(0.2)
+    assert args.max_volume == pytest.approx(2.0)
 
 
 

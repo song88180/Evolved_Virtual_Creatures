@@ -747,7 +747,7 @@
       "SwimmingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, volume_weight: float = 0.1, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
+          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
           "Parameters": {
             "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
             "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
@@ -760,7 +760,9 @@
             "vertical_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for z-axis drift."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."},
             "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for generated body count."},
-            "volume_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for total generated creature volume in cubic meters."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Linear penalty multiplier for volume above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Generated volume in cubic meters allowed without a volume penalty."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Hard maximum generated creature volume in cubic meters; larger phenotypes receive failure fitness."},
             "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned when build or simulation fails."},
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Position/state magnitude threshold used to detect numerical instability."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Absolute generalized-velocity limit used to reject unstable simulations."},
@@ -780,7 +782,9 @@
           "vertical_drift_weight": {"Type": "float", "Description": "Vertical drift penalty weight."},
           "angular_speed_weight": {"Type": "float", "Description": "Angular speed penalty weight."},
           "body_count_weight": {"Type": "float", "Description": "Body count penalty weight."},
-          "volume_weight": {"Type": "float", "Description": "Total creature volume penalty weight."},
+          "volume_weight": {"Type": "float", "Description": "Excess-volume penalty weight."},
+          "volume_penalty_cutoff": {"Type": "float", "Description": "No-penalty volume allowance."},
+          "max_volume": {"Type": "float", "Description": "Maximum allowed generated creature volume."},
           "build_failure_fitness": {"Type": "float", "Description": "Fallback fitness for failed evaluations."},
           "max_abs_state_value": {"Type": "float", "Description": "Position/state numerical stability threshold."},
           "max_abs_velocity": {"Type": "float", "Description": "Generalized-velocity numerical stability threshold."},

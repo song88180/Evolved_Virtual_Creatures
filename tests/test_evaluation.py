@@ -318,21 +318,55 @@ def test_creature_volume_sums_generated_box_volumes_only():
     assert _creature_volume(model) == pytest.approx(48.0)
 
 
-def test_volume_weight_reduces_fitness_by_total_volume():
+def test_volume_penalty_has_cutoff_then_grows_linearly():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    without_penalty = evaluate_x_axis_swimming(
+    baseline = evaluate_x_axis_swimming(
         genotype,
         SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=0.0),
     )
-    with_penalty = evaluate_x_axis_swimming(
+    below_cutoff = evaluate_x_axis_swimming(
         genotype,
-        SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=1.0),
+        SwimmingEvaluationConfig(
+            episode_seconds=0.02,
+            volume_weight=1.0,
+            volume_penalty_cutoff=0.1,
+        ),
+    )
+    above_cutoff = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(
+            episode_seconds=0.02,
+            volume_weight=1.0,
+            volume_penalty_cutoff=0.05,
+        ),
     )
 
-    assert with_penalty.total_volume > 0.0
-    assert without_penalty.fitness - with_penalty.fitness == pytest.approx(
-        with_penalty.total_volume
+    assert baseline.total_volume < 0.1
+    assert below_cutoff.fitness == pytest.approx(baseline.fitness)
+    assert baseline.fitness - above_cutoff.fitness == pytest.approx(
+        baseline.total_volume - 0.05
     )
+
+
+def test_creature_above_maximum_volume_is_rejected_before_simulation():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.6, 0.6, 0.6),
+                "joint_type": "free",
+            }
+        },
+    )
+
+    result = evaluate_x_axis_swimming(
+        genotype,
+        SwimmingEvaluationConfig(episode_seconds=0.02, max_volume=1.0),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert "exceeds maximum allowed volume" in result.failure_reason
 
 
 def _single_motor_genotype(motor_gear):

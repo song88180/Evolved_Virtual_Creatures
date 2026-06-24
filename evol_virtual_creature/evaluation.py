@@ -31,7 +31,9 @@ class SwimmingEvaluationConfig:
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
     body_count_weight: float = 0.001
-    volume_weight: float = 0.05
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
@@ -55,7 +57,9 @@ class WalkingEvaluationConfig:
     upright_weight: float = 0.2
     height_loss_weight: float = 0.2
     body_count_weight: float = 0.001
-    volume_weight: float = 0.05
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
@@ -124,7 +128,9 @@ def evaluate_x_axis_swimming(
         - config.vertical_drift_weight * metrics["vertical_drift"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * metrics["total_volume"]
+        - config.volume_weight * _excess_volume(
+            metrics["total_volume"], config.volume_penalty_cutoff
+        )
     )
     if not math.isfinite(fitness):
         return _failed_swimming(config, "Simulation produced a non-finite fitness.")
@@ -171,7 +177,9 @@ def evaluate_x_axis_walking(
         - config.upright_weight * walking_metrics["mean_upright_error"]
         - config.height_loss_weight * walking_metrics["height_loss"]
         - config.body_count_weight * walking_metrics["body_count"]
-        - config.volume_weight * walking_metrics["total_volume"]
+        - config.volume_weight * _excess_volume(
+            walking_metrics["total_volume"], config.volume_penalty_cutoff
+        )
     )
     if not math.isfinite(fitness):
         return _failed_walking(config, "Simulation produced a non-finite fitness.")
@@ -225,6 +233,12 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
     except PhenotypeBuildAbort as error:
         return str(error)
     model = mujoco.MjModel.from_xml_string(mjcf)
+    total_volume = _creature_volume(model)
+    if total_volume > config.max_volume:
+        return (
+            f"Creature volume {total_volume:.6f} m^3 exceeds maximum "
+            f"allowed volume {config.max_volume:.6f} m^3."
+        )
     return model, mujoco.MjData(model), builder
 
 
@@ -352,6 +366,10 @@ def _normalized_target_direction(target_direction: Sequence[float]):
     return tuple(component / norm for component in target_direction)
 
 
+def _excess_volume(total_volume: float, cutoff: float) -> float:
+    return max(0.0, total_volume - cutoff)
+
+
 def _creature_volume(model: mujoco.MjModel) -> float:
     total_volume = 0.0
     for geom_id in range(model.ngeom):
@@ -361,7 +379,6 @@ def _creature_volume(model: mujoco.MjModel) -> float:
             continue
         total_volume += 8.0 * float(np.prod(model.geom_size[geom_id, :3]))
     return total_volume
-
 
 
 def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):
