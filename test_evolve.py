@@ -68,6 +68,16 @@ def test_evolve_accepts_disallow_collision(monkeypatch):
     assert not args.self_collision
 
 
+def test_evolve_accepts_latest_best_only(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--latest-best-only"])
+    assert evolve_cli.parse_args().latest_best_only
+
+
+def test_evolve_records_generation_history_by_default(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert not evolve_cli.parse_args().latest_best_only
+
+
 def test_evolve_rejects_nonpositive_threads(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--threads", "0"])
     with pytest.raises(ValueError, match="--threads must be at least 1"):
@@ -105,6 +115,49 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     assert default_geom is not None
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "3"
+
+
+def test_save_generation_best_can_skip_generation_history(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    creature = evolve_lib.EvaluatedCreature(
+        genotype=genotype,
+        fitness=1.0,
+        metrics={"fitness": 1.0},
+    )
+
+    evolve_lib._save_generation_best(
+        tmp_path,
+        generation=3,
+        generation_best=creature,
+        best_so_far=creature,
+        config=SwimmingEvaluationConfig(episode_seconds=0.02),
+        save_generation_history=False,
+    )
+
+    assert (tmp_path / "latest_best_genotype.json").is_file()
+    assert (tmp_path / "best_genotype.json").is_file()
+    assert not (tmp_path / "generation_bests").exists()
+
+
+def test_save_generation_best_records_history_by_default(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    creature = evolve_lib.EvaluatedCreature(
+        genotype=genotype,
+        fitness=1.0,
+        metrics={"fitness": 1.0},
+    )
+
+    evolve_lib._save_generation_best(
+        tmp_path,
+        generation=3,
+        generation_best=creature,
+        best_so_far=creature,
+        config=SwimmingEvaluationConfig(episode_seconds=0.02),
+    )
+
+    assert (
+        tmp_path / "generation_bests" / "generation_0003.json"
+    ).is_file()
 
 
 def test_generation_summary_counts_disqualifications():

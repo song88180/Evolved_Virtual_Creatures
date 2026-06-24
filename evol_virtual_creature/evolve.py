@@ -75,6 +75,7 @@ def _save_generation_best(
     generation_best: EvaluatedCreature,
     best_so_far: EvaluatedCreature,
     config: EvaluationConfig,
+    save_generation_history: bool = True,
 ) -> None:
     """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
@@ -82,12 +83,13 @@ def _save_generation_best(
     write_json(run_dir / "best_metrics.json", best_so_far.metrics)
     _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, config)
 
-    generation_dir = run_dir / "generation_bests"
-    generation_dir.mkdir(exist_ok=True)
-    save_genotype_to_json(
-        generation_best.genotype,
-        generation_dir / f"generation_{generation:04d}.json",
-    )
+    if save_generation_history:
+        generation_dir = run_dir / "generation_bests"
+        generation_dir.mkdir(exist_ok=True)
+        save_genotype_to_json(
+            generation_best.genotype,
+            generation_dir / f"generation_{generation:04d}.json",
+        )
 
 
 def _write_best_xml(

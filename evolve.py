@@ -86,7 +86,14 @@ def main() -> None:
             summary = generation_summary(generation, evaluated, best_so_far)
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
-            _save_generation_best(run_dir, generation, best, best_so_far, config)
+            _save_generation_best(
+                run_dir,
+                generation,
+                best,
+                best_so_far,
+                config,
+                save_generation_history=not args.latest_best_only,
+            )
 
             print(
                 f"gen={generation:04d} "
@@ -231,6 +238,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Assign low fitness if any non-parent creature bodies collide; "
             "self-collision detection is enabled automatically."
+        ),
+    )
+    parser.add_argument(
+        "--latest-best-only",
+        action="store_true",
+        help=(
+            "Keep only latest_best_genotype.json instead of saving a separate "
+            "best genotype for every generation."
         ),
     )
     parser.add_argument(
