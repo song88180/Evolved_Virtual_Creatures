@@ -280,7 +280,7 @@ Each body part receives a box-shaped geometry:
 geom = ET.SubElement(parent_xml, "geom")
 geom.set("name", f"{parent_xml.get('name')}_geom")
 geom.set("size", vec_to_str(node.size))
-geom.set("rgba", "0.6 0.7 0.9 1")
+geom.set("rgba", "0.933333 0.603922 0.301961 1")
 ```
 
 The default geometry type is already set to `box` in the `<default>` section, so this code only needs to set the size and color.

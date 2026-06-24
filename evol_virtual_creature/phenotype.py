@@ -140,8 +140,8 @@ class PhenotypeBuilder:
         texture.set("name", "floor_checker")
         texture.set("type", "2d")
         texture.set("builtin", "checker")
-        texture.set("rgb1", "0.2 0.3 0.4")
-        texture.set("rgb2", "0.8 0.8 0.8")
+        texture.set("rgb1", "0.172549 0.286275 0.521569")
+        texture.set("rgb2", "0.250980 0.458824 0.784314")
         texture.set("width", "512")
         texture.set("height", "512")
 
@@ -149,7 +149,7 @@ class PhenotypeBuilder:
         material.set("name", "floor_material")
         material.set("texture", "floor_checker")
         material.set("texrepeat", "10 10")
-        material.set("reflectance", "0.2")
+        material.set("reflectance", "0")
 
 
     def add_defaults(self):
@@ -374,7 +374,7 @@ class PhenotypeBuilder:
         geom.set("name", f"{parent_xml.get('name')}_geom")
         geom.set("size", vec_to_str(size))
         geom.set("pos", vec_to_str(geom_center))
-        geom.set("rgba", "0.6 0.7 0.9 1")
+        geom.set("rgba", "0.933333 0.603922 0.301961 1")
 
     def next_depths(
         self,

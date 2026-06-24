@@ -51,9 +51,15 @@ def test_task_physics_settings_are_distinct():
     floor_material = walking.find("./asset/material[@name=\"floor_material\"]")
     assert checker is not None
     assert checker.get("builtin") == "checker"
+    assert checker.get("rgb1") == "0.172549 0.286275 0.521569"
+    assert checker.get("rgb2") == "0.250980 0.458824 0.784314"
     assert floor_material is not None
     assert floor_material.get("texture") == "floor_checker"
+    assert floor_material.get("reflectance") == "0"
     assert walking_floor.get("material") == "floor_material"
+    creature_geom = walking.find("./worldbody/body/geom")
+    assert creature_geom is not None
+    assert creature_geom.get("rgba") == "0.933333 0.603922 0.301961 1"
     assert walking_floor.get("contype") == "1"
     assert walking_floor.get("conaffinity") == "2"
 
