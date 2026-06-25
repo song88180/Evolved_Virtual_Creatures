@@ -14,6 +14,8 @@ from .phenotype import ActuatorController, PhenotypeBuilder
 
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
+INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
+_WALKING_FLOOR_CLEARANCE = 0.05
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,9 @@ def evaluate_x_axis_walking(
         return _failed_walking(config, built)
     model, data, builder = built
 
+    failure = initialize_walking_model(model, data)
+    if failure is not None:
+        return _failed_walking(config, failure)
     failure = settle_walking_model(model, data, config)
     if failure is not None:
         return _failed_walking(config, failure)
@@ -196,6 +201,62 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
 
 def task_for_config(config: EvaluationConfig) -> str:
     return "walking" if isinstance(config, WalkingEvaluationConfig) else "swimming"
+
+
+def initialize_walking_model(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+) -> str | None:
+    """Place a walking creature above the floor and reject penetration."""
+    mujoco.mj_forward(model, data)
+    floor_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
+    )
+    if floor_id < 0:
+        return None
+
+    free_joint_ids = np.flatnonzero(
+        model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
+    )
+    if free_joint_ids.size == 0:
+        return "Walking creature has no free root joint."
+    root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
+    floor_z = float(data.geom_xpos[floor_id, 2])
+    lowest_z = min(
+        _box_lowest_world_z(model, data, geom_id)
+        for geom_id in range(model.ngeom)
+        if model.geom_bodyid[geom_id] != 0
+    )
+    required_shift = floor_z + _WALKING_FLOOR_CLEARANCE - lowest_z
+    if required_shift > 0.0:
+        data.qpos[root_qpos_adr + 2] += required_shift
+    mujoco.mj_forward(model, data)
+    if _has_floor_penetration(model, data, floor_id):
+        return INITIAL_FLOOR_OVERLAP_REASON
+    return None
+
+
+def _box_lowest_world_z(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> float:
+    rotation = data.geom_xmat[geom_id].reshape(3, 3)
+    vertical_half_extent = float(
+        np.abs(rotation[2]) @ model.geom_size[geom_id, :3]
+    )
+    return float(data.geom_xpos[geom_id, 2] - vertical_half_extent)
+
+
+def _has_floor_penetration(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    floor_id: int,
+) -> bool:
+    for contact in data.contact:
+        if floor_id in contact.geom and float(contact.dist) < 0.0:
+            return True
+    return False
 
 
 def settle_walking_model(

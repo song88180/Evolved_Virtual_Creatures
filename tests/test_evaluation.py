@@ -6,12 +6,14 @@ import pytest
 
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
+    INITIAL_FLOOR_OVERLAP_REASON,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
     _has_nonparent_self_collision,
     _creature_volume,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
+    initialize_walking_model,
     simulation_failure_reason,
 )
 from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
@@ -167,6 +169,46 @@ def test_both_tasks_return_finite_results():
     assert walking.simulated_seconds == 0.02
     assert walking.mean_upright_error >= 0.0
     assert walking.height_loss >= 0.0
+
+
+def test_walking_initialization_raises_low_creature_above_floor():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.2, 0.8),
+                "joint_type": "free",
+            }
+        },
+    )
+    model = mujoco.MjModel.from_xml_string(
+        PhenotypeBuilder(genotype, max_node=500, task="walking").build()
+    )
+    data = mujoco.MjData(model)
+
+    assert initialize_walking_model(model, data) is None
+
+    floor_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
+    )
+    body_geom_id = _creature_geom_ids(model)[0]
+    lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
+    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 0.05)
+    assert all(float(contact.dist) >= 0.0 for contact in data.contact)
+
+
+def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    monkeypatch.setattr(evaluation, "_has_floor_penetration", lambda *_args: True)
+    result = evaluate_x_axis_walking(
+        load_genotype_from_json("examples/single_root.json"),
+        WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert result.failure_reason == INITIAL_FLOOR_OVERLAP_REASON
 
 
 def test_detects_nonparent_contact_but_parent_filter_remains_enabled():

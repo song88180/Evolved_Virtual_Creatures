@@ -12,6 +12,7 @@ from .evaluation import (
     WalkingEvaluationConfig,
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
+    initialize_walking_model,
     settle_walking_model,
     simulation_failure_reason,
     task_for_config,
@@ -146,6 +147,9 @@ def save_x_axis_video(
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
     if isinstance(config, WalkingEvaluationConfig):
+        failure = initialize_walking_model(model, data)
+        if failure is not None:
+            raise RuntimeError(f"Cannot record video: {failure}")
         failure = settle_walking_model(model, data, config)
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
