@@ -28,7 +28,7 @@ class SwimmingEvaluationConfig:
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
-    energy_weight: float = 0.001
+    energy_weight: float = 1e-6
     sideways_drift_weight: float = 0.1
     vertical_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
@@ -53,7 +53,7 @@ class WalkingEvaluationConfig:
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     forward_speed_weight: float = 1.0
-    energy_weight: float = 0.001
+    energy_weight: float = 1e-7
     sideways_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
     upright_weight: float = 0.2
