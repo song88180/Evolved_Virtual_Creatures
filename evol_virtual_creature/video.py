@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import mujoco
@@ -23,6 +24,7 @@ _VIDEO_SUN_LIGHT_POS = (0.0, 0.0, 5.0)
 _VIDEO_SUN_LIGHT_DIR = (0.3, 0.2, -1.0)
 _VIDEO_SUN_LIGHT_DIFFUSE = (0.9, 0.85, 0.75)
 _VIDEO_SUN_LIGHT_AMBIENT = (0.15, 0.15, 0.18)
+_VIDEO_FLOOR_TEXTURE_SCALE = 0.25
 
 
 def _configure_video_sun_light(model: mujoco.MjModel) -> None:
@@ -36,6 +38,28 @@ def _configure_video_sun_light(model: mujoco.MjModel) -> None:
     model.light_dir[light_id] = _VIDEO_SUN_LIGHT_DIR
     model.light_diffuse[light_id] = _VIDEO_SUN_LIGHT_DIFFUSE
     model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
+
+
+def _track_video_sun_light(
+    mjcf: str,
+    root_body_name: str,
+) -> str:
+    """Attach the video light to the root while keeping its direction global."""
+    xml_root = ET.fromstring(mjcf)
+    worldbody = xml_root.find("worldbody")
+    root_body = xml_root.find(f"./worldbody/body[@name='{root_body_name}']")
+    light = worldbody.find("light") if worldbody is not None else None
+    if worldbody is None or root_body is None or light is None:
+        return mjcf
+
+    worldbody.remove(light)
+    light.set("mode", "track")
+    light.set("directional", "true")
+    light.set("castshadow", "true")
+    light.set("pos", " ".join(map(str, _VIDEO_SUN_LIGHT_POS)))
+    light.set("dir", " ".join(map(str, _VIDEO_SUN_LIGHT_DIR)))
+    root_body.insert(0, light)
+    return ET.tostring(xml_root, encoding="unicode")
 
 
 def _prevent_floor_shadow_casting(
@@ -90,6 +114,8 @@ def save_x_axis_video(
             f"Cannot record video because phenotype build failed: {error}"
         ) from error
 
+    root_body_name = f"{genotype.root}_1"
+    mjcf = _track_video_sun_light(mjcf, root_body_name)
     model = mujoco.MjModel.from_xml_string(mjcf)
     _configure_video_sun_light(model)
     floor_geom_id = mujoco.mj_name2id(
@@ -98,6 +124,9 @@ def save_x_axis_video(
         "floor",
     )
     if floor_geom_id >= 0:
+        floor_material_id = model.geom_matid[floor_geom_id]
+        if floor_material_id >= 0:
+            model.mat_texrepeat[floor_material_id] *= _VIDEO_FLOOR_TEXTURE_SCALE
         # Zero plane extents make MuJoCo render the floor to the horizon.
         # This model exists only for video generation.
         model.geom_size[floor_geom_id, :2] = 0.0
@@ -116,17 +145,17 @@ def save_x_axis_video(
     frame_interval = speed / fps
     camera = -1
 
-    if track_root:
-        root_body_name = f"{genotype.root}_1"
-        root_body_id = mujoco.mj_name2id(
-            model,
-            mujoco.mjtObj.mjOBJ_BODY,
-            root_body_name,
+    root_body_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_BODY,
+        root_body_name,
+    )
+    if root_body_id < 0:
+        raise RuntimeError(
+            f"Cannot render video because {root_body_name!r} was not found."
         )
-        if root_body_id < 0:
-            raise RuntimeError(
-                f"Cannot track root body because {root_body_name!r} was not found."
-            )
+
+    if track_root:
         camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(model, camera)
         camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
