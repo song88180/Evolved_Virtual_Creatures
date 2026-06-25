@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor
+import random
 import sys
 import xml.etree.ElementTree as ET
 
@@ -139,6 +140,21 @@ def test_evolve_accepts_disallow_collision(monkeypatch):
 def test_evolve_accepts_latest_best_only(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--latest-best-only"])
     assert evolve_cli.parse_args().latest_best_only
+
+
+def test_evolve_accepts_disallow_topology_mutations(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evolve.py", "--disallow-topology-mutations"],
+    )
+    assert evolve_cli.parse_args().disallow_topology_mutations
+
+
+def test_evolve_allows_topology_mutations_by_default(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert not evolve_cli.parse_args().disallow_topology_mutations
+
 
 
 def test_evolve_records_generation_history_by_default(monkeypatch):
@@ -333,3 +349,56 @@ def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
     assert default_geom is not None
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "2"
+
+def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    settings = []
+
+    def record_mutation(
+        _genotype,
+        _mutation_count,
+        _rng,
+        allow_topology_mutations=True,
+    ):
+        settings.append(allow_topology_mutations)
+
+    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
+    evolve_lib.initial_population(
+        seed_genotype=genotype,
+        population_size=3,
+        initial_mutations=2,
+        rng=random.Random(1),
+        allow_topology_mutations=False,
+    )
+
+    assert settings == [False, False]
+
+
+def test_next_population_forwards_topology_mutation_setting(monkeypatch):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    evaluated = [
+        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+    ]
+    settings = []
+
+    def record_mutation(
+        _genotype,
+        _mutation_count,
+        _rng,
+        allow_topology_mutations=True,
+    ):
+        settings.append(allow_topology_mutations)
+
+    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
+    evolve_lib.next_population(
+        evaluated=evaluated,
+        population_size=3,
+        elite_count=1,
+        tournament_size=1,
+        min_mutations=1,
+        max_mutations=1,
+        rng=random.Random(1),
+        allow_topology_mutations=False,
+    )
+
+    assert settings == [False, False]

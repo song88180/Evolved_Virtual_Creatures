@@ -125,12 +125,18 @@ def initial_population(
     population_size: int,
     initial_mutations: int,
     rng: random.Random,
+    allow_topology_mutations: bool = True,
 ) -> list[Genotype]:
     """Build the starting population from the seed genotype and random mutations."""
     population = [copy.deepcopy(seed_genotype)]
     while len(population) < population_size:
         genotype = copy.deepcopy(seed_genotype)
-        mutate_quietly(genotype, initial_mutations, rng)
+        mutate_quietly(
+            genotype,
+            initial_mutations,
+            rng,
+            allow_topology_mutations=allow_topology_mutations,
+        )
         population.append(genotype)
     return population
 
@@ -143,6 +149,7 @@ def next_population(
     min_mutations: int,
     max_mutations: int,
     rng: random.Random,
+    allow_topology_mutations: bool = True,
 ) -> list[Genotype]:
     """Select elites and tournament winners, then mutate them into the next generation."""
     next_generation = [
@@ -154,7 +161,12 @@ def next_population(
         parent = tournament_select(evaluated, tournament_size, rng)
         child = copy.deepcopy(parent.genotype)
         mutation_count = rng.randint(min_mutations, max_mutations)
-        mutate_quietly(child, mutation_count, rng)
+        mutate_quietly(
+            child,
+            mutation_count,
+            rng,
+            allow_topology_mutations=allow_topology_mutations,
+        )
         next_generation.append(child)
 
     return next_generation
@@ -175,12 +187,17 @@ def mutate_quietly(
     genotype: Genotype,
     mutation_count: int,
     rng: random.Random,
+    allow_topology_mutations: bool = True,
 ) -> None:
     """Apply genotype mutations while suppressing mutation log output."""
     if mutation_count == 0:
         return
     with contextlib.redirect_stdout(io.StringIO()):
-        genotype.mutation(num_mutations=mutation_count, rng=rng)
+        genotype.mutation(
+            num_mutations=mutation_count,
+            rng=rng,
+            allow_topology_mutations=allow_topology_mutations,
+        )
 
 
 def best_of(

@@ -63,6 +63,7 @@ def main() -> None:
         population_size=args.population_size,
         initial_mutations=args.initial_mutations,
         rng=rng,
+        allow_topology_mutations=not args.disallow_topology_mutations,
     )
 
     best_so_far: EvaluatedCreature | None = None
@@ -119,6 +120,7 @@ def main() -> None:
                 min_mutations=args.min_mutations,
                 max_mutations=args.max_mutations,
                 rng=rng,
+                allow_topology_mutations=not args.disallow_topology_mutations,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -208,6 +210,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help="Mutations used to seed initial variants around the input genotype.",
+    )
+    parser.add_argument(
+        "--disallow-topology-mutations",
+        action="store_true",
+        help=(
+            "Only mutate properties of existing node and connection genes; "
+            "do not add, remove, replace, or relink genes."
+        ),
     )
     parser.add_argument(
         "--duration",
