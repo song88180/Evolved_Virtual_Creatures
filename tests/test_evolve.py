@@ -76,15 +76,15 @@ def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate.py", "--shadowclip", "0.75", "--spotlight"],
+        ["evaluate.py", "--shadowsize", "8192", "--spotlight"],
     )
     args = evaluate.parse_args()
-    assert args.shadowclip == pytest.approx(0.75)
+    assert args.shadowsize == 8192
     assert args.spotlight
 
 
-def test_evaluate_rejects_nonpositive_shadowclip(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--shadowclip", "0"])
+def test_evaluate_rejects_nonpositive_shadowsize(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--shadowsize", "0"])
     with pytest.raises(SystemExit, match="2"):
         evaluate.parse_args()
 
@@ -266,6 +266,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
                 "default: 6.0",
                 "default: disabled",
                 "default: 30",
+                "default: 4096",
             ),
         ),
         (

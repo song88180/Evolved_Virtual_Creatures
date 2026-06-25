@@ -89,7 +89,7 @@ def main():
                 height=args.height,
                 track_root=args.track_root,
                 speed=args.speed,
-                shadowclip=args.shadowclip,
+                shadowsize=args.shadowsize,
                 spotlight=args.spotlight,
             )
         except RuntimeError as error:
@@ -199,12 +199,11 @@ def parse_args() -> argparse.Namespace:
         help="Video playback speed multiplier (for example, 1.25 or 0.8).",
     )
     parser.add_argument(
-        "--shadowclip",
-        type=float,
-        default=1.0,
+        "--shadowsize",
+        type=int,
+        default=4096,
         help=(
-            "Directional-light shadow-map half-width as a multiple of the "
-            "model extent; ignored when --spotlight is set."
+            "Shadow-map texture width and height in pixels."
         ),
     )
     parser.add_argument(
@@ -227,8 +226,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--fps must be at least 1")
     if args.width < 1 or args.height < 1:
         parser.error("--width and --height must be at least 1")
-    if args.shadowclip <= 0.0:
-        parser.error("--shadowclip must be greater than zero")
+    if args.shadowsize < 1:
+        parser.error("--shadowsize must be greater than zero")
     if args.speed <= 0.0:
         parser.error("--speed must be greater than zero")
     return args

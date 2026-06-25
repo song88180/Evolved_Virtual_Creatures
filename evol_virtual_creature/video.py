@@ -29,7 +29,7 @@ _VIDEO_FLOOR_TEXTURE_SCALE = 0.25
 
 def _configure_video_light(
     model: mujoco.MjModel,
-    shadowclip: float,
+    shadowsize: int,
     spotlight: bool,
 ) -> None:
     if model.nlight < 1:
@@ -46,7 +46,7 @@ def _configure_video_light(
     model.light_dir[light_id] = _VIDEO_SUN_LIGHT_DIR
     model.light_diffuse[light_id] = _VIDEO_SUN_LIGHT_DIFFUSE
     model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
-    model.vis.map.shadowclip = shadowclip
+    model.vis.quality.shadowsize = shadowsize
 
 
 def _track_video_light(
@@ -98,7 +98,7 @@ def save_x_axis_video(
     height: int,
     track_root: bool = False,
     speed: float = 1.0,
-    shadowclip: float = 1.0,
+    shadowsize: int = 4096,
     spotlight: bool = False,
 ):
     """Render a swimming or walking evaluation episode to MP4."""
@@ -129,7 +129,7 @@ def save_x_axis_video(
     root_body_name = f"{genotype.root}_1"
     mjcf = _track_video_light(mjcf, root_body_name, spotlight)
     model = mujoco.MjModel.from_xml_string(mjcf)
-    _configure_video_light(model, shadowclip, spotlight)
+    _configure_video_light(model, shadowsize, spotlight)
     floor_geom_id = mujoco.mj_name2id(
         model,
         mujoco.mjtObj.mjOBJ_GEOM,
@@ -218,7 +218,7 @@ def save_x_axis_swimming_video(
     height: int,
     track_root: bool = False,
     speed: float = 1.0,
-    shadowclip: float = 1.0,
+    shadowsize: int = 4096,
     spotlight: bool = False,
 ):
     """Compatibility wrapper for callers that explicitly render swimming."""
@@ -231,7 +231,7 @@ def save_x_axis_swimming_video(
         height,
         track_root,
         speed,
-        shadowclip,
+        shadowsize,
         spotlight,
     )
 
