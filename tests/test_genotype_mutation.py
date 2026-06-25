@@ -192,14 +192,12 @@ def test_template_new_node_addition_attaches_connection_before_mutating_it():
     assert "connection new-node addition" in description
     assert any(node.children for node in genotype.nodes.values())
 
-MUTABLE_NODE_FIELDS = {"size", "joint_type", "recursive_limit"}
+MUTABLE_NODE_FIELDS = {"size", "joint_type"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
     "surface_uv",
-    "symmetry",
     "axis",
     "scale",
-    "terminal_only",
     "motor_enabled",
     "motor_gear",
     "ctrlrange",
@@ -293,7 +291,7 @@ def _mutable_effect_genotype(field_name):
     return Genotype(root="body", nodes=nodes), target
 
 
-def test_effect_cases_cover_every_registered_mutable_gene_field():
+def test_non_topology_mutations_only_register_body_count_stable_fields():
     genotype, _ = _mutable_effect_genotype("axis")
     paths = genotype._collect_mutable_parameters(allow_topology_mutations=False)
     node_fields = {path[2] for path in paths if path[0] == "node"}
@@ -363,3 +361,58 @@ def test_every_mutable_gene_field_can_change_phenotype_or_controller(
     after = _phenotype_and_controller_snapshot(genotype)
 
     assert after != before
+
+def test_topology_mutations_register_body_count_fields():
+    genotype, _ = _mutable_effect_genotype("axis")
+    paths = genotype._collect_mutable_parameters(allow_topology_mutations=True)
+
+    assert any(
+        path[:3] == ("node", "limb", "recursive_limit") for path in paths
+    )
+    connection_fields = {
+        path[2] for path in paths if path[0] == "connection"
+    }
+    assert {"symmetry", "terminal_only"} <= connection_fields
+
+
+def test_non_topology_mutations_preserve_phenotype_body_count():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.3, 0.2, 0.1),
+                joint_type="free",
+                children=[ConnectionGene(child="segment", axis=(0, 1, 0))],
+            ),
+            "segment": NodeGene(
+                name="segment",
+                size=(0.12, 0.08, 0.04),
+                recursive_limit=3,
+                children=[
+                    ConnectionGene(
+                        child="segment", axis=(0, 1, 0), symmetry=("xy",)
+                    ),
+                    ConnectionGene(
+                        child="limb", axis=(0, 1, 0), terminal_only=True
+                    ),
+                ],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.08, 0.04, 0.04),
+            ),
+        },
+    )
+    before_builder = PhenotypeBuilder(genotype, max_node=100)
+    before_builder.build()
+
+    genotype.mutation(
+        num_mutations=10_000,
+        rng=random.Random(7),
+        allow_topology_mutations=False,
+    )
+
+    after_builder = PhenotypeBuilder(genotype, max_node=100)
+    after_builder.build()
+    assert after_builder.body_counter == before_builder.body_counter

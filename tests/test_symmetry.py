@@ -80,7 +80,7 @@ def test_symmetry_mutation_toggles_one_plane():
     )
 
     mutable_parameters = genotype._collect_mutable_parameters(
-        allow_topology_mutations=False
+        allow_topology_mutations=True
     )
     symmetry_path = ("connection", connection, "symmetry")
     assert symmetry_path in mutable_parameters
