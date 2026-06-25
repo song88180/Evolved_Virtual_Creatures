@@ -38,6 +38,23 @@ def _configure_video_sun_light(model: mujoco.MjModel) -> None:
     model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
 
 
+def _prevent_floor_shadow_casting(
+    scene: mujoco.MjvScene,
+    floor_geom_id: int,
+) -> None:
+    """Exclude the rendered floor from the shadow-map casting pass."""
+    for scene_geom_id in range(scene.ngeom):
+        scene_geom = scene.geoms[scene_geom_id]
+        if (
+            scene_geom.objtype == mujoco.mjtObj.mjOBJ_GEOM
+            and scene_geom.objid == floor_geom_id
+        ):
+            # This changes only the temporary visual scene. The floor remains
+            # unchanged in MjModel, so walking contacts and friction still work.
+            scene_geom.category = mujoco.mjtCatBit.mjCAT_DECOR
+            return
+
+
 def save_x_axis_video(
     genotype: Genotype,
     output_path: Path,
@@ -75,6 +92,15 @@ def save_x_axis_video(
 
     model = mujoco.MjModel.from_xml_string(mjcf)
     _configure_video_sun_light(model)
+    floor_geom_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_GEOM,
+        "floor",
+    )
+    if floor_geom_id >= 0:
+        # Zero plane extents make MuJoCo render the floor to the horizon.
+        # This model exists only for video generation.
+        model.geom_size[floor_geom_id, :2] = 0.0
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
@@ -125,6 +151,11 @@ def save_x_axis_video(
                 raise RuntimeError(f"Cannot record video: {failure}")
             if data.time >= next_frame_time:
                 renderer.update_scene(data, camera=camera)
+                if floor_geom_id >= 0:
+                    _prevent_floor_shadow_casting(
+                        renderer.scene,
+                        floor_geom_id,
+                    )
                 frames.append(renderer.render())
                 next_frame_time += frame_interval
 
