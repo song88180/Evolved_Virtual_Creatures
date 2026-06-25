@@ -27,22 +27,32 @@ _VIDEO_SUN_LIGHT_AMBIENT = (0.15, 0.15, 0.18)
 _VIDEO_FLOOR_TEXTURE_SCALE = 0.25
 
 
-def _configure_video_sun_light(model: mujoco.MjModel) -> None:
+def _configure_video_light(
+    model: mujoco.MjModel,
+    shadowclip: float,
+    spotlight: bool,
+) -> None:
     if model.nlight < 1:
         return
 
     light_id = 0
-    model.light_type[light_id] = mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+    model.light_type[light_id] = (
+        mujoco.mjtLightType.mjLIGHT_SPOT
+        if spotlight
+        else mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+    )
     model.light_castshadow[light_id] = 1
     model.light_pos[light_id] = _VIDEO_SUN_LIGHT_POS
     model.light_dir[light_id] = _VIDEO_SUN_LIGHT_DIR
     model.light_diffuse[light_id] = _VIDEO_SUN_LIGHT_DIFFUSE
     model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
+    model.vis.map.shadowclip = shadowclip
 
 
-def _track_video_sun_light(
+def _track_video_light(
     mjcf: str,
     root_body_name: str,
+    spotlight: bool,
 ) -> str:
     """Attach the video light to the root while keeping its direction global."""
     xml_root = ET.fromstring(mjcf)
@@ -54,7 +64,7 @@ def _track_video_sun_light(
 
     worldbody.remove(light)
     light.set("mode", "track")
-    light.set("directional", "true")
+    light.set("directional", "false" if spotlight else "true")
     light.set("castshadow", "true")
     light.set("pos", " ".join(map(str, _VIDEO_SUN_LIGHT_POS)))
     light.set("dir", " ".join(map(str, _VIDEO_SUN_LIGHT_DIR)))
@@ -88,6 +98,8 @@ def save_x_axis_video(
     height: int,
     track_root: bool = False,
     speed: float = 1.0,
+    shadowclip: float = 1.0,
+    spotlight: bool = False,
 ):
     """Render a swimming or walking evaluation episode to MP4."""
     try:
@@ -115,9 +127,9 @@ def save_x_axis_video(
         ) from error
 
     root_body_name = f"{genotype.root}_1"
-    mjcf = _track_video_sun_light(mjcf, root_body_name)
+    mjcf = _track_video_light(mjcf, root_body_name, spotlight)
     model = mujoco.MjModel.from_xml_string(mjcf)
-    _configure_video_sun_light(model)
+    _configure_video_light(model, shadowclip, spotlight)
     floor_geom_id = mujoco.mj_name2id(
         model,
         mujoco.mjtObj.mjOBJ_GEOM,
@@ -206,10 +218,21 @@ def save_x_axis_swimming_video(
     height: int,
     track_root: bool = False,
     speed: float = 1.0,
+    shadowclip: float = 1.0,
+    spotlight: bool = False,
 ):
     """Compatibility wrapper for callers that explicitly render swimming."""
     return save_x_axis_video(
-        genotype, output_path, config, fps, width, height, track_root, speed
+        genotype,
+        output_path,
+        config,
+        fps,
+        width,
+        height,
+        track_root,
+        speed,
+        shadowclip,
+        spotlight,
     )
 
 

@@ -72,6 +72,22 @@ def test_evaluate_accepts_self_collision(monkeypatch):
     assert evaluate.parse_args().self_collision
 
 
+def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evaluate.py", "--shadowclip", "0.75", "--spotlight"],
+    )
+    args = evaluate.parse_args()
+    assert args.shadowclip == pytest.approx(0.75)
+    assert args.spotlight
+
+
+def test_evaluate_rejects_nonpositive_shadowclip(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--shadowclip", "0"])
+    with pytest.raises(SystemExit, match="2"):
+        evaluate.parse_args()
+
 def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--task", "walking", "--threads", "3"]

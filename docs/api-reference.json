@@ -876,7 +876,7 @@
     "Classes": {},
     "Functions": {
       "save_x_axis_video": {
-        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, config: EvaluationConfig, fps: int, width: int, height: int) -> None",
+        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowclip: float = 1.0, spotlight: bool = false) -> None",
         "Purpose": "Render a swimming or walking episode to MP4 using MuJoCo's offscreen renderer and imageio.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
@@ -884,7 +884,11 @@
           "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Swimming or walking simulation settings and max_node budget."},
           "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
           "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
-          "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."}
+          "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."},
+          "track_root": {"Type": "bool", "Default": "false", "Description": "Track the creature root with the video camera."},
+          "speed": {"Type": "float", "Default": "1.0", "Description": "Video playback speed multiplier."},
+          "shadowclip": {"Type": "float", "Default": "1.0", "Description": "Directional shadow-map half-width as a multiple of model extent."},
+          "spotlight": {"Type": "bool", "Default": "false", "Description": "Use a shadow-casting spotlight instead of a directional light."}
         },
         "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
         "Raises": ["RuntimeError", "OSError"],
