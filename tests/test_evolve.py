@@ -9,6 +9,7 @@ import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.evaluation import (
+    OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
 )
@@ -99,6 +100,14 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     assert not args.self_collision
 
 
+def test_evaluate_and_evolve_accept_origin_distance_task(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "origin-distance"])
+    assert evaluate.parse_args().task == "origin-distance"
+
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "origin-distance"])
+    assert evolve_cli.parse_args().task == "origin-distance"
+
+
 def test_evolve_accepts_volume_weight(monkeypatch):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--volume-weight", "0.25"]
@@ -173,6 +182,7 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
     [
         SwimmingEvaluationConfig(episode_seconds=0.02),
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
+        OriginDistanceEvaluationConfig(episode_seconds=0.02),
     ],
 )
 def test_evaluate_population_runs_in_processes_and_preserves_order(config):
@@ -199,6 +209,28 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     assert default_geom is not None
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "3"
+
+
+def test_saved_best_xml_preserves_origin_distance_swimming_physics(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        OriginDistanceEvaluationConfig(episode_seconds=0.02, self_collision=True),
+    )
+    root = ET.fromstring(path.read_text())
+    option = root.find("option")
+    default_geom = root.find("./default/geom")
+    floor = root.find("./worldbody/geom[@name='floor']")
+
+    assert option is not None
+    assert option.get("gravity") == "0 0 0"
+    assert option.get("density") == "1000"
+    assert default_geom is not None
+    assert default_geom.get("contype") == "2"
+    assert floor is not None
+    assert floor.get("contype") == "0"
 
 
 def test_save_generation_best_can_skip_generation_history(tmp_path):

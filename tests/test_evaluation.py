@@ -7,10 +7,12 @@ import pytest
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
+    OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
     _has_nonparent_self_collision,
     _creature_volume,
+    evaluate_origin_distance,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
     initialize_walking_model,
@@ -31,12 +33,19 @@ def test_task_physics_settings_are_distinct():
     walking = ET.fromstring(
         PhenotypeBuilder(genotype, max_node=500, task="walking").build()
     )
+    origin_distance = ET.fromstring(
+        PhenotypeBuilder(genotype, max_node=500, task="origin-distance").build()
+    )
 
     swimming_option = swimming.find("option")
     walking_option = walking.find("option")
+    origin_distance_option = origin_distance.find("option")
     assert swimming_option is not None and walking_option is not None
+    assert origin_distance_option is not None
     assert swimming_option.get("gravity") == "0 0 0"
     assert swimming_option.get("density") == "1000"
+    assert origin_distance_option.get("gravity") == "0 0 0"
+    assert origin_distance_option.get("density") == "1000"
     assert walking_option.get("gravity") == "0 0 -9.81"
     assert walking_option.get("density") == "0"
     assert walking_option.get("viscosity") == "0"
@@ -163,10 +172,17 @@ def test_both_tasks_return_finite_results():
         genotype,
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
+    origin_distance = evaluate_origin_distance(
+        genotype, OriginDistanceEvaluationConfig(episode_seconds=0.02)
+    )
     assert not swimming.build_failed
     assert not walking.build_failed
+    assert not origin_distance.build_failed
     assert swimming.simulated_seconds == 0.02
     assert walking.simulated_seconds == 0.02
+    assert origin_distance.simulated_seconds == 0.02
+    assert origin_distance.origin_distance >= 0.0
+    assert origin_distance.average_origin_speed >= 0.0
     assert walking.mean_upright_error >= 0.0
     assert walking.height_loss >= 0.0
 
@@ -444,3 +460,20 @@ def test_control_energy_scales_with_squared_motor_gear():
 
     assert low_gear.control_energy > 0.0
     assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)
+
+
+def test_origin_distance_fitness_maximizes_final_distance():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    result = evaluate_origin_distance(
+        genotype,
+        OriginDistanceEvaluationConfig(
+            episode_seconds=0.02,
+            energy_weight=0.0,
+            angular_speed_weight=0.0,
+            body_count_weight=0.0,
+            volume_weight=0.0,
+        ),
+    )
+
+    assert result.fitness == pytest.approx(result.origin_distance)
+    assert result.origin_distance >= abs(result.forward_distance)

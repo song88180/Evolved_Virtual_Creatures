@@ -10,6 +10,7 @@ from pathlib import Path
 import random
 
 from evol_virtual_creature.evaluation import (
+    OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
 )
@@ -44,9 +45,7 @@ def main() -> None:
     write_json(run_dir / "config.json", vars(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
-    config_type = (
-        WalkingEvaluationConfig if args.task == "walking" else SwimmingEvaluationConfig
-    )
+    config_type = _config_type_for_task(args.task)
     config = config_type(
         episode_seconds=args.duration,
         max_node=args.max_node,
@@ -127,6 +126,14 @@ def main() -> None:
     print(f"Metrics: {metrics_path}")
 
 
+def _config_type_for_task(task: str):
+    if task == "walking":
+        return WalkingEvaluationConfig
+    if task == "origin-distance":
+        return OriginDistanceEvaluationConfig
+    return SwimmingEvaluationConfig
+
+
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
     """Show concrete defaults while allowing dynamic defaults in help text."""
 
@@ -139,12 +146,15 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments for the evolution run."""
     parser = argparse.ArgumentParser(
-        description="Run mutation-based evolution for swimming or walking creatures.",
+        description=(
+            "Run mutation-based evolution for swimming, walking, "
+            "or origin-distance creatures."
+        ),
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming", "walking"),
+        choices=("swimming", "walking", "origin-distance"),
         default="swimming",
         help="Locomotion task used for fitness evaluation.",
     )

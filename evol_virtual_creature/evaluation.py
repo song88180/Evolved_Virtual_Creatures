@@ -68,12 +68,38 @@ class WalkingEvaluationConfig:
     max_abs_acceleration: float = 100_000.0
 
 
-EvaluationConfig: TypeAlias = SwimmingEvaluationConfig | WalkingEvaluationConfig
+@dataclass(frozen=True)
+class OriginDistanceEvaluationConfig:
+    """Weights and simulation settings for distance-from-origin fitness."""
+
+    episode_seconds: float = 10.0
+    max_node: int = 500
+    self_collision: bool = False
+    disallow_collision: bool = False
+    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
+    distance_weight: float = 1.0
+    energy_weight: float = 1e-6
+    angular_speed_weight: float = 0.01
+    body_count_weight: float = 0.001
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
+    build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
+
+
+EvaluationConfig: TypeAlias = (
+    SwimmingEvaluationConfig | WalkingEvaluationConfig | OriginDistanceEvaluationConfig
+)
 
 
 @dataclass(frozen=True)
 class SwimmingEvaluationResult:
     fitness: float
+    origin_distance: float
+    average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
     sideways_drift: float
@@ -92,6 +118,8 @@ class SwimmingEvaluationResult:
 @dataclass(frozen=True)
 class WalkingEvaluationResult:
     fitness: float
+    origin_distance: float
+    average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
     sideways_drift: float
@@ -99,6 +127,26 @@ class WalkingEvaluationResult:
     control_energy: float
     mean_angular_speed: float
     mean_upright_error: float
+    simulated_seconds: float
+    actuator_count: int
+    body_count: int
+    total_volume: float
+    build_failed: bool = False
+    disqualified: bool = False
+    failure_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class OriginDistanceEvaluationResult:
+    fitness: float
+    origin_distance: float
+    average_origin_speed: float
+    forward_distance: float
+    average_forward_speed: float
+    sideways_drift: float
+    vertical_drift: float
+    control_energy: float
+    mean_angular_speed: float
     simulated_seconds: float
     actuator_count: int
     body_count: int
@@ -138,6 +186,38 @@ def evaluate_x_axis_swimming(
         return _failed_swimming(config, "Simulation produced a non-finite fitness.")
 
     return SwimmingEvaluationResult(fitness=fitness, **metrics)
+
+
+def evaluate_origin_distance(
+    genotype: Genotype,
+    config: OriginDistanceEvaluationConfig | None = None,
+) -> OriginDistanceEvaluationResult:
+    """Score a genotype by final root distance from its starting position."""
+    config = config or OriginDistanceEvaluationConfig()
+    built = _build_model(genotype, config, "origin-distance")
+    if isinstance(built, str):
+        return _failed_origin_distance(config, built)
+    model, data, builder = built
+
+    metrics = _run_controlled_episode(model, data, builder, config)
+    if isinstance(metrics, str):
+        return _failed_origin_distance(config, metrics)
+
+    fitness = (
+        config.distance_weight * metrics["origin_distance"]
+        - config.energy_weight * metrics["control_energy"]
+        - config.angular_speed_weight * metrics["mean_angular_speed"]
+        - config.body_count_weight * metrics["body_count"]
+        - config.volume_weight * _excess_volume(
+            metrics["total_volume"], config.volume_penalty_cutoff
+        )
+    )
+    if not math.isfinite(fitness):
+        return _failed_origin_distance(
+            config, "Simulation produced a non-finite fitness."
+        )
+
+    return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
 
 
 def evaluate_x_axis_walking(
@@ -196,11 +276,17 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
     """Dispatch evaluation from the concrete task configuration type."""
     if isinstance(config, WalkingEvaluationConfig):
         return evaluate_x_axis_walking(genotype, config)
+    if isinstance(config, OriginDistanceEvaluationConfig):
+        return evaluate_origin_distance(genotype, config)
     return evaluate_x_axis_swimming(genotype, config)
 
 
 def task_for_config(config: EvaluationConfig) -> str:
-    return "walking" if isinstance(config, WalkingEvaluationConfig) else "swimming"
+    if isinstance(config, WalkingEvaluationConfig):
+        return "walking"
+    if isinstance(config, OriginDistanceEvaluationConfig):
+        return "origin-distance"
+    return "swimming"
 
 
 def initialize_walking_model(
@@ -359,9 +445,13 @@ def _run_controlled_episode(
     forward_distance = float(displacement @ target_direction)
     simulated_seconds = max(float(data.time), model.opt.timestep)
     average_forward_speed = forward_distance / simulated_seconds
+    origin_distance = float(np.linalg.norm(displacement))
+    average_origin_speed = origin_distance / simulated_seconds
     lateral = displacement - forward_distance * np.asarray(target_direction)
 
     metrics = {
+        "origin_distance": origin_distance,
+        "average_origin_speed": average_origin_speed,
         "forward_distance": forward_distance,
         "average_forward_speed": average_forward_speed,
         "sideways_drift": abs(float(lateral[1])),
@@ -382,6 +472,29 @@ def _run_controlled_episode(
 def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
     return SwimmingEvaluationResult(
         fitness=config.build_failure_fitness,
+        origin_distance=0.0,
+        average_origin_speed=0.0,
+        forward_distance=0.0,
+        average_forward_speed=0.0,
+        sideways_drift=0.0,
+        vertical_drift=0.0,
+        control_energy=0.0,
+        mean_angular_speed=0.0,
+        simulated_seconds=0.0,
+        actuator_count=0,
+        body_count=0,
+        total_volume=0.0,
+        build_failed=reason != DISALLOWED_COLLISION_REASON,
+        disqualified=reason == DISALLOWED_COLLISION_REASON,
+        failure_reason=reason,
+    )
+
+
+def _failed_origin_distance(config: OriginDistanceEvaluationConfig, reason: str):
+    return OriginDistanceEvaluationResult(
+        fitness=config.build_failure_fitness,
+        origin_distance=0.0,
+        average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
         sideways_drift=0.0,
@@ -401,6 +514,8 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
 def _failed_walking(config: WalkingEvaluationConfig, reason: str):
     return WalkingEvaluationResult(
         fitness=config.build_failure_fitness,
+        origin_distance=0.0,
+        average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
         sideways_drift=0.0,

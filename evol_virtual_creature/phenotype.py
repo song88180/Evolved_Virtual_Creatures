@@ -53,8 +53,8 @@ class PhenotypeBuilder:
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
-        if task not in {"swimming", "walking"}:
-            raise ValueError("task must be 'swimming' or 'walking'")
+        if task not in {"swimming", "walking", "origin-distance"}:
+            raise ValueError("task must be 'swimming', 'walking', or 'origin-distance'")
 
         self.genotype = genotype
         self.max_node = max_node
@@ -118,7 +118,7 @@ class PhenotypeBuilder:
         compiler.set("angle", "degree")
 
         option = ET.SubElement(self.mujoco_xml, "option")
-        if self.task == "swimming":
+        if self.task != "walking":
             option.set("gravity", "0 0 0")
             option.set("density", "1000")
             option.set("viscosity", "0.001")
@@ -161,7 +161,7 @@ class PhenotypeBuilder:
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
         geom_default.set("density", "500")
-        if self.task == "swimming":
+        if self.task != "walking":
             geom_default.set("friction", "1.0 0.5 0.5")
             collision_mask = "2" if self.self_collision else "0"
             geom_default.set("contype", collision_mask)

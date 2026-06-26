@@ -18,6 +18,7 @@ def _configure_video_rendering_backend() -> None:
 _configure_video_rendering_backend()
 
 from evol_virtual_creature.evaluation import (
+    OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingEvaluationConfig,
     evaluate_for_task,
@@ -33,9 +34,7 @@ _DEFAULT_VIDEO_SENTINEL = Path("__task_default_video__")
 def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
-    config_type = (
-        WalkingEvaluationConfig if args.task == "walking" else SwimmingEvaluationConfig
-    )
+    config_type = _config_type_for_task(args.task)
     config = config_type(
         episode_seconds=args.duration,
         body_count_weight=args.body_count_weight,
@@ -57,13 +56,20 @@ def main():
         print(f"Fitness: {result.fitness:.6f}")
         return
 
-    print(f"X-axis {args.task} evaluation")
+    title = (
+        "Origin-distance evaluation"
+        if args.task == "origin-distance"
+        else f"X-axis {args.task} evaluation"
+    )
+    print(title)
     print(f"Genotype: {args.genotype}")
     print(f"Fitness: {result.fitness:.6f}")
+    print(f"Origin distance: {result.origin_distance:.6f}")
+    print(f"Average origin speed: {result.average_origin_speed:.6f}")
     print(f"Forward distance: {result.forward_distance:.6f}")
     print(f"Average forward speed: {result.average_forward_speed:.6f}")
     print(f"Sideways drift: {result.sideways_drift:.6f}")
-    if args.task == "swimming":
+    if args.task in {"swimming", "origin-distance"}:
         print(f"Vertical drift: {result.vertical_drift:.6f}")
     else:
         print(f"Height loss: {result.height_loss:.6f}")
@@ -98,6 +104,14 @@ def main():
         print(f"Saved video: {video_path}")
 
 
+def _config_type_for_task(task: str):
+    if task == "walking":
+        return WalkingEvaluationConfig
+    if task == "origin-distance":
+        return OriginDistanceEvaluationConfig
+    return SwimmingEvaluationConfig
+
+
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
     def _get_help_string(self, action):
         if action.default is None or action.default is argparse.SUPPRESS:
@@ -107,12 +121,12 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate a creature on a swimming or walking task.",
+        description="Evaluate a creature on a swimming, walking, or origin-distance task.",
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming", "walking"),
+        choices=("swimming", "walking", "origin-distance"),
         default="swimming",
         help="Locomotion task to evaluate.",
     )
