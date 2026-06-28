@@ -20,6 +20,7 @@ _configure_video_rendering_backend()
 from evol_virtual_creature.evaluation import (
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
     evaluate_for_task,
 )
@@ -57,8 +58,8 @@ def main():
         return
 
     title = (
-        "Origin-distance evaluation"
-        if args.task == "origin-distance"
+        f"Distance-from-origin {args.task} evaluation"
+        if args.task.endswith("_away")
         else f"X-axis {args.task} evaluation"
     )
     print(title)
@@ -69,7 +70,7 @@ def main():
     print(f"Forward distance: {result.forward_distance:.6f}")
     print(f"Average forward speed: {result.average_forward_speed:.6f}")
     print(f"Sideways drift: {result.sideways_drift:.6f}")
-    if args.task in {"swimming", "origin-distance"}:
+    if args.task.startswith("swimming"):
         print(f"Vertical drift: {result.vertical_drift:.6f}")
     else:
         print(f"Height loss: {result.height_loss:.6f}")
@@ -105,9 +106,11 @@ def main():
 
 
 def _config_type_for_task(task: str):
-    if task == "walking":
+    if task == "walking_x":
         return WalkingEvaluationConfig
-    if task == "origin-distance":
+    if task == "walking_away":
+        return WalkingAwayEvaluationConfig
+    if task == "swimming_away":
         return OriginDistanceEvaluationConfig
     return SwimmingEvaluationConfig
 
@@ -121,13 +124,13 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate a creature on a swimming, walking, or origin-distance task.",
+        description="Evaluate a creature on a swimming_x, swimming_away, walking_x, or walking_away task.",
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming", "walking", "origin-distance"),
-        default="swimming",
+        choices=("swimming_x", "swimming_away", "walking_x", "walking_away"),
+        default="swimming_x",
         help="Locomotion task to evaluate.",
     )
     parser.add_argument(

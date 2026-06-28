@@ -501,11 +501,11 @@
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
         "Constructor": {
-          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, task: str = \"swimming\", self_collision: bool = false)",
+          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, task: str = \"swimming_x\", self_collision: bool = false)",
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
             "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},
-            "task": {"Type": "str", "Default": "swimming", "Description": "Physics environment: swimming or walking."},
+            "task": {"Type": "str", "Default": "swimming_x", "Description": "Task environment/objective: swimming_x, swimming_away, walking_x, or walking_away."},
             "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable non-parent creature self-collision while retaining MuJoCo parent filtering."}
           },
           "Raises": ["ValueError"]
@@ -730,7 +730,7 @@
   },
   "evol_virtual_creature.evaluation": {
     "Overview": {
-      "Purpose": "Scores genotypes on x-axis swimming and walking tasks using MuJoCo simulation and open-loop actuator control.",
+      "Purpose": "Scores genotypes on x-axis and away-from-origin swimming/walking tasks using MuJoCo simulation and open-loop actuator control.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
@@ -831,6 +831,44 @@
         },
         "Methods": {},
         "Example": "if result.build_failed: print(result.failure_reason)"
+      },
+      "OriginDistanceEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for swimming_away distance-from-origin fitness.",
+        "Constructor": {
+          "Signature": "OriginDistanceEvaluationConfig(..., distance_weight: float = 1.0)",
+          "Parameters": {
+            "distance_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for final distance from the starting point."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {},
+        "Example": "config = OriginDistanceEvaluationConfig(episode_seconds=6.0)"
+      },
+      "WalkingEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_x land locomotion.",
+        "Constructor": {
+          "Signature": "WalkingEvaluationConfig(..., settle_seconds: float = 1.0, forward_speed_weight: float = 1.0)",
+          "Parameters": {},
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {},
+        "Example": "config = WalkingEvaluationConfig(episode_seconds=6.0, settle_seconds=1.0)"
+      },
+      "WalkingAwayEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_away distance-from-origin fitness in the land environment.",
+        "Constructor": {
+          "Signature": "WalkingAwayEvaluationConfig(..., settle_seconds: float = 1.0, distance_weight: float = 1.0)",
+          "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Unscored time used to let the creature settle onto the floor."},
+            "distance_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for final distance from the starting point."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {},
+        "Example": "config = WalkingAwayEvaluationConfig(episode_seconds=6.0, settle_seconds=1.0)"
       }
     },
     "Functions": {
@@ -844,6 +882,30 @@
         "Returns": {"Type": "SwimmingEvaluationResult", "Description": "Fitness and diagnostic metrics; build failures are represented as failed results."},
         "Raises": ["ValueError"],
         "Example": "result = evaluate_x_axis_swimming(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
+      },
+      "evaluate_origin_distance": {
+        "Signature": "evaluate_origin_distance(genotype: Genotype, config: OriginDistanceEvaluationConfig | None = None) -> OriginDistanceEvaluationResult",
+        "Purpose": "Score swimming_away by measuring final root distance from the starting point.",
+        "Parameters": {},
+        "Returns": {"Type": "OriginDistanceEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_origin_distance(genotype, OriginDistanceEvaluationConfig(episode_seconds=6.0))"
+      },
+      "evaluate_x_axis_walking": {
+        "Signature": "evaluate_x_axis_walking(genotype: Genotype, config: WalkingEvaluationConfig | None = None) -> WalkingEvaluationResult",
+        "Purpose": "Score walking_x using land physics, settling, and positive X-axis movement.",
+        "Parameters": {},
+        "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_x_axis_walking(genotype, WalkingEvaluationConfig(episode_seconds=6.0))"
+      },
+      "evaluate_walking_away": {
+        "Signature": "evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None) -> WalkingEvaluationResult",
+        "Purpose": "Score walking_away using land physics, settling, and distance from the starting point.",
+        "Parameters": {},
+        "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_walking_away(genotype, WalkingAwayEvaluationConfig(episode_seconds=6.0))"
       }
     },
     "Internal_Functions": {
@@ -860,7 +922,7 @@
   },
   "evol_virtual_creature.video": {
     "Overview": {
-      "Purpose": "Renders x-axis swimming or walking simulations to MP4 video and exposes controller helpers shared with rendering.",
+      "Purpose": "Renders selected swimming or walking simulations to MP4 video and exposes controller helpers shared with rendering.",
       "Main_Use_Cases": [
         "Build a genotype phenotype and record a selected-task episode",
         "Map generated actuator controllers to MuJoCo actuator IDs",
@@ -877,11 +939,11 @@
     "Functions": {
       "save_x_axis_video": {
         "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false) -> None",
-        "Purpose": "Render a swimming or walking episode to MP4 using MuJoCo's offscreen renderer and imageio.",
+        "Purpose": "Render a selected-task episode to MP4 using MuJoCo's offscreen renderer and imageio.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
           "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
-          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Swimming or walking simulation settings and max_node budget."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Selected-task simulation settings and max_node budget."},
           "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
           "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
           "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."},

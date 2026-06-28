@@ -45,7 +45,7 @@
             <h1>Evol Virtual Creature</h1>
             <p class="lede">
               A compact reference for building genotype recipes, expanding them
-              into MuJoCo MJCF creatures, evaluating swimming or walking fitness, and
+              into MuJoCo MJCF creatures, evaluating swimming or walking fitness variants, and
               running mutation-based evolution.
             </p>
             <div class="hero-actions" aria-label="Primary actions">
@@ -84,11 +84,11 @@
             </figure>
             <figure>
               <figcaption>Evaluate locomotion fitness</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evaluate.py --task walking --video</code></pre>
+              <pre><code>conda run -n mujoco --no-capture-output python evaluate.py --task walking_x --video</code></pre>
             </figure>
             <figure>
               <figcaption>Run evolution</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evolve.py --task walking \
+              <pre><code>conda run -n mujoco --no-capture-output python evolve.py --task walking_away \
   --population-size 100 \
   --generations 100 \
   --seed 7</code></pre>
@@ -155,8 +155,9 @@
             <section>
               <h3>Evaluation</h3>
               <p>
-                Swimming and walking tasks reward forward speed while applying task-specific
-                physics and penalties for inefficient or unstable movement. Optional
+                <code>swimming_x</code> and <code>walking_x</code> reward forward speed. <code>swimming_away</code>
+                and <code>walking_away</code> reward distance from the starting point. All tasks
+                apply task-specific physics and penalties for inefficient or unstable movement. Optional
                 self-collision includes non-parent body pairs while MuJoCo filters
                 direct parent-child pairs. <code>--disallow-collision</code> enables
                 that detection and assigns low fitness when such contact occurs.
@@ -192,8 +193,8 @@
                 </tr>
                 <tr>
                   <td><code>evaluate.py</code></td>
-                  <td>Score one genotype on the selected swimming or walking task.</td>
-                  <td><code>--task</code>, <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--video</code>.</td>
+                  <td>Score one genotype on the selected swimming or walking task variant.</td>
+                  <td><code>--task</code> (<code>swimming_x</code>, <code>swimming_away</code>, <code>walking_x</code>, <code>walking_away</code>), <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--video</code>.</td>
                 </tr>
                 <tr>
                   <td><code>evolve.py</code></td>

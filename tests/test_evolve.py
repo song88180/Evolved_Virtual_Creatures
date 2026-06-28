@@ -11,6 +11,7 @@ from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.evaluation import (
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
 )
 import generate_model
@@ -31,7 +32,7 @@ def test_default_thread_count_has_minimum_of_one(monkeypatch):
 def test_evaluate_defaults_to_swimming_without_self_collision(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py"])
     args = evaluate.parse_args()
-    assert args.task == "swimming"
+    assert args.task == "swimming_x"
     assert not args.self_collision
     assert not args.disallow_collision
 
@@ -92,20 +93,20 @@ def test_evaluate_rejects_nonpositive_shadowsize(monkeypatch):
 
 def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     monkeypatch.setattr(
-        sys, "argv", ["evolve.py", "--task", "walking", "--threads", "3"]
+        sys, "argv", ["evolve.py", "--task", "walking_x", "--threads", "3"]
     )
     args = evolve_cli.parse_args()
-    assert args.task == "walking"
+    assert args.task == "walking_x"
     assert args.threads == 3
     assert not args.self_collision
 
 
-def test_evaluate_and_evolve_accept_origin_distance_task(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "origin-distance"])
-    assert evaluate.parse_args().task == "origin-distance"
+def test_evaluate_and_evolve_accept_away_tasks(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "swimming_away"])
+    assert evaluate.parse_args().task == "swimming_away"
 
-    monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "origin-distance"])
-    assert evolve_cli.parse_args().task == "origin-distance"
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "walking_away"])
+    assert evolve_cli.parse_args().task == "walking_away"
 
 
 def test_evolve_accepts_volume_weight(monkeypatch):
@@ -183,6 +184,7 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
         SwimmingEvaluationConfig(episode_seconds=0.02),
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
         OriginDistanceEvaluationConfig(episode_seconds=0.02),
+        WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
     ],
 )
 def test_evaluate_population_runs_in_processes_and_preserves_order(config):
@@ -211,7 +213,7 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     assert default_geom.get("conaffinity") == "3"
 
 
-def test_saved_best_xml_preserves_origin_distance_swimming_physics(tmp_path):
+def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
     evolve_lib._write_best_xml(
@@ -231,6 +233,29 @@ def test_saved_best_xml_preserves_origin_distance_swimming_physics(tmp_path):
     assert default_geom.get("contype") == "2"
     assert floor is not None
     assert floor.get("contype") == "0"
+
+
+def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        WalkingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
+    )
+    root = ET.fromstring(path.read_text())
+    option = root.find("option")
+    default_geom = root.find("./default/geom")
+    floor = root.find("./worldbody/geom[@name='floor']")
+
+    assert option is not None
+    assert option.get("gravity") == "0 0 -9.81"
+    assert option.get("density") == "0"
+    assert default_geom is not None
+    assert default_geom.get("contype") == "2"
+    assert default_geom.get("conaffinity") == "3"
+    assert floor is not None
+    assert floor.get("contype") == "1"
 
 
 def test_save_generation_best_can_skip_generation_history(tmp_path):
@@ -298,8 +323,8 @@ def test_default_run_directory_uses_task_name(monkeypatch):
             return "20260102_030405"
 
     monkeypatch.setattr(evolve_cli, "datetime", FixedDateTime)
-    assert str(evolve_cli._default_run_dir("walking")).endswith(
-        "runs/walking_20260102_030405"
+    assert str(evolve_cli._default_run_dir("walking_x")).endswith(
+        "runs/walking_x_20260102_030405"
     )
 
 
@@ -309,7 +334,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
         (
             evaluate.parse_args,
             (
-                "default: swimming",
+                "default: swimming_x",
                 "default: examples/example_genotype.json",
                 "default: 6.0",
                 "default: disabled",
@@ -320,7 +345,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
         (
             evolve_cli.parse_args,
             (
-                "default: swimming",
+                "default: swimming_x",
                 "default: examples/example_genotype.json",
                 "default: runs/<task>_<timestamp>",
                 "default: 100",

@@ -12,6 +12,7 @@ import random
 from evol_virtual_creature.evaluation import (
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
 )
 from evol_virtual_creature.evolve import (
@@ -127,9 +128,11 @@ def main() -> None:
 
 
 def _config_type_for_task(task: str):
-    if task == "walking":
+    if task == "walking_x":
         return WalkingEvaluationConfig
-    if task == "origin-distance":
+    if task == "walking_away":
+        return WalkingAwayEvaluationConfig
+    if task == "swimming_away":
         return OriginDistanceEvaluationConfig
     return SwimmingEvaluationConfig
 
@@ -147,15 +150,15 @@ def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments for the evolution run."""
     parser = argparse.ArgumentParser(
         description=(
-            "Run mutation-based evolution for swimming, walking, "
-            "or origin-distance creatures."
+            "Run mutation-based evolution for swimming_x, swimming_away, "
+            "walking_x, or walking_away creatures."
         ),
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming", "walking", "origin-distance"),
-        default="swimming",
+        choices=("swimming_x", "swimming_away", "walking_x", "walking_away"),
+        default="swimming_x",
         help="Locomotion task used for fitness evaluation.",
     )
     parser.add_argument(

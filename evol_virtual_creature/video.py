@@ -9,6 +9,7 @@ import mujoco
 from .evaluation import (
     EvaluationConfig,
     SwimmingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
@@ -102,7 +103,7 @@ def save_x_axis_video(
     shadowsize: int = 4096,
     spotlight: bool = False,
 ):
-    """Render a swimming or walking evaluation episode to MP4."""
+    """Render a selected swimming or walking task episode to MP4."""
     try:
         import imageio.v3 as iio
     except ImportError as error:
@@ -146,7 +147,7 @@ def save_x_axis_video(
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
-    if isinstance(config, WalkingEvaluationConfig):
+    if isinstance(config, (WalkingEvaluationConfig, WalkingAwayEvaluationConfig)):
         failure = initialize_walking_model(model, data)
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")

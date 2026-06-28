@@ -70,7 +70,7 @@ class WalkingEvaluationConfig:
 
 @dataclass(frozen=True)
 class OriginDistanceEvaluationConfig:
-    """Weights and simulation settings for distance-from-origin fitness."""
+    """Weights and simulation settings for swimming-away fitness."""
 
     episode_seconds: float = 10.0
     max_node: int = 500
@@ -90,8 +90,34 @@ class OriginDistanceEvaluationConfig:
     max_abs_acceleration: float = 100_000.0
 
 
+@dataclass(frozen=True)
+class WalkingAwayEvaluationConfig:
+    """Weights and simulation settings for walking-away fitness."""
+
+    episode_seconds: float = 10.0
+    settle_seconds: float = 1.0
+    max_node: int = 500
+    self_collision: bool = False
+    disallow_collision: bool = False
+    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
+    distance_weight: float = 1.0
+    energy_weight: float = 1e-7
+    angular_speed_weight: float = 0.01
+    body_count_weight: float = 0.001
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
+    build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
+
+
 EvaluationConfig: TypeAlias = (
-    SwimmingEvaluationConfig | WalkingEvaluationConfig | OriginDistanceEvaluationConfig
+    SwimmingEvaluationConfig
+    | WalkingEvaluationConfig
+    | OriginDistanceEvaluationConfig
+    | WalkingAwayEvaluationConfig
 )
 
 
@@ -162,7 +188,7 @@ def evaluate_x_axis_swimming(
 ) -> SwimmingEvaluationResult:
     """Score a genotype by how well it swims in the positive x direction."""
     config = config or SwimmingEvaluationConfig()
-    built = _build_model(genotype, config, "swimming")
+    built = _build_model(genotype, config, "swimming_x")
     if isinstance(built, str):
         return _failed_swimming(config, built)
     model, data, builder = built
@@ -194,7 +220,7 @@ def evaluate_origin_distance(
 ) -> OriginDistanceEvaluationResult:
     """Score a genotype by final root distance from its starting position."""
     config = config or OriginDistanceEvaluationConfig()
-    built = _build_model(genotype, config, "origin-distance")
+    built = _build_model(genotype, config, "swimming_away")
     if isinstance(built, str):
         return _failed_origin_distance(config, built)
     model, data, builder = built
@@ -220,13 +246,62 @@ def evaluate_origin_distance(
     return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
 
 
+def evaluate_walking_away(
+    genotype: Genotype,
+    config: WalkingAwayEvaluationConfig | None = None,
+) -> WalkingEvaluationResult:
+    """Score ground locomotion by final root distance from its starting position."""
+    config = config or WalkingAwayEvaluationConfig()
+    built = _build_model(genotype, config, "walking_away")
+    if isinstance(built, str):
+        return _failed_walking(config, built)
+    model, data, builder = built
+
+    failure = initialize_walking_model(model, data)
+    if failure is not None:
+        return _failed_walking(config, failure)
+    failure = settle_walking_model(model, data, config)
+    if failure is not None:
+        return _failed_walking(config, failure)
+    data.time = 0.0
+
+    metrics = _run_controlled_episode(
+        model,
+        data,
+        builder,
+        config,
+        root_body_name=f"{genotype.root}_1",
+    )
+    if isinstance(metrics, str):
+        return _failed_walking(config, metrics)
+
+    walking_metrics = {
+        key: value
+        for key, value in metrics.items()
+        if key != "vertical_drift"
+    }
+    fitness = (
+        config.distance_weight * walking_metrics["origin_distance"]
+        - config.energy_weight * walking_metrics["control_energy"]
+        - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
+        - config.body_count_weight * walking_metrics["body_count"]
+        - config.volume_weight * _excess_volume(
+            walking_metrics["total_volume"], config.volume_penalty_cutoff
+        )
+    )
+    if not math.isfinite(fitness):
+        return _failed_walking(config, "Simulation produced a non-finite fitness.")
+
+    return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
+
+
 def evaluate_x_axis_walking(
     genotype: Genotype,
     config: WalkingEvaluationConfig | None = None,
 ) -> WalkingEvaluationResult:
     """Score positive-x ground locomotion while penalizing falling and rolling."""
     config = config or WalkingEvaluationConfig()
-    built = _build_model(genotype, config, "walking")
+    built = _build_model(genotype, config, "walking_x")
     if isinstance(built, str):
         return _failed_walking(config, built)
     model, data, builder = built
@@ -274,6 +349,8 @@ def evaluate_x_axis_walking(
 
 def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
     """Dispatch evaluation from the concrete task configuration type."""
+    if isinstance(config, WalkingAwayEvaluationConfig):
+        return evaluate_walking_away(genotype, config)
     if isinstance(config, WalkingEvaluationConfig):
         return evaluate_x_axis_walking(genotype, config)
     if isinstance(config, OriginDistanceEvaluationConfig):
@@ -282,11 +359,13 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
 
 
 def task_for_config(config: EvaluationConfig) -> str:
+    if isinstance(config, WalkingAwayEvaluationConfig):
+        return "walking_away"
     if isinstance(config, WalkingEvaluationConfig):
-        return "walking"
+        return "walking_x"
     if isinstance(config, OriginDistanceEvaluationConfig):
-        return "origin-distance"
-    return "swimming"
+        return "swimming_away"
+    return "swimming_x"
 
 
 def initialize_walking_model(
@@ -348,7 +427,7 @@ def _has_floor_penetration(
 def settle_walking_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    config: WalkingEvaluationConfig,
+    config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig,
 ) -> str | None:
     """Let a walking creature fall onto the floor before controls and scoring."""
     settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
@@ -511,7 +590,7 @@ def _failed_origin_distance(config: OriginDistanceEvaluationConfig, reason: str)
     )
 
 
-def _failed_walking(config: WalkingEvaluationConfig, reason: str):
+def _failed_walking(config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig, reason: str):
     return WalkingEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,

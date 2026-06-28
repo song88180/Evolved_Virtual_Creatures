@@ -5,7 +5,7 @@ This project turns a small graph-like genotype into a MuJoCo creature model. The
 The correct command is:
 
 ```bash
-python generate_model.py
+conda run -n mujoco --no-capture-output python generate_model.py
 ```
 
 ## Main Idea
@@ -208,12 +208,12 @@ mujoco_xml = ET.Element("mujoco", model="genotype_creature")
 It then adds standard MuJoCo sections:
 
 - `<compiler>`: sets angles to degrees.
-- `<option>`: sets simulation options, including zero gravity plus density and viscosity values.
+- `<option>`: sets simulation options. `swimming_x` and `swimming_away` use zero gravity with fluid density and viscosity, while `walking_x` and `walking_away` use Earth gravity without fluid drag.
 - `<default>`: defines default geometry, joint, and motor properties.
 - `<worldbody>`: contains the floor, light, and creature bodies.
 - `<actuator>`: contains motors for motor-enabled hinge, slide, and ball joints.
 
-The default geometry settings make body parts box-shaped, moderately dense, and frictional. They also set `contype` and `conaffinity` to `0`, which disables contacts for geoms that inherit these defaults. A built-in checker texture and tiled material are assigned to the floor for visual scale and motion reference. The floor and light are added directly to the world:
+The default geometry settings make body parts box-shaped, moderately dense, and frictional. Swimming tasks disable floor contacts unless self-collision is enabled; walking tasks enable floor contact and use land friction settings. A built-in checker texture and tiled material are assigned to the floor for visual scale and motion reference. The floor and light are added directly to the world:
 
 ```python
 floor = ET.SubElement(worldbody, "geom")
@@ -433,7 +433,7 @@ The current script is intentionally minimal, but it leaves several natural place
 - Use `ConnectionGene.axis` to influence child orientation, not just joint axes.
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
-- Add a fitness function, such as forward distance traveled.
+- Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `swimming_away`, and `walking_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward distance from the starting point.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary
