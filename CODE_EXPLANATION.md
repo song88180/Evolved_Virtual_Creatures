@@ -111,7 +111,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_type`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values.
+Mutable parameters include node fields such as `size`, `joint_type`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
 
 The method prints the mutation details as it applies them:
 

@@ -159,8 +159,35 @@ def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
         random.Random(1),
     )
     assert genotype.nodes["body"].joint_type == "free"
-    assert genotype.nodes["limb"].joint_type in {"slide", "ball"}
+    assert genotype.nodes["limb"].joint_type == "ball"
     assert "joint_type" in description
+
+
+def test_joint_type_mutation_allows_slide_when_enabled():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+    genotype._allow_slide_joint_for_mutation = True
+
+    genotype._mutate_parameter_path(
+        ("node", "limb", "joint_type"),
+        random.Random(1),
+    )
+
+    assert genotype.nodes["limb"].joint_type == "slide"
 
 
 def test_node_rejects_unknown_joint_type():

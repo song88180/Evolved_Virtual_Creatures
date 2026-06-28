@@ -166,6 +166,20 @@ def test_evolve_allows_topology_mutations_by_default(monkeypatch):
     assert not evolve_cli.parse_args().disallow_topology_mutations
 
 
+def test_evolve_accepts_allow_slide_joint(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--allow-slide-joint"])
+    assert evolve_cli.parse_args().allow_slide_joint
+
+
+def test_evolve_disallows_slide_joint_by_default(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert not evolve_cli.parse_args().allow_slide_joint
+
+
+def test_generate_model_accepts_allow_slide_joint(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["generate_model.py", "--allow-slide-joint"])
+    assert generate_model.parse_args().allow_slide_joint
+
 
 def test_evolve_records_generation_history_by_default(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py"])
@@ -443,8 +457,9 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
         _mutation_count,
         _rng,
         allow_topology_mutations=True,
+        allow_slide_joint=False,
     ):
-        settings.append(allow_topology_mutations)
+        settings.append((allow_topology_mutations, allow_slide_joint))
 
     monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
     evolve_lib.initial_population(
@@ -455,7 +470,7 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
         allow_topology_mutations=False,
     )
 
-    assert settings == [False, False]
+    assert settings == [(False, False), (False, False)]
 
 
 def test_next_population_forwards_topology_mutation_setting(monkeypatch):
@@ -470,8 +485,9 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
         _mutation_count,
         _rng,
         allow_topology_mutations=True,
+        allow_slide_joint=False,
     ):
-        settings.append(allow_topology_mutations)
+        settings.append((allow_topology_mutations, allow_slide_joint))
 
     monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
     evolve_lib.next_population(
@@ -485,4 +501,42 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
         allow_topology_mutations=False,
     )
 
-    assert settings == [False, False]
+    assert settings == [(False, False), (False, False)]
+
+
+def test_population_helpers_forward_allow_slide_joint(monkeypatch):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    evaluated = [
+        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+    ]
+    settings = []
+
+    def record_mutation(
+        _genotype,
+        _mutation_count,
+        _rng,
+        allow_topology_mutations=True,
+        allow_slide_joint=False,
+    ):
+        settings.append(allow_slide_joint)
+
+    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
+    evolve_lib.initial_population(
+        seed_genotype=genotype,
+        population_size=2,
+        initial_mutations=1,
+        rng=random.Random(1),
+        allow_slide_joint=True,
+    )
+    evolve_lib.next_population(
+        evaluated=evaluated,
+        population_size=2,
+        elite_count=1,
+        tournament_size=1,
+        min_mutations=1,
+        max_mutations=1,
+        rng=random.Random(1),
+        allow_slide_joint=True,
+    )
+
+    assert settings == [True, True]

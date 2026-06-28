@@ -64,6 +64,7 @@ def main() -> None:
         initial_mutations=args.initial_mutations,
         rng=rng,
         allow_topology_mutations=not args.disallow_topology_mutations,
+        allow_slide_joint=args.allow_slide_joint,
     )
 
     best_so_far: EvaluatedCreature | None = None
@@ -113,6 +114,7 @@ def main() -> None:
                 max_mutations=args.max_mutations,
                 rng=rng,
                 allow_topology_mutations=not args.disallow_topology_mutations,
+                allow_slide_joint=args.allow_slide_joint,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -240,6 +242,11 @@ def parse_args() -> argparse.Namespace:
             "Only mutate properties of existing node and connection genes; "
             "do not add, remove, replace, or relink genes."
         ),
+    )
+    parser.add_argument(
+        "--allow-slide-joint",
+        action="store_true",
+        help="Allow mutations to create slide-jointed body parts.",
     )
     parser.add_argument(
         "--duration",

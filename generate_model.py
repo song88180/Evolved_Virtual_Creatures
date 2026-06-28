@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         help="Number of random mutations to apply.",
     )
     parser.add_argument(
+        "--allow-slide-joint",
+        action="store_true",
+        help="Allow mutations to create slide-jointed body parts.",
+    )
+    parser.add_argument(
         "--max-node",
         type=int,
         default=MAX_N_NODES,
@@ -60,7 +65,10 @@ def main():
     genotype = load_genotype_from_json(args.genotype)
 
     for _ in range(args.mutations):
-        genotype.mutation(num_mutations=1)
+        genotype.mutation(
+            num_mutations=1,
+            allow_slide_joint=args.allow_slide_joint,
+        )
 
     print("Building MuJoCo organism from mutated genotype.")
 
