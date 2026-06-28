@@ -10,6 +10,8 @@ from pathlib import Path
 import random
 
 from evol_virtual_creature.evaluation import (
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
@@ -139,6 +141,10 @@ def _format_generation_progress(
 
 
 def _config_type_for_task(task: str):
+    if task == "flying_x":
+        return FlyingEvaluationConfig
+    if task == "flying_away":
+        return FlyingAwayEvaluationConfig
     if task == "walking_x":
         return WalkingEvaluationConfig
     if task == "walking_away":
@@ -161,14 +167,21 @@ def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments for the evolution run."""
     parser = argparse.ArgumentParser(
         description=(
-            "Run mutation-based evolution for swimming_x, swimming_away, "
-            "walking_x, or walking_away creatures."
+            "Run mutation-based evolution for swimming, walking, "
+            "or flying task variants."
         ),
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming_x", "swimming_away", "walking_x", "walking_away"),
+        choices=(
+            "swimming_x",
+            "swimming_away",
+            "walking_x",
+            "walking_away",
+            "flying_x",
+            "flying_away",
+        ),
         default="swimming_x",
         help="Locomotion task used for fitness evaluation.",
     )

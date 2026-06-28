@@ -7,16 +7,22 @@ import pytest
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
+    _flying_fitness,
     _has_nonparent_self_collision,
     _creature_volume,
+    evaluate_flying_away,
     evaluate_origin_distance,
     evaluate_walking_away,
+    evaluate_x_axis_flying,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
+    initialize_flying_model,
     initialize_walking_model,
     simulation_failure_reason,
 )
@@ -41,13 +47,22 @@ def test_task_physics_settings_are_distinct():
     walking_away = ET.fromstring(
         PhenotypeBuilder(genotype, max_node=500, task="walking_away").build()
     )
+    flying = ET.fromstring(
+        PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+    )
+    flying_away = ET.fromstring(
+        PhenotypeBuilder(genotype, max_node=500, task="flying_away").build()
+    )
 
     swimming_option = swimming.find("option")
     walking_option = walking.find("option")
     swimming_away_option = swimming_away.find("option")
     walking_away_option = walking_away.find("option")
+    flying_option = flying.find("option")
+    flying_away_option = flying_away.find("option")
     assert swimming_option is not None and walking_option is not None
     assert swimming_away_option is not None and walking_away_option is not None
+    assert flying_option is not None and flying_away_option is not None
     assert swimming_option.get("gravity") == "0 0 0"
     assert swimming_option.get("density") == "1000"
     assert swimming_away_option.get("gravity") == "0 0 0"
@@ -57,6 +72,10 @@ def test_task_physics_settings_are_distinct():
     assert walking_option.get("gravity") == "0 0 -9.81"
     assert walking_option.get("density") == "0"
     assert walking_option.get("viscosity") == "0"
+    assert flying_option.get("gravity") == "0 0 -9.81"
+    assert flying_option.get("density") == "0"
+    assert flying_away_option.get("gravity") == "0 0 -9.81"
+    assert flying_away_option.get("density") == "0"
 
     swimming_geom = swimming.find("./default/geom")
     walking_geom = walking.find("./default/geom")
@@ -81,6 +100,10 @@ def test_task_physics_settings_are_distinct():
     assert creature_geom.get("rgba") == "0.933333 0.603922 0.301961 1"
     assert walking_floor.get("contype") == "1"
     assert walking_floor.get("conaffinity") == "2"
+    flying_floor = flying.find('./worldbody/geom[@name="floor"]')
+    assert flying_floor is not None
+    assert flying_floor.get("contype") == "1"
+    assert flying_floor.get("conaffinity") == "2"
 
 
 def _collision_enabled(model, first_geom, second_geom):
@@ -187,14 +210,24 @@ def test_both_tasks_return_finite_results():
         genotype,
         WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
+    flying = evaluate_x_axis_flying(
+        genotype, FlyingEvaluationConfig(episode_seconds=0.02)
+    )
+    flying_away = evaluate_flying_away(
+        genotype, FlyingAwayEvaluationConfig(episode_seconds=0.02)
+    )
     assert not swimming.build_failed
     assert not walking.build_failed
     assert not swimming_away.build_failed
     assert not walking_away.build_failed
+    assert not flying.build_failed
+    assert not flying_away.build_failed
     assert swimming.simulated_seconds == 0.02
     assert walking.simulated_seconds == 0.02
     assert swimming_away.simulated_seconds == 0.02
     assert walking_away.simulated_seconds == 0.02
+    assert flying.simulated_seconds == 0.02
+    assert flying_away.simulated_seconds == 0.02
     assert swimming_away.origin_distance >= 0.0
     assert swimming_away.average_origin_speed >= 0.0
     assert walking_away.origin_distance >= 0.0
@@ -203,6 +236,34 @@ def test_both_tasks_return_finite_results():
     assert walking.height_loss >= 0.0
     assert walking_away.mean_upright_error >= 0.0
     assert walking_away.height_loss >= 0.0
+    assert flying.height_loss >= 0.0
+    assert flying_away.height_loss >= 0.0
+    assert flying_away.origin_distance >= 0.0
+
+
+def test_flying_initialization_raises_low_creature_above_floor():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.2, 0.8),
+                "joint_type": "free",
+            }
+        },
+    )
+    model = mujoco.MjModel.from_xml_string(
+        PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+    )
+    data = mujoco.MjData(model)
+
+    assert initialize_flying_model(model, data) is None
+
+    floor_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
+    )
+    body_geom_id = _creature_geom_ids(model)[0]
+    lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
+    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 1.0)
 
 
 def test_walking_initialization_raises_low_creature_above_floor():
@@ -495,6 +556,37 @@ def test_swimming_away_fitness_maximizes_final_distance():
 
     assert result.fitness == pytest.approx(result.origin_distance)
     assert result.origin_distance >= abs(result.forward_distance)
+
+
+def test_flying_fitness_uses_distance_over_ten_and_penalizes_ground_contact():
+    config = FlyingAwayEvaluationConfig(
+        energy_weight=0.0,
+        angular_speed_weight=0.0,
+        body_count_weight=0.0,
+        volume_weight=0.0,
+    )
+    metrics = {
+        "origin_distance": 20.0,
+        "forward_distance": 12.0,
+        "height_loss": 0.5,
+        "ground_touch_penalty": 0.25,
+        "no_ground_touch_bonus": 0.0,
+        "control_energy": 0.0,
+        "mean_angular_speed": 0.0,
+        "body_count": 1,
+        "total_volume": 0.0,
+    }
+
+    assert _flying_fitness(config, metrics, "origin_distance") == pytest.approx(
+        20.0 / 10.0 - 0.5 - 0.25
+    )
+
+    metrics["height_loss"] = 0.0
+    metrics["ground_touch_penalty"] = 0.0
+    metrics["no_ground_touch_bonus"] = config.no_ground_touch_bonus
+    assert _flying_fitness(config, metrics, "origin_distance") == pytest.approx(
+        20.0 / 10.0 + config.no_ground_touch_bonus
+    )
 
 
 def test_walking_away_fitness_maximizes_final_distance():

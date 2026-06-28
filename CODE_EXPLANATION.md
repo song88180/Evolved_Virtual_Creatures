@@ -208,7 +208,7 @@ mujoco_xml = ET.Element("mujoco", model="genotype_creature")
 It then adds standard MuJoCo sections:
 
 - `<compiler>`: sets angles to degrees.
-- `<option>`: sets simulation options. `swimming_x` and `swimming_away` use zero gravity with fluid density and viscosity, while `walking_x` and `walking_away` use Earth gravity without fluid drag.
+- `<option>`: sets simulation options. `swimming_x` and `swimming_away` use zero gravity with fluid density and viscosity, while `walking_x`, `walking_away`, `flying_x`, and `flying_away` use Earth gravity without fluid drag.
 - `<default>`: defines default geometry, joint, and motor properties.
 - `<worldbody>`: contains the floor, light, and creature bodies.
 - `<actuator>`: contains motors for motor-enabled hinge, slide, and ball joints.
@@ -433,7 +433,7 @@ The current script is intentionally minimal, but it leaves several natural place
 - Use `ConnectionGene.axis` to influence child orientation, not just joint axes.
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
-- Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `swimming_away`, and `walking_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward distance from the starting point.
+- Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward distance from the starting point. Flying tasks start above the floor, use horizontal distance divided by 10, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary

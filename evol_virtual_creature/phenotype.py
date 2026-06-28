@@ -53,10 +53,17 @@ class PhenotypeBuilder:
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
-        if task not in {"swimming_x", "swimming_away", "walking_x", "walking_away"}:
+        if task not in {
+            "swimming_x",
+            "swimming_away",
+            "walking_x",
+            "walking_away",
+            "flying_x",
+            "flying_away",
+        }:
             raise ValueError(
                 "task must be 'swimming_x', 'swimming_away', "
-                "'walking_x', or 'walking_away'"
+                "'walking_x', 'walking_away', 'flying_x', or 'flying_away'"
             )
 
         self.genotype = genotype
@@ -121,7 +128,7 @@ class PhenotypeBuilder:
         compiler.set("angle", "degree")
 
         option = ET.SubElement(self.mujoco_xml, "option")
-        if self.task not in {"walking_x", "walking_away"}:
+        if self.task in {"swimming_x", "swimming_away"}:
             option.set("gravity", "0 0 0")
             option.set("density", "1000")
             option.set("viscosity", "0.001")
@@ -164,7 +171,7 @@ class PhenotypeBuilder:
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
         geom_default.set("density", "500")
-        if self.task not in {"walking_x", "walking_away"}:
+        if self.task in {"swimming_x", "swimming_away"}:
             geom_default.set("friction", "1.0 0.5 0.5")
             collision_mask = "2" if self.self_collision else "0"
             geom_default.set("contype", collision_mask)
@@ -191,7 +198,7 @@ class PhenotypeBuilder:
         floor.set("size", "5 5 0.1")
         floor.set("pos", "0 0 -0.05")
         floor.set("material", "floor_material")
-        if self.task in {"walking_x", "walking_away"}:
+        if self.task in {"walking_x", "walking_away", "flying_x", "flying_away"}:
             floor.set("contype", "1")
             floor.set("conaffinity", "2")
         else:

@@ -9,6 +9,8 @@ import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.evaluation import (
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
@@ -109,6 +111,14 @@ def test_evaluate_and_evolve_accept_away_tasks(monkeypatch):
     assert evolve_cli.parse_args().task == "walking_away"
 
 
+def test_evaluate_and_evolve_accept_flying_tasks(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "flying_x"])
+    assert evaluate.parse_args().task == "flying_x"
+
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "flying_away"])
+    assert evolve_cli.parse_args().task == "flying_away"
+
+
 def test_evolve_accepts_volume_weight(monkeypatch):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--volume-weight", "0.25"]
@@ -199,6 +209,8 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
         OriginDistanceEvaluationConfig(episode_seconds=0.02),
         WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
+        FlyingEvaluationConfig(episode_seconds=0.02),
+        FlyingAwayEvaluationConfig(episode_seconds=0.02),
     ],
 )
 def test_evaluate_population_runs_in_processes_and_preserves_order(config):
@@ -247,6 +259,29 @@ def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
     assert default_geom.get("contype") == "2"
     assert floor is not None
     assert floor.get("contype") == "0"
+
+
+def test_saved_best_xml_preserves_flying_physics(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        FlyingEvaluationConfig(episode_seconds=0.02, self_collision=True),
+    )
+    root = ET.fromstring(path.read_text())
+    option = root.find("option")
+    default_geom = root.find("./default/geom")
+    floor = root.find("./worldbody/geom[@name='floor']")
+
+    assert option is not None
+    assert option.get("gravity") == "0 0 -9.81"
+    assert option.get("density") == "0"
+    assert default_geom is not None
+    assert default_geom.get("contype") == "2"
+    assert default_geom.get("conaffinity") == "3"
+    assert floor is not None
+    assert floor.get("contype") == "1"
 
 
 def test_saved_best_xml_preserves_walking_away_physics(tmp_path):

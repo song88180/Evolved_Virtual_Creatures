@@ -8,11 +8,14 @@ import mujoco
 
 from .evaluation import (
     EvaluationConfig,
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
+    initialize_flying_model,
     initialize_walking_model,
     settle_walking_model,
     simulation_failure_reason,
@@ -103,7 +106,7 @@ def save_x_axis_video(
     shadowsize: int = 4096,
     spotlight: bool = False,
 ):
-    """Render a selected swimming or walking task episode to MP4."""
+    """Render a selected swimming, walking, or flying task episode to MP4."""
     try:
         import imageio.v3 as iio
     except ImportError as error:
@@ -155,6 +158,10 @@ def save_x_axis_video(
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
         data.time = 0.0
+    elif isinstance(config, (FlyingEvaluationConfig, FlyingAwayEvaluationConfig)):
+        failure = initialize_flying_model(model, data)
+        if failure is not None:
+            raise RuntimeError(f"Cannot record video: {failure}")
 
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []

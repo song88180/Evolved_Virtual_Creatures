@@ -18,6 +18,8 @@ def _configure_video_rendering_backend() -> None:
 _configure_video_rendering_backend()
 
 from evol_virtual_creature.evaluation import (
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
     OriginDistanceEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
@@ -72,6 +74,14 @@ def main():
     print(f"Sideways drift: {result.sideways_drift:.6f}")
     if args.task.startswith("swimming"):
         print(f"Vertical drift: {result.vertical_drift:.6f}")
+    elif args.task.startswith("flying"):
+        print(f"Height loss: {result.height_loss:.6f}")
+        if result.first_ground_contact_time is None:
+            print("First ground contact: none")
+        else:
+            print(f"First ground contact: {result.first_ground_contact_time:.2f}")
+        print(f"Ground touch penalty: {result.ground_touch_penalty:.6f}")
+        print(f"No-ground-touch bonus: {result.no_ground_touch_bonus:.6f}")
     else:
         print(f"Height loss: {result.height_loss:.6f}")
         print(f"Mean upright error: {result.mean_upright_error:.6f}")
@@ -106,6 +116,10 @@ def main():
 
 
 def _config_type_for_task(task: str):
+    if task == "flying_x":
+        return FlyingEvaluationConfig
+    if task == "flying_away":
+        return FlyingAwayEvaluationConfig
     if task == "walking_x":
         return WalkingEvaluationConfig
     if task == "walking_away":
@@ -124,12 +138,21 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate a creature on a swimming_x, swimming_away, walking_x, or walking_away task.",
+        description=(
+            "Evaluate a creature on swimming, walking, or flying task variants."
+        ),
         formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--task",
-        choices=("swimming_x", "swimming_away", "walking_x", "walking_away"),
+        choices=(
+            "swimming_x",
+            "swimming_away",
+            "walking_x",
+            "walking_away",
+            "flying_x",
+            "flying_away",
+        ),
         default="swimming_x",
         help="Locomotion task to evaluate.",
     )

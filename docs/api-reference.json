@@ -505,7 +505,7 @@
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
             "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},
-            "task": {"Type": "str", "Default": "swimming_x", "Description": "Task environment/objective: swimming_x, swimming_away, walking_x, or walking_away."},
+            "task": {"Type": "str", "Default": "swimming_x", "Description": "Task environment/objective: swimming_x, swimming_away, walking_x, walking_away, flying_x, or flying_away."},
             "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable non-parent creature self-collision while retaining MuJoCo parent filtering."}
           },
           "Raises": ["ValueError"]
@@ -730,7 +730,7 @@
   },
   "evol_virtual_creature.evaluation": {
     "Overview": {
-      "Purpose": "Scores genotypes on x-axis and away-from-origin swimming/walking tasks using MuJoCo simulation and open-loop actuator control.",
+      "Purpose": "Scores genotypes on x-axis and away-from-origin swimming, walking, and flying tasks using MuJoCo simulation and open-loop actuator control.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
@@ -869,6 +869,28 @@
         "Attributes": {},
         "Methods": {},
         "Example": "config = WalkingAwayEvaluationConfig(episode_seconds=6.0, settle_seconds=1.0)"
+      },
+      "FlyingEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_x.",
+        "Constructor": {
+          "Signature": "FlyingEvaluationConfig(..., distance_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
+          "Parameters": {},
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {},
+        "Example": "config = FlyingEvaluationConfig(episode_seconds=6.0)"
+      },
+      "FlyingAwayEvaluationConfig": {
+        "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_away.",
+        "Constructor": {
+          "Signature": "FlyingAwayEvaluationConfig(..., distance_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
+          "Parameters": {},
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {},
+        "Example": "config = FlyingAwayEvaluationConfig(episode_seconds=6.0)"
       }
     },
     "Functions": {
@@ -906,6 +928,22 @@
         "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
         "Example": "result = evaluate_walking_away(genotype, WalkingAwayEvaluationConfig(episode_seconds=6.0))"
+      },
+      "evaluate_x_axis_flying": {
+        "Signature": "evaluate_x_axis_flying(genotype: Genotype, config: FlyingEvaluationConfig | None = None) -> FlyingEvaluationResult",
+        "Purpose": "Score flying_x using horizontal positive-X distance divided by 10, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
+        "Parameters": {},
+        "Returns": {"Type": "FlyingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_x_axis_flying(genotype, FlyingEvaluationConfig(episode_seconds=6.0))"
+      },
+      "evaluate_flying_away": {
+        "Signature": "evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None) -> FlyingEvaluationResult",
+        "Purpose": "Score flying_away using horizontal distance from origin divided by 10, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
+        "Parameters": {},
+        "Returns": {"Type": "FlyingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Raises": ["ValueError"],
+        "Example": "result = evaluate_flying_away(genotype, FlyingAwayEvaluationConfig(episode_seconds=6.0))"
       }
     },
     "Internal_Functions": {
@@ -922,7 +960,7 @@
   },
   "evol_virtual_creature.video": {
     "Overview": {
-      "Purpose": "Renders selected swimming or walking simulations to MP4 video and exposes controller helpers shared with rendering.",
+      "Purpose": "Renders selected swimming, walking, or flying simulations to MP4 video and exposes controller helpers shared with rendering.",
       "Main_Use_Cases": [
         "Build a genotype phenotype and record a selected-task episode",
         "Map generated actuator controllers to MuJoCo actuator IDs",

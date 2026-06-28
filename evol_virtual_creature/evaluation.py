@@ -16,6 +16,7 @@ DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
 _WALKING_FLOOR_CLEARANCE = 0.05
+_FLYING_FLOOR_CLEARANCE = 1.0
 
 
 @dataclass(frozen=True)
@@ -113,11 +114,63 @@ class WalkingAwayEvaluationConfig:
     max_abs_acceleration: float = 100_000.0
 
 
+@dataclass(frozen=True)
+class FlyingEvaluationConfig:
+    """Weights and simulation settings for x-axis flying fitness."""
+
+    episode_seconds: float = 10.0
+    max_node: int = 500
+    self_collision: bool = False
+    disallow_collision: bool = False
+    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
+    distance_weight: float = 0.1
+    energy_weight: float = 1e-7
+    angular_speed_weight: float = 0.01
+    height_loss_weight: float = 1.0
+    ground_touch_weight: float = 1.0
+    no_ground_touch_bonus: float = 1.0
+    body_count_weight: float = 0.001
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
+    build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
+
+
+@dataclass(frozen=True)
+class FlyingAwayEvaluationConfig:
+    """Weights and simulation settings for flying-away fitness."""
+
+    episode_seconds: float = 10.0
+    max_node: int = 500
+    self_collision: bool = False
+    disallow_collision: bool = False
+    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
+    distance_weight: float = 0.1
+    energy_weight: float = 1e-7
+    angular_speed_weight: float = 0.01
+    height_loss_weight: float = 1.0
+    ground_touch_weight: float = 1.0
+    no_ground_touch_bonus: float = 1.0
+    body_count_weight: float = 0.001
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    max_volume: float = 1.0
+    build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
+
+
 EvaluationConfig: TypeAlias = (
     SwimmingEvaluationConfig
     | WalkingEvaluationConfig
     | OriginDistanceEvaluationConfig
     | WalkingAwayEvaluationConfig
+    | FlyingEvaluationConfig
+    | FlyingAwayEvaluationConfig
 )
 
 
@@ -171,6 +224,29 @@ class OriginDistanceEvaluationResult:
     average_forward_speed: float
     sideways_drift: float
     vertical_drift: float
+    control_energy: float
+    mean_angular_speed: float
+    simulated_seconds: float
+    actuator_count: int
+    body_count: int
+    total_volume: float
+    build_failed: bool = False
+    disqualified: bool = False
+    failure_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class FlyingEvaluationResult:
+    fitness: float
+    origin_distance: float
+    average_origin_speed: float
+    forward_distance: float
+    average_forward_speed: float
+    sideways_drift: float
+    height_loss: float
+    first_ground_contact_time: float | None
+    ground_touch_penalty: float
+    no_ground_touch_bonus: float
     control_energy: float
     mean_angular_speed: float
     simulated_seconds: float
@@ -244,6 +320,58 @@ def evaluate_origin_distance(
         )
 
     return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
+
+
+def evaluate_x_axis_flying(
+    genotype: Genotype,
+    config: FlyingEvaluationConfig | None = None,
+) -> FlyingEvaluationResult:
+    """Score flight by horizontal positive-x travel while penalizing altitude loss."""
+    config = config or FlyingEvaluationConfig()
+    built = _build_model(genotype, config, "flying_x")
+    if isinstance(built, str):
+        return _failed_flying(config, built)
+    model, data, builder = built
+
+    failure = initialize_flying_model(model, data)
+    if failure is not None:
+        return _failed_flying(config, failure)
+
+    metrics = _run_flying_episode(model, data, builder, config)
+    if isinstance(metrics, str):
+        return _failed_flying(config, metrics)
+
+    fitness = _flying_fitness(config, metrics, distance_metric="forward_distance")
+    if not math.isfinite(fitness):
+        return _failed_flying(config, "Simulation produced a non-finite fitness.")
+
+    return FlyingEvaluationResult(fitness=fitness, **metrics)
+
+
+def evaluate_flying_away(
+    genotype: Genotype,
+    config: FlyingAwayEvaluationConfig | None = None,
+) -> FlyingEvaluationResult:
+    """Score flight by horizontal distance from the starting point."""
+    config = config or FlyingAwayEvaluationConfig()
+    built = _build_model(genotype, config, "flying_away")
+    if isinstance(built, str):
+        return _failed_flying(config, built)
+    model, data, builder = built
+
+    failure = initialize_flying_model(model, data)
+    if failure is not None:
+        return _failed_flying(config, failure)
+
+    metrics = _run_flying_episode(model, data, builder, config)
+    if isinstance(metrics, str):
+        return _failed_flying(config, metrics)
+
+    fitness = _flying_fitness(config, metrics, distance_metric="origin_distance")
+    if not math.isfinite(fitness):
+        return _failed_flying(config, "Simulation produced a non-finite fitness.")
+
+    return FlyingEvaluationResult(fitness=fitness, **metrics)
 
 
 def evaluate_walking_away(
@@ -349,6 +477,10 @@ def evaluate_x_axis_walking(
 
 def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
     """Dispatch evaluation from the concrete task configuration type."""
+    if isinstance(config, FlyingAwayEvaluationConfig):
+        return evaluate_flying_away(genotype, config)
+    if isinstance(config, FlyingEvaluationConfig):
+        return evaluate_x_axis_flying(genotype, config)
     if isinstance(config, WalkingAwayEvaluationConfig):
         return evaluate_walking_away(genotype, config)
     if isinstance(config, WalkingEvaluationConfig):
@@ -359,6 +491,10 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
 
 
 def task_for_config(config: EvaluationConfig) -> str:
+    if isinstance(config, FlyingAwayEvaluationConfig):
+        return "flying_away"
+    if isinstance(config, FlyingEvaluationConfig):
+        return "flying_x"
     if isinstance(config, WalkingAwayEvaluationConfig):
         return "walking_away"
     if isinstance(config, WalkingEvaluationConfig):
@@ -397,6 +533,39 @@ def initialize_walking_model(
         data.qpos[root_qpos_adr + 2] += required_shift
     mujoco.mj_forward(model, data)
     if _has_floor_penetration(model, data, floor_id):
+        return INITIAL_FLOOR_OVERLAP_REASON
+    return None
+
+
+def initialize_flying_model(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+) -> str | None:
+    """Place a flying creature above the floor before scoring starts."""
+    mujoco.mj_forward(model, data)
+    floor_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
+    )
+    if floor_id < 0:
+        return None
+
+    free_joint_ids = np.flatnonzero(
+        model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
+    )
+    if free_joint_ids.size == 0:
+        return "Flying creature has no free root joint."
+    root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
+    floor_z = float(data.geom_xpos[floor_id, 2])
+    lowest_z = min(
+        _box_lowest_world_z(model, data, geom_id)
+        for geom_id in range(model.ngeom)
+        if model.geom_bodyid[geom_id] != 0
+    )
+    required_shift = floor_z + _FLYING_FLOOR_CLEARANCE - lowest_z
+    if required_shift > 0.0:
+        data.qpos[root_qpos_adr + 2] += required_shift
+    mujoco.mj_forward(model, data)
+    if _has_floor_contact(model, data, floor_id):
         return INITIAL_FLOOR_OVERLAP_REASON
     return None
 
@@ -466,6 +635,118 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
             f"allowed volume {config.max_volume:.6f} m^3."
         )
     return model, mujoco.MjData(model), builder
+
+
+def _run_flying_episode(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    builder: PhenotypeBuilder,
+    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
+):
+    actuator_ids = _actuator_ids(model, builder.actuator_controllers)
+    body_count = max(model.nbody - 1, 0)
+    total_volume = _creature_volume(model)
+    target_direction = _normalized_target_direction(config.target_direction)
+    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    initial_root_position = data.qpos[:3].copy()
+    initial_center_of_mass = _creature_center_of_mass(model, data)
+    previous_time = data.time
+    control_energy = 0.0
+    actuator_gear_norms = np.linalg.norm(
+        model.actuator_gear[actuator_ids],
+        axis=1,
+    )
+    angular_speed_sum = 0.0
+    sample_count = 0
+    first_ground_contact_time = None
+    if floor_id >= 0 and _has_floor_contact(model, data, floor_id):
+        first_ground_contact_time = 0.0
+
+    max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
+    for _ in range(max_steps):
+        if data.time >= config.episode_seconds:
+            break
+        _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
+        ctrl = data.ctrl.copy()
+        mujoco.mj_step(model, data)
+        if (
+            config.disallow_collision
+            and _has_nonparent_self_collision(model, data)
+        ):
+            return DISALLOWED_COLLISION_REASON
+        if (
+            floor_id >= 0
+            and first_ground_contact_time is None
+            and _has_floor_contact(model, data, floor_id)
+        ):
+            first_ground_contact_time = float(data.time)
+        failure = simulation_failure_reason(data, previous_time, config)
+        if failure is not None:
+            return failure
+
+        dt = data.time - previous_time
+        previous_time = data.time
+        control_effort = ctrl[actuator_ids] * actuator_gear_norms
+        control_energy += float(dt * (control_effort @ control_effort))
+        if model.nv >= 6:
+            angular_speed_sum += float(np.linalg.norm(data.qvel[3:6]))
+        sample_count += 1
+
+    final_root_position = data.qpos[:3].copy()
+    final_center_of_mass = _creature_center_of_mass(model, data)
+    displacement = final_root_position - initial_root_position
+    horizontal_displacement = displacement.copy()
+    horizontal_displacement[2] = 0.0
+    forward_distance = float(horizontal_displacement @ np.asarray(target_direction))
+    origin_distance = float(np.linalg.norm(horizontal_displacement))
+    simulated_seconds = max(float(data.time), model.opt.timestep)
+    ground_touch_penalty = 0.0
+    no_ground_touch_bonus = config.no_ground_touch_bonus
+    if first_ground_contact_time is not None:
+        touch_fraction = min(first_ground_contact_time / config.episode_seconds, 1.0)
+        ground_touch_penalty = config.ground_touch_weight * (1.0 - touch_fraction)
+        no_ground_touch_bonus = 0.0
+    height_loss = max(
+        0.0, float(initial_center_of_mass[2] - final_center_of_mass[2])
+    )
+    lateral = horizontal_displacement - forward_distance * np.asarray(target_direction)
+
+    return {
+        "origin_distance": origin_distance,
+        "average_origin_speed": origin_distance / simulated_seconds,
+        "forward_distance": forward_distance,
+        "average_forward_speed": forward_distance / simulated_seconds,
+        "sideways_drift": abs(float(lateral[1])),
+        "height_loss": height_loss,
+        "first_ground_contact_time": first_ground_contact_time,
+        "ground_touch_penalty": ground_touch_penalty,
+        "no_ground_touch_bonus": no_ground_touch_bonus,
+        "control_energy": control_energy,
+        "mean_angular_speed": angular_speed_sum / max(sample_count, 1),
+        "simulated_seconds": simulated_seconds,
+        "actuator_count": len(actuator_ids),
+        "body_count": body_count,
+        "total_volume": total_volume,
+    }
+
+
+def _flying_fitness(
+    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
+    metrics: dict,
+    distance_metric: str,
+) -> float:
+    return (
+        config.distance_weight * metrics[distance_metric]
+        + metrics["no_ground_touch_bonus"]
+        - config.height_loss_weight * metrics["height_loss"]
+        - metrics["ground_touch_penalty"]
+        - config.energy_weight * metrics["control_energy"]
+        - config.angular_speed_weight * metrics["mean_angular_speed"]
+        - config.body_count_weight * metrics["body_count"]
+        - config.volume_weight * _excess_volume(
+            metrics["total_volume"], config.volume_penalty_cutoff
+        )
+    )
 
 
 def _run_controlled_episode(
@@ -590,6 +871,32 @@ def _failed_origin_distance(config: OriginDistanceEvaluationConfig, reason: str)
     )
 
 
+def _failed_flying(
+    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig, reason: str
+):
+    return FlyingEvaluationResult(
+        fitness=config.build_failure_fitness,
+        origin_distance=0.0,
+        average_origin_speed=0.0,
+        forward_distance=0.0,
+        average_forward_speed=0.0,
+        sideways_drift=0.0,
+        height_loss=0.0,
+        first_ground_contact_time=None,
+        ground_touch_penalty=0.0,
+        no_ground_touch_bonus=0.0,
+        control_energy=0.0,
+        mean_angular_speed=0.0,
+        simulated_seconds=0.0,
+        actuator_count=0,
+        body_count=0,
+        total_volume=0.0,
+        build_failed=reason != DISALLOWED_COLLISION_REASON,
+        disqualified=reason == DISALLOWED_COLLISION_REASON,
+        failure_reason=reason,
+    )
+
+
 def _failed_walking(config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig, reason: str):
     return WalkingEvaluationResult(
         fitness=config.build_failure_fitness,
@@ -623,6 +930,30 @@ def _normalized_target_direction(target_direction: Sequence[float]):
 
 def _excess_volume(total_volume: float, cutoff: float) -> float:
     return max(0.0, total_volume - cutoff)
+
+
+def _creature_center_of_mass(
+    model: mujoco.MjModel, data: mujoco.MjData
+) -> np.ndarray:
+    body_ids = np.arange(1, model.nbody)
+    masses = model.body_mass[body_ids]
+    total_mass = float(np.sum(masses))
+    if total_mass <= 0.0:
+        return data.qpos[:3].copy()
+    return (data.xipos[body_ids] * masses[:, None]).sum(axis=0) / total_mass
+
+
+def _has_floor_contact(
+    model: mujoco.MjModel, data: mujoco.MjData, floor_id: int
+) -> bool:
+    for contact in data.contact:
+        if floor_id not in contact.geom:
+            continue
+        first_geom, second_geom = map(int, contact.geom)
+        other_geom = second_geom if first_geom == floor_id else first_geom
+        if other_geom >= 0 and model.geom_bodyid[other_geom] != 0:
+            return True
+    return False
 
 
 def _creature_volume(model: mujoco.MjModel) -> float:
