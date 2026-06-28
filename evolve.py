@@ -99,15 +99,7 @@ def main() -> None:
                 save_generation_history=not args.latest_best_only,
             )
 
-            print(
-                f"gen={generation:04d} "
-                f"best={best.fitness:.6f} "
-                f"best_ever={best_so_far.fitness:.6f} "
-                f"mean={summary['mean_fitness']:.6f} "
-                f"bodies={summary['best_body_count']} "
-                f"failures={summary['build_failures']} "
-                f"disqualified={summary['disqualifications']}"
-            )
+            print(_format_generation_progress(generation, best, summary))
 
             if generation == args.generations:
                 break
@@ -125,6 +117,23 @@ def main() -> None:
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
     print(f"Metrics: {metrics_path}")
+
+
+def _format_generation_progress(
+    generation: int,
+    best: EvaluatedCreature,
+    summary: dict,
+) -> str:
+    """Return the one-line progress report printed during evolution."""
+    return (
+        f"gen={generation:04d} "
+        f"best={best.fitness:.6f} "
+        f"bodies={summary['best_body_count']} "
+        f"volume={best.metrics.get('total_volume', 0.0):.6f} "
+        f"energy={best.metrics.get('control_energy', 0.0):.6f} "
+        f"failures={summary['build_failures']} "
+        f"disqualified={summary['disqualifications']}"
+    )
 
 
 def _config_type_for_task(task: str):

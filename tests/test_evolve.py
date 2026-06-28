@@ -301,6 +301,33 @@ def test_save_generation_best_records_history_by_default(tmp_path):
     ).is_file()
 
 
+def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean():
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    creature = evolve_lib.EvaluatedCreature(
+        genotype=genotype,
+        fitness=2.5,
+        metrics={
+            "body_count": 7,
+            "total_volume": 0.125,
+            "control_energy": 3.75,
+        },
+    )
+    summary = {
+        "best_body_count": 7,
+        "build_failures": 1,
+        "disqualifications": 2,
+    }
+
+    line = evolve_cli._format_generation_progress(4, creature, summary)
+
+    assert line == (
+        "gen=0004 best=2.500000 bodies=7 volume=0.125000 "
+        "energy=3.750000 failures=1 disqualified=2"
+    )
+    assert "best_ever=" not in line
+    assert "mean=" not in line
+
+
 def test_generation_summary_counts_disqualifications():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = evolve_lib.EvaluatedCreature(
