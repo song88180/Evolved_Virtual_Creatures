@@ -9,7 +9,14 @@ import numpy as np
 
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
-from .phenotype import ActuatorController, PhenotypeBuilder
+from .phenotype import (
+    DEFAULT_FLYING_FLUID_COEF,
+    DEFAULT_FLYING_FLUID_DENSITY,
+    DEFAULT_FLYING_FLUID_SHAPE,
+    DEFAULT_FLYING_FLUID_VISCOSITY,
+    ActuatorController,
+    PhenotypeBuilder,
+)
 
 
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
@@ -119,6 +126,10 @@ class FlyingEvaluationConfig:
     """Weights and simulation settings for x-axis flying fitness."""
 
     episode_seconds: float = 10.0
+    fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
+    fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
+    fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
+    fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
     max_node: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
@@ -144,6 +155,10 @@ class FlyingAwayEvaluationConfig:
     """Weights and simulation settings for flying-away fitness."""
 
     episode_seconds: float = 10.0
+    fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
+    fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
+    fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
+    fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
     max_node: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
@@ -623,6 +638,10 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
+            fluid_density=getattr(config, "fluid_density", None),
+            fluid_viscosity=getattr(config, "fluid_viscosity", None),
+            fluid_shape=getattr(config, "fluid_shape", None),
+            fluid_coef=getattr(config, "fluid_coef", None),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:

@@ -77,6 +77,35 @@ def test_evaluate_accepts_self_collision(monkeypatch):
     assert evaluate.parse_args().self_collision
 
 
+def test_evaluate_accepts_flying_fluid_options(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate.py",
+            "--task",
+            "flying_x",
+            "--fluid-density",
+            "0.9",
+            "--fluid-viscosity",
+            "0.00002",
+            "--fluid-shape",
+            "none",
+            "--fluid-coef",
+            "0.1",
+            "0.2",
+            "0.3",
+            "0.4",
+            "0.5",
+        ],
+    )
+    args = evaluate.parse_args()
+    assert args.fluid_density == pytest.approx(0.9)
+    assert args.fluid_viscosity == pytest.approx(0.00002)
+    assert args.fluid_shape == "none"
+    assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
+
+
 def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -117,6 +146,35 @@ def test_evaluate_and_evolve_accept_flying_tasks(monkeypatch):
 
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "flying_away"])
     assert evolve_cli.parse_args().task == "flying_away"
+
+
+def test_evolve_accepts_flying_fluid_options(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evolve.py",
+            "--task",
+            "flying_away",
+            "--fluid-density",
+            "0.9",
+            "--fluid-viscosity",
+            "0.00002",
+            "--fluid-shape",
+            "none",
+            "--fluid-coef",
+            "0.1",
+            "0.2",
+            "0.3",
+            "0.4",
+            "0.5",
+        ],
+    )
+    args = evolve_cli.parse_args()
+    assert args.fluid_density == pytest.approx(0.9)
+    assert args.fluid_viscosity == pytest.approx(0.00002)
+    assert args.fluid_shape == "none"
+    assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
 
 
 def test_evolve_accepts_volume_weight(monkeypatch):
@@ -276,8 +334,11 @@ def test_saved_best_xml_preserves_flying_physics(tmp_path):
 
     assert option is not None
     assert option.get("gravity") == "0 0 -9.81"
-    assert option.get("density") == "0"
+    assert option.get("density") == "1.225"
+    assert option.get("viscosity") == "1.8e-05"
     assert default_geom is not None
+    assert default_geom.get("fluidshape") == "ellipsoid"
+    assert default_geom.get("fluidcoef") == "0.5 0.25 1.5 1.0 1.0"
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "3"
     assert floor is not None

@@ -105,6 +105,10 @@ def _write_best_xml(
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
+            fluid_density=getattr(config, "fluid_density", None),
+            fluid_viscosity=getattr(config, "fluid_viscosity", None),
+            fluid_shape=getattr(config, "fluid_shape", None),
+            fluid_coef=getattr(config, "fluid_coef", None),
         ).build()
     except PhenotypeBuildAbort:
         return

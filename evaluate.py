@@ -38,15 +38,23 @@ def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
     config_type = _config_type_for_task(args.task)
-    config = config_type(
-        episode_seconds=args.duration,
-        body_count_weight=args.body_count_weight,
-        volume_weight=args.volume_weight,
-        volume_penalty_cutoff=args.volume_penalty_cutoff,
-        max_volume=args.max_volume,
-        self_collision=args.self_collision,
-        disallow_collision=args.disallow_collision,
-    )
+    config_kwargs = {
+        "episode_seconds": args.duration,
+        "body_count_weight": args.body_count_weight,
+        "volume_weight": args.volume_weight,
+        "volume_penalty_cutoff": args.volume_penalty_cutoff,
+        "max_volume": args.max_volume,
+        "self_collision": args.self_collision,
+        "disallow_collision": args.disallow_collision,
+    }
+    if args.task.startswith("flying"):
+        config_kwargs.update(
+            fluid_density=args.fluid_density,
+            fluid_viscosity=args.fluid_viscosity,
+            fluid_shape=args.fluid_shape,
+            fluid_coef=tuple(args.fluid_coef),
+        )
+    config = config_type(**config_kwargs)
     result = evaluate_for_task(genotype, config)
 
     if result.disqualified:
@@ -193,6 +201,32 @@ def parse_args() -> argparse.Namespace:
         help="Maximum allowed generated creature volume in cubic meters.",
     )
     parser.add_argument(
+        "--fluid-density",
+        type=float,
+        default=FlyingEvaluationConfig.fluid_density,
+        help="Fluid density for flying tasks in kg/m^3.",
+    )
+    parser.add_argument(
+        "--fluid-viscosity",
+        type=float,
+        default=FlyingEvaluationConfig.fluid_viscosity,
+        help="Fluid viscosity for flying tasks in Pa*s.",
+    )
+    parser.add_argument(
+        "--fluid-shape",
+        choices=("none", "ellipsoid"),
+        default=FlyingEvaluationConfig.fluid_shape,
+        help="MuJoCo fluid shape approximation for flying creature geoms.",
+    )
+    parser.add_argument(
+        "--fluid-coef",
+        type=float,
+        nargs=5,
+        default=list(FlyingEvaluationConfig.fluid_coef),
+        metavar=("BLUNT", "SLENDER", "ANGULAR", "KUTTA", "MAGNUS"),
+        help="Five MuJoCo fluid coefficients used by flying creature geoms.",
+    )
+    parser.add_argument(
         "--self-collision",
         action="store_true",
         help=(
@@ -262,6 +296,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--volume-weight must be non-negative")
     if args.body_count_weight < 0.0:
         parser.error("--body-count-weight must be non-negative")
+    if args.fluid_density < 0.0:
+        parser.error("--fluid-density must be non-negative")
+    if args.fluid_viscosity < 0.0:
+        parser.error("--fluid-viscosity must be non-negative")
     if args.fps < 1:
         parser.error("--fps must be at least 1")
     if args.width < 1 or args.height < 1:

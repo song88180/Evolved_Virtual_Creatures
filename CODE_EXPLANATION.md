@@ -208,7 +208,7 @@ mujoco_xml = ET.Element("mujoco", model="genotype_creature")
 It then adds standard MuJoCo sections:
 
 - `<compiler>`: sets angles to degrees.
-- `<option>`: sets simulation options. `swimming_x` and `swimming_away` use zero gravity with fluid density and viscosity, while `walking_x`, `walking_away`, `flying_x`, and `flying_away` use Earth gravity without fluid drag.
+- `<option>`: sets simulation options. `swimming_x` and `swimming_away` use zero gravity with water-like fluid density and viscosity, `walking_x` and `walking_away` use Earth gravity without fluid drag, and `flying_x` and `flying_away` use Earth gravity with air-like MuJoCo fluid density, viscosity, and geom fluid coefficients.
 - `<default>`: defines default geometry, joint, and motor properties.
 - `<worldbody>`: contains the floor, light, and creature bodies.
 - `<actuator>`: contains motors for motor-enabled hinge, slide, and ball joints.

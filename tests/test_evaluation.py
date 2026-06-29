@@ -73,13 +73,19 @@ def test_task_physics_settings_are_distinct():
     assert walking_option.get("density") == "0"
     assert walking_option.get("viscosity") == "0"
     assert flying_option.get("gravity") == "0 0 -9.81"
-    assert flying_option.get("density") == "0"
+    assert flying_option.get("density") == "1.225"
+    assert flying_option.get("viscosity") == "1.8e-05"
     assert flying_away_option.get("gravity") == "0 0 -9.81"
-    assert flying_away_option.get("density") == "0"
+    assert flying_away_option.get("density") == "1.225"
+    assert flying_away_option.get("viscosity") == "1.8e-05"
 
     swimming_geom = swimming.find("./default/geom")
     walking_geom = walking.find("./default/geom")
+    flying_geom = flying.find("./default/geom")
     assert swimming_geom is not None and walking_geom is not None
+    assert flying_geom is not None
+    assert flying_geom.get("fluidshape") == "ellipsoid"
+    assert flying_geom.get("fluidcoef") == "0.5 0.25 1.5 1.0 1.0"
     assert swimming_geom.get("contype") == "0"
     assert walking_geom.get("contype") == "2"
     assert walking_geom.get("conaffinity") == "1"
@@ -104,6 +110,39 @@ def test_task_physics_settings_are_distinct():
     assert flying_floor is not None
     assert flying_floor.get("contype") == "1"
     assert flying_floor.get("conaffinity") == "2"
+
+
+def test_flying_fluid_settings_compile_in_mujoco():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    mjcf = PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+    model = mujoco.MjModel.from_xml_string(mjcf)
+
+    assert model.opt.density == pytest.approx(1.225)
+    assert model.opt.viscosity == pytest.approx(0.000018)
+
+
+def test_flying_fluid_settings_can_be_overridden():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    root = ET.fromstring(
+        PhenotypeBuilder(
+            genotype,
+            max_node=500,
+            task="flying_x",
+            fluid_density=0.9,
+            fluid_viscosity=0.00002,
+            fluid_shape="none",
+            fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+        ).build()
+    )
+    option = root.find("option")
+    default_geom = root.find("./default/geom")
+
+    assert option is not None
+    assert option.get("density") == "0.9"
+    assert option.get("viscosity") == "2e-05"
+    assert default_geom is not None
+    assert default_geom.get("fluidshape") == "none"
+    assert default_geom.get("fluidcoef") == "0.1 0.2 0.3 0.4 0.5"
 
 
 def _collision_enabled(model, first_geom, second_geom):

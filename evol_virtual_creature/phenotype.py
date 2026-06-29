@@ -29,6 +29,10 @@ PLANE_REFLECTIONS = {
 }
 IDENTITY_REFLECTION = (1.0, 1.0, 1.0)
 DEFAULT_ARTICULATED_ROOT_AXIS = (0.0, 1.0, 0.0)
+DEFAULT_FLYING_FLUID_DENSITY = 1.225
+DEFAULT_FLYING_FLUID_VISCOSITY = 0.000018
+DEFAULT_FLYING_FLUID_SHAPE = "ellipsoid"
+DEFAULT_FLYING_FLUID_COEF = (0.5, 0.25, 1.5, 1.0, 1.0)
 
 
 @dataclass
@@ -50,6 +54,10 @@ class PhenotypeBuilder:
         max_node: int,
         task: str = "swimming_x",
         self_collision: bool = False,
+        fluid_density: float | None = None,
+        fluid_viscosity: float | None = None,
+        fluid_shape: str | None = None,
+        fluid_coef: Sequence[float] | None = None,
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
@@ -70,6 +78,23 @@ class PhenotypeBuilder:
         self.max_node = max_node
         self.task = task
         self.self_collision = self_collision
+        self.fluid_density = (
+            DEFAULT_FLYING_FLUID_DENSITY
+            if fluid_density is None
+            else float(fluid_density)
+        )
+        self.fluid_viscosity = (
+            DEFAULT_FLYING_FLUID_VISCOSITY
+            if fluid_viscosity is None
+            else float(fluid_viscosity)
+        )
+        self.fluid_shape = fluid_shape or DEFAULT_FLYING_FLUID_SHAPE
+        self.fluid_coef = tuple(
+            DEFAULT_FLYING_FLUID_COEF if fluid_coef is None else fluid_coef
+        )
+        if len(self.fluid_coef) != 5:
+            raise ValueError("fluid_coef must contain exactly five values")
+        self.fluid_coef = tuple(float(value) for value in self.fluid_coef)
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
@@ -132,6 +157,10 @@ class PhenotypeBuilder:
             option.set("gravity", "0 0 0")
             option.set("density", "1000")
             option.set("viscosity", "0.001")
+        elif self.task in {"flying_x", "flying_away"}:
+            option.set("gravity", "0 0 -9.81")
+            option.set("density", str(self.fluid_density))
+            option.set("viscosity", str(self.fluid_viscosity))
         else:
             option.set("gravity", "0 0 -9.81")
             option.set("density", "0")
@@ -171,6 +200,9 @@ class PhenotypeBuilder:
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
         geom_default.set("density", "500")
+        if self.task in {"flying_x", "flying_away"}:
+            geom_default.set("fluidshape", self.fluid_shape)
+            geom_default.set("fluidcoef", vec_to_str(self.fluid_coef))
         if self.task in {"swimming_x", "swimming_away"}:
             geom_default.set("friction", "1.0 0.5 0.5")
             collision_mask = "2" if self.self_collision else "0"
