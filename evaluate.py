@@ -173,7 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duration",
         type=float,
-        default=6.0,
+        default=10.0,
         help="Measured episode duration in seconds.",
     )
     parser.add_argument(

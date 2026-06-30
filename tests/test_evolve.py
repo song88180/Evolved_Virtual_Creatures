@@ -473,7 +473,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
             (
                 "default: swimming_x",
                 "default: examples/example_genotype.json",
-                "default: 6.0",
+                "default: 10.0",
                 "default: disabled",
                 "default: 30",
                 "default: 4096",
