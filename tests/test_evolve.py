@@ -11,7 +11,7 @@ from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.evaluation import (
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
-    OriginDistanceEvaluationConfig,
+    SwimmingAwayEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
@@ -265,7 +265,7 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
     [
         SwimmingEvaluationConfig(episode_seconds=0.02),
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
-        OriginDistanceEvaluationConfig(episode_seconds=0.02),
+        SwimmingAwayEvaluationConfig(episode_seconds=0.02),
         WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
         FlyingEvaluationConfig(episode_seconds=0.02),
         FlyingAwayEvaluationConfig(episode_seconds=0.02),
@@ -303,7 +303,7 @@ def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
-        OriginDistanceEvaluationConfig(episode_seconds=0.02, self_collision=True),
+        SwimmingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
     option = root.find("option")

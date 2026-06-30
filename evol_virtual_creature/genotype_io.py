@@ -14,6 +14,14 @@ GenotypeSpec = Mapping[str, Mapping[str, Any]]
 LEGACY_NODE_FIELDS = {"joint_axis"}
 
 
+def _referenced_child_node_names(spec: GenotypeSpec) -> set[str]:
+    return {
+        connection_spec["child"]
+        for node_spec in spec.values()
+        for connection_spec in node_spec.get("children", [])
+    }
+
+
 def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
     """
     Build a concrete genotype from a compact declarative recipe.
@@ -22,6 +30,7 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
     list contains connection dictionaries that are passed to ConnectionGene.
     """
     nodes: Dict[str, NodeGene] = {}
+    child_node_names = _referenced_child_node_names(spec)
 
     for node_name, node_spec in spec.items():
         node_kwargs = {
@@ -29,6 +38,12 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
             for key, value in node_spec.items()
             if key != "children" and key not in LEGACY_NODE_FIELDS
         }
+        if (
+            node_name != root
+            and node_name in child_node_names
+            and "joint_type" not in node_kwargs
+        ):
+            node_kwargs["joint_type"] = "fixed"
         nodes[node_name] = NodeGene(name=node_name, **node_kwargs)
 
     if root not in nodes:

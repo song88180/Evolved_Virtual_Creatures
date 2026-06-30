@@ -832,10 +832,10 @@
         "Methods": {},
         "Example": "if result.build_failed: print(result.failure_reason)"
       },
-      "OriginDistanceEvaluationConfig": {
+      "SwimmingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for swimming_away distance-from-origin fitness.",
         "Constructor": {
-          "Signature": "OriginDistanceEvaluationConfig(..., distance_weight: float = 1.0)",
+          "Signature": "SwimmingAwayEvaluationConfig(..., distance_weight: float = 1.0)",
           "Parameters": {
             "distance_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for final distance from the starting point."}
           },
@@ -843,7 +843,7 @@
         },
         "Attributes": {},
         "Methods": {},
-        "Example": "config = OriginDistanceEvaluationConfig(episode_seconds=6.0)"
+        "Example": "config = SwimmingAwayEvaluationConfig(episode_seconds=6.0)"
       },
       "WalkingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_x land locomotion.",
@@ -906,12 +906,12 @@
         "Example": "result = evaluate_x_axis_swimming(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
       },
       "evaluate_origin_distance": {
-        "Signature": "evaluate_origin_distance(genotype: Genotype, config: OriginDistanceEvaluationConfig | None = None) -> OriginDistanceEvaluationResult",
+        "Signature": "evaluate_origin_distance(genotype: Genotype, config: SwimmingAwayEvaluationConfig | None = None) -> OriginDistanceEvaluationResult",
         "Purpose": "Score swimming_away by measuring final root distance from the starting point.",
         "Parameters": {},
         "Returns": {"Type": "OriginDistanceEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
-        "Example": "result = evaluate_origin_distance(genotype, OriginDistanceEvaluationConfig(episode_seconds=6.0))"
+        "Example": "result = evaluate_origin_distance(genotype, SwimmingAwayEvaluationConfig(episode_seconds=6.0))"
       },
       "evaluate_x_axis_walking": {
         "Signature": "evaluate_x_axis_walking(genotype: Genotype, config: WalkingEvaluationConfig | None = None) -> WalkingEvaluationResult",

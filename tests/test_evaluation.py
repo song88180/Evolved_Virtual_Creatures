@@ -9,7 +9,7 @@ from evol_virtual_creature.evaluation import (
     INITIAL_FLOOR_OVERLAP_REASON,
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
-    OriginDistanceEvaluationConfig,
+    SwimmingAwayEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
@@ -244,7 +244,7 @@ def test_both_tasks_return_finite_results():
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
     swimming_away = evaluate_origin_distance(
-        genotype, OriginDistanceEvaluationConfig(episode_seconds=0.02)
+        genotype, SwimmingAwayEvaluationConfig(episode_seconds=0.02)
     )
     walking_away = evaluate_walking_away(
         genotype,
@@ -623,7 +623,7 @@ def _single_motor_genotype(motor_gear):
                     "control_phase": math.pi / 2.0,
                 }],
             },
-            "limb": {"size": (0.1, 0.05, 0.05)},
+            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
         },
     )
 
@@ -646,7 +646,7 @@ def test_swimming_away_fitness_maximizes_final_distance():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_origin_distance(
         genotype,
-        OriginDistanceEvaluationConfig(
+        SwimmingAwayEvaluationConfig(
             episode_seconds=0.02,
             energy_weight=0.0,
             angular_speed_weight=0.0,

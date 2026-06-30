@@ -8,7 +8,8 @@ from typing import List, Tuple
 ATTACHMENT_FACES = ("+x", "-x", "+y", "-y", "+z", "-z")
 SYMMETRY_PLANES = ("xy", "xz", "yz")
 ARTICULATED_JOINT_TYPES = ("hinge", "slide", "ball")
-JOINT_TYPES = ("free", *ARTICULATED_JOINT_TYPES)
+CHILD_JOINT_TYPES = ("fixed", *ARTICULATED_JOINT_TYPES)
+JOINT_TYPES = ("free", *CHILD_JOINT_TYPES)
 
 
 @dataclass

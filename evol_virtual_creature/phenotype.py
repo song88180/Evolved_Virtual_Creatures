@@ -307,6 +307,8 @@ class PhenotypeBuilder:
         node_depth: int,
         logical_path: Tuple[int, ...],
     ):
+        if node.joint_type == "fixed":
+            return
         if node.joint_type == "free":
             joint = ET.SubElement(parent_xml, "joint")
             joint.set("type", "free")

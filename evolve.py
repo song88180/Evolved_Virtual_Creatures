@@ -12,7 +12,7 @@ import random
 from evol_virtual_creature.evaluation import (
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
-    OriginDistanceEvaluationConfig,
+    SwimmingAwayEvaluationConfig,
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
@@ -159,7 +159,7 @@ def _config_type_for_task(task: str):
     if task == "walking_away":
         return WalkingAwayEvaluationConfig
     if task == "swimming_away":
-        return OriginDistanceEvaluationConfig
+        return SwimmingAwayEvaluationConfig
     return SwimmingEvaluationConfig
 
 

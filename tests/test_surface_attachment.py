@@ -84,6 +84,58 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
     assert "joint_axis" not in saved_data["archived_nodes"][0]
 
 
+def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
+    genotype_path = tmp_path / "fixed_default.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+            },
+            "limb": {"size": [0.1, 0.1, 0.1]},
+            "template": {"size": [0.1, 0.1, 0.1]},
+        },
+    }))
+
+    genotype = load_genotype_from_json(genotype_path)
+
+    assert genotype.nodes["limb"].joint_type == "fixed"
+    assert genotype.nodes["template"].joint_type == "hinge"
+
+
+def test_fixed_joint_emits_rigid_child_without_joint_or_motor():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="fixed",
+            ),
+        },
+    )
+
+    mjcf = PhenotypeBuilder(genotype, max_node=2).build()
+    xml_root = ET.fromstring(mjcf)
+    child_body = xml_root.find("./worldbody/body/body")
+
+    assert child_body.find("joint") is None
+    assert xml_root.findall("./actuator/motor") == []
+
+    model = mujoco.MjModel.from_xml_string(mjcf)
+    assert model.nbody == 3
+    assert model.nv == 6
+    assert model.nu == 0
+
+
 def test_child_hinge_and_geom_meet_parent_surface():
     genotype = build_genotype(
         root="body",
@@ -98,7 +150,7 @@ def test_child_hinge_and_geom_meet_parent_surface():
                     "surface_uv": (0.5, -0.5),
                 }],
             },
-            "limb": {"size": (0.4, 0.3, 0.2)},
+            "limb": {"size": (0.4, 0.3, 0.2), "joint_type": "hinge"},
         },
     )
 

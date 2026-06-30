@@ -38,7 +38,7 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert child_name in genotype.nodes
 
     child = genotype.nodes[child_name]
-    assert child.joint_type == "hinge"
+    assert child.joint_type in {"fixed", "hinge", "ball"}
     assert all(0.04 <= value <= 0.30 for value in child.size)
     assert 1 <= child.recursive_limit <= 8
     assert child.size != (0.1, 0.05, 0.05)
@@ -159,7 +159,7 @@ def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
         random.Random(1),
     )
     assert genotype.nodes["body"].joint_type == "free"
-    assert genotype.nodes["limb"].joint_type == "ball"
+    assert genotype.nodes["limb"].joint_type in {"fixed", "ball"}
     assert "joint_type" in description
 
 
@@ -184,15 +184,21 @@ def test_joint_type_mutation_allows_slide_when_enabled():
 
     genotype._mutate_parameter_path(
         ("node", "limb", "joint_type"),
-        random.Random(1),
+        random.Random(0),
     )
 
     assert genotype.nodes["limb"].joint_type == "slide"
 
 
+def test_node_accepts_fixed_joint_type():
+    node = NodeGene(name="rigid", size=(0.1, 0.1, 0.1), joint_type="fixed")
+
+    assert node.joint_type == "fixed"
+
+
 def test_node_rejects_unknown_joint_type():
     with pytest.raises(ValueError, match="Unknown joint type"):
-        NodeGene(name="bad", size=(0.1, 0.1, 0.1), joint_type="fixed")
+        NodeGene(name="bad", size=(0.1, 0.1, 0.1), joint_type="welded")
 
 
 def test_template_new_node_addition_attaches_connection_before_mutating_it():

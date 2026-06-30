@@ -81,7 +81,7 @@ class WalkingEvaluationConfig:
 
 
 @dataclass(frozen=True)
-class OriginDistanceEvaluationConfig:
+class SwimmingAwayEvaluationConfig:
     """Weights and simulation settings for swimming-away fitness."""
 
     episode_seconds: float = 10.0
@@ -190,7 +190,7 @@ class FlyingAwayEvaluationConfig:
 EvaluationConfig: TypeAlias = (
     SwimmingEvaluationConfig
     | WalkingEvaluationConfig
-    | OriginDistanceEvaluationConfig
+    | SwimmingAwayEvaluationConfig
     | WalkingAwayEvaluationConfig
     | FlyingEvaluationConfig
     | FlyingAwayEvaluationConfig
@@ -315,10 +315,10 @@ def evaluate_x_axis_swimming(
 
 def evaluate_origin_distance(
     genotype: Genotype,
-    config: OriginDistanceEvaluationConfig | None = None,
+    config: SwimmingAwayEvaluationConfig | None = None,
 ) -> OriginDistanceEvaluationResult:
     """Score a genotype by final root distance from its starting position."""
-    config = config or OriginDistanceEvaluationConfig()
+    config = config or SwimmingAwayEvaluationConfig()
     built = _build_model(genotype, config, "swimming_away")
     if isinstance(built, str):
         return _failed_origin_distance(config, built)
@@ -508,7 +508,7 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
         return evaluate_walking_away(genotype, config)
     if isinstance(config, WalkingEvaluationConfig):
         return evaluate_x_axis_walking(genotype, config)
-    if isinstance(config, OriginDistanceEvaluationConfig):
+    if isinstance(config, SwimmingAwayEvaluationConfig):
         return evaluate_origin_distance(genotype, config)
     return evaluate_x_axis_swimming(genotype, config)
 
@@ -522,7 +522,7 @@ def task_for_config(config: EvaluationConfig) -> str:
         return "walking_away"
     if isinstance(config, WalkingEvaluationConfig):
         return "walking_x"
-    if isinstance(config, OriginDistanceEvaluationConfig):
+    if isinstance(config, SwimmingAwayEvaluationConfig):
         return "swimming_away"
     return "swimming_x"
 
@@ -888,7 +888,7 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
     )
 
 
-def _failed_origin_distance(config: OriginDistanceEvaluationConfig, reason: str):
+def _failed_origin_distance(config: SwimmingAwayEvaluationConfig, reason: str):
     return OriginDistanceEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,

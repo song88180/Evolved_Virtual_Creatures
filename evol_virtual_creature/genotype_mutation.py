@@ -5,7 +5,7 @@ import copy
 import random
 
 from .genes import (
-    ARTICULATED_JOINT_TYPES,
+    CHILD_JOINT_TYPES,
     ATTACHMENT_FACES,
     SYMMETRY_PLANES,
     ConnectionGene,
@@ -351,7 +351,7 @@ class GenotypeMutationMixin:
     ) -> Tuple[str, float, bool]:
         field_specs = {
             "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
-            "joint_type": ("articulated_joint_type", 0.0, False),
+            "joint_type": ("child_joint_type", 0.0, False),
             "recursive_limit": (
                 "positive_integer",
                 self.MIN_INTEGER_MUTATION_STD,
@@ -386,12 +386,12 @@ class GenotypeMutationMixin:
         }
         return field_specs[field_name]
 
-    def _articulated_joint_types_for_mutation(self) -> Tuple[str, ...]:
+    def _child_joint_types_for_mutation(self) -> Tuple[str, ...]:
         if getattr(self, "_allow_slide_joint_for_mutation", False):
-            return ARTICULATED_JOINT_TYPES
+            return CHILD_JOINT_TYPES
         return tuple(
             joint_type
-            for joint_type in ARTICULATED_JOINT_TYPES
+            for joint_type in CHILD_JOINT_TYPES
             if joint_type != "slide"
         )
 
@@ -404,11 +404,11 @@ class GenotypeMutationMixin:
     ) -> Any:
         mutation_kind = mutation_kind.lower()
 
-        if mutation_kind == "articulated_joint_type":
+        if mutation_kind == "child_joint_type":
             return random_source.choice(
                 [
                     joint_type
-                    for joint_type in self._articulated_joint_types_for_mutation()
+                    for joint_type in self._child_joint_types_for_mutation()
                     if joint_type != value
                 ]
             )
@@ -728,7 +728,7 @@ class GenotypeMutationMixin:
             name=self._new_node_name("node"),
             size=tuple(random_source.uniform(0.04, 0.30) for _ in range(3)),
             joint_type=random_source.choice(
-                self._articulated_joint_types_for_mutation()
+                self._child_joint_types_for_mutation()
             ),
             recursive_limit=random_source.randint(1, 8),
         )
