@@ -585,6 +585,28 @@ def test_creature_above_maximum_volume_is_rejected_before_simulation():
     assert "exceeds maximum allowed volume" in result.failure_reason
 
 
+def test_body_below_minimum_volume_is_rejected_before_flying_bonus():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.01, 0.01, 0.001),
+                "joint_type": "free",
+            }
+        },
+    )
+
+    result = evaluate_x_axis_flying(
+        genotype,
+        FlyingEvaluationConfig(episode_seconds=0.02, min_body_volume=1e-6),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert "below the minimum allowed volume" in result.failure_reason
+    assert result.no_ground_touch_bonus == 0.0
+
+
 def _single_motor_genotype(motor_gear):
     return build_genotype(
         root="body",

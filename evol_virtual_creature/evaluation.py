@@ -22,8 +22,10 @@ from .phenotype import (
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
+MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed volume."
 _WALKING_FLOOR_CLEARANCE = 0.05
 _FLYING_FLOOR_CLEARANCE = 1.0
+_DEFAULT_MIN_BODY_VOLUME = 1e-6
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class SwimmingEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -69,6 +72,7 @@ class WalkingEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -91,6 +95,7 @@ class OriginDistanceEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -114,6 +119,7 @@ class WalkingAwayEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -143,6 +149,7 @@ class FlyingEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -172,6 +179,7 @@ class FlyingAwayEvaluationConfig:
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -646,7 +654,13 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
         return str(error)
-    model = mujoco.MjModel.from_xml_string(mjcf)
+    try:
+        model = mujoco.MjModel.from_xml_string(mjcf)
+    except ValueError as error:
+        return str(error)
+    volume_failure = _creature_volume_failure_reason(model, config)
+    if volume_failure is not None:
+        return volume_failure
     total_volume = _creature_volume(model)
     if total_volume > config.max_volume:
         return (
@@ -981,14 +995,43 @@ def _has_floor_contact(
 
 
 def _creature_volume(model: mujoco.MjModel) -> float:
-    total_volume = 0.0
+    return sum(_creature_body_volumes(model).values())
+
+
+def _creature_body_volumes(model: mujoco.MjModel) -> dict[int, float]:
+    body_volumes = {body_id: 0.0 for body_id in range(1, model.nbody)}
+    if not body_volumes:
+        return body_volumes
+
     for geom_id in range(model.ngeom):
-        if model.geom_bodyid[geom_id] == 0:
+        body_id = int(model.geom_bodyid[geom_id])
+        if body_id == 0:
             continue
         if model.geom_type[geom_id] != mujoco.mjtGeom.mjGEOM_BOX:
             continue
-        total_volume += 8.0 * float(np.prod(model.geom_size[geom_id, :3]))
-    return total_volume
+        body_volumes[body_id] += 8.0 * float(np.prod(model.geom_size[geom_id, :3]))
+    return body_volumes
+
+
+def _creature_volume_failure_reason(
+    model: mujoco.MjModel,
+    config: EvaluationConfig,
+) -> str | None:
+    min_body_volume = getattr(config, "min_body_volume", 0.0)
+    if min_body_volume <= 0.0:
+        return None
+
+    for body_id, body_volume in _creature_body_volumes(model).items():
+        if body_volume >= min_body_volume:
+            continue
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+        if body_name is None:
+            body_name = f"body {body_id}"
+        return (
+            f"{MINIMUM_BODY_VOLUME_REASON} {body_name!r} has volume "
+            f"{body_volume:.6g} m^3; minimum is {min_body_volume:.6g} m^3."
+        )
+    return None
 
 
 def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):

@@ -43,6 +43,7 @@ def main():
         "body_count_weight": args.body_count_weight,
         "volume_weight": args.volume_weight,
         "volume_penalty_cutoff": args.volume_penalty_cutoff,
+        "min_body_volume": args.min_body_volume,
         "max_volume": args.max_volume,
         "self_collision": args.self_collision,
         "disallow_collision": args.disallow_collision,
@@ -195,6 +196,12 @@ def parse_args() -> argparse.Namespace:
         help="Creature volume in cubic meters allowed without a fitness penalty.",
     )
     parser.add_argument(
+        "--min-body-volume",
+        type=float,
+        default=SwimmingEvaluationConfig.min_body_volume,
+        help="Minimum required volume for each generated body section in cubic meters.",
+    )
+    parser.add_argument(
         "--max-volume",
         type=float,
         default=SwimmingEvaluationConfig.max_volume,
@@ -292,6 +299,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--volume-penalty-cutoff must be non-negative")
     if args.max_volume <= args.volume_penalty_cutoff:
         parser.error("--max-volume must be greater than --volume-penalty-cutoff")
+    if args.min_body_volume < 0.0:
+        parser.error("--min-body-volume must be non-negative")
     if args.volume_weight < 0.0:
         parser.error("--volume-weight must be non-negative")
     if args.body_count_weight < 0.0:
