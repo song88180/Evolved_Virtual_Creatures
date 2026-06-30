@@ -15,6 +15,7 @@ from evol_virtual_creature.evaluation import (
     WalkingEvaluationConfig,
     _flying_fitness,
     _has_nonparent_self_collision,
+    _run_flying_episode,
     _creature_volume,
     evaluate_flying_away,
     evaluate_origin_distance,
@@ -278,6 +279,45 @@ def test_both_tasks_return_finite_results():
     assert flying.height_loss >= 0.0
     assert flying_away.height_loss >= 0.0
     assert flying_away.origin_distance >= 0.0
+
+
+def test_flying_distance_stops_at_first_ground_contact():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.1, 0.1, 0.1),
+                "joint_type": "free",
+            }
+        },
+    )
+    config = FlyingAwayEvaluationConfig(
+        episode_seconds=0.7,
+        fluid_density=0.0,
+        fluid_viscosity=0.0,
+    )
+    builder = PhenotypeBuilder(
+        genotype,
+        max_node=config.max_node,
+        task="flying_away",
+        fluid_density=config.fluid_density,
+        fluid_viscosity=config.fluid_viscosity,
+        fluid_shape=config.fluid_shape,
+        fluid_coef=config.fluid_coef,
+    )
+    model = mujoco.MjModel.from_xml_string(builder.build())
+    data = mujoco.MjData(model)
+
+    assert initialize_flying_model(model, data) is None
+    data.qvel[0] = 10.0
+
+    metrics = _run_flying_episode(model, data, builder, config)
+
+    assert not isinstance(metrics, str)
+    assert metrics["first_ground_contact_time"] is not None
+    assert metrics["simulated_seconds"] == pytest.approx(config.episode_seconds)
+    assert metrics["origin_distance"] > 0.0
+    assert abs(float(data.qpos[0]) - metrics["origin_distance"]) > 0.1
 
 
 def test_flying_initialization_raises_low_creature_above_floor():

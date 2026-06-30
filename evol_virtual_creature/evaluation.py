@@ -678,8 +678,10 @@ def _run_flying_episode(
     angular_speed_sum = 0.0
     sample_count = 0
     first_ground_contact_time = None
+    distance_measurement_position = None
     if floor_id >= 0 and _has_floor_contact(model, data, floor_id):
         first_ground_contact_time = 0.0
+        distance_measurement_position = initial_root_position.copy()
 
     max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
     for _ in range(max_steps):
@@ -699,6 +701,7 @@ def _run_flying_episode(
             and _has_floor_contact(model, data, floor_id)
         ):
             first_ground_contact_time = float(data.time)
+            distance_measurement_position = data.qpos[:3].copy()
         failure = simulation_failure_reason(data, previous_time, config)
         if failure is not None:
             return failure
@@ -713,7 +716,9 @@ def _run_flying_episode(
 
     final_root_position = data.qpos[:3].copy()
     final_center_of_mass = _creature_center_of_mass(model, data)
-    displacement = final_root_position - initial_root_position
+    if distance_measurement_position is None:
+        distance_measurement_position = final_root_position
+    displacement = distance_measurement_position - initial_root_position
     horizontal_displacement = displacement.copy()
     horizontal_displacement[2] = 0.0
     forward_distance = float(horizontal_displacement @ np.asarray(target_direction))
