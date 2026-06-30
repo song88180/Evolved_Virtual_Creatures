@@ -285,58 +285,76 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--body-count-weight",
         type=float,
-        default=SwimmingEvaluationConfig.body_count_weight,
-        help="Fitness penalty per generated body.",
+        default=None,
+        help="Fitness penalty per generated body. (default: task default)",
     )
     parser.add_argument(
         "--volume-weight",
         type=float,
-        default=SwimmingEvaluationConfig.volume_weight,
-        help="Fitness penalty per cubic meter of generated creature volume.",
+        default=None,
+        help=(
+            "Fitness penalty per cubic meter of generated creature volume. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--volume-penalty-cutoff",
         type=float,
-        default=SwimmingEvaluationConfig.volume_penalty_cutoff,
-        help="Creature volume in cubic meters allowed without a fitness penalty.",
+        default=None,
+        help=(
+            "Creature volume in cubic meters allowed without a fitness penalty. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--min-body-volume",
         type=float,
-        default=SwimmingEvaluationConfig.min_body_volume,
-        help="Minimum required volume for each generated body section in cubic meters.",
+        default=None,
+        help=(
+            "Minimum required volume for each generated body section in cubic meters. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--max-volume",
         type=float,
-        default=SwimmingEvaluationConfig.max_volume,
-        help="Maximum allowed generated creature volume in cubic meters.",
+        default=None,
+        help=(
+            "Maximum allowed generated creature volume in cubic meters. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--fluid-density",
         type=float,
-        default=FlyingEvaluationConfig.fluid_density,
-        help="Fluid density for flying tasks in kg/m^3.",
+        default=None,
+        help="Fluid density for flying tasks in kg/m^3. (default: task default)",
     )
     parser.add_argument(
         "--fluid-viscosity",
         type=float,
-        default=FlyingEvaluationConfig.fluid_viscosity,
-        help="Fluid viscosity for flying tasks in Pa*s.",
+        default=None,
+        help="Fluid viscosity for flying tasks in Pa*s. (default: task default)",
     )
     parser.add_argument(
         "--fluid-shape",
         choices=("none", "ellipsoid"),
-        default=FlyingEvaluationConfig.fluid_shape,
-        help="MuJoCo fluid shape approximation for flying creature geoms.",
+        default=None,
+        help=(
+            "MuJoCo fluid shape approximation for flying creature geoms. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--fluid-coef",
         type=float,
         nargs=5,
-        default=list(FlyingEvaluationConfig.fluid_coef),
+        default=None,
         metavar=("BLUNT", "SLENDER", "ANGULAR", "KUTTA", "MAGNUS"),
-        help="Five MuJoCo fluid coefficients used by flying creature geoms.",
+        help=(
+            "Five MuJoCo fluid coefficients used by flying creature geoms. "
+            "(default: task default)"
+        ),
     )
     parser.add_argument(
         "--self-collision",
@@ -369,8 +387,33 @@ def parse_args() -> argparse.Namespace:
         help="Random seed for reproducible evolution. (default: random)",
     )
     args = parser.parse_args()
+    _apply_task_defaults(args)
     _validate_args(args)
     return args
+
+
+def _apply_task_defaults(args: argparse.Namespace) -> None:
+    """Fill task-dependent CLI defaults after ``--task`` has been parsed."""
+    task_defaults = _config_type_for_task(args.task)()
+    for name in (
+        "body_count_weight",
+        "volume_weight",
+        "volume_penalty_cutoff",
+        "min_body_volume",
+        "max_volume",
+    ):
+        if getattr(args, name) is None:
+            setattr(args, name, getattr(task_defaults, name))
+
+    flying_defaults = (
+        task_defaults if args.task.startswith("flying") else FlyingEvaluationConfig()
+    )
+    for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
+        if getattr(args, name) is None:
+            value = getattr(flying_defaults, name)
+            if name == "fluid_coef":
+                value = list(value)
+            setattr(args, name, value)
 
 
 def _validate_args(args: argparse.Namespace) -> None:

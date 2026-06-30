@@ -177,6 +177,94 @@ def test_evolve_accepts_flying_fluid_options(monkeypatch):
     assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
 
 
+@pytest.mark.parametrize("module", [evaluate, evolve_cli])
+def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
+    class TaskDefaults:
+        body_count_weight = 0.012
+        volume_weight = 0.034
+        volume_penalty_cutoff = 0.056
+        min_body_volume = 0.000078
+        max_volume = 0.9
+        fluid_density = 0.8
+        fluid_viscosity = 0.00003
+        fluid_shape = "none"
+        fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
+
+    monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
+    monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
+
+    args = module.parse_args()
+
+    assert args.body_count_weight == pytest.approx(0.012)
+    assert args.volume_weight == pytest.approx(0.034)
+    assert args.volume_penalty_cutoff == pytest.approx(0.056)
+    assert args.min_body_volume == pytest.approx(0.000078)
+    assert args.max_volume == pytest.approx(0.9)
+    assert args.fluid_density == pytest.approx(0.8)
+    assert args.fluid_viscosity == pytest.approx(0.00003)
+    assert args.fluid_shape == "none"
+    assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
+
+
+@pytest.mark.parametrize("module", [evaluate, evolve_cli])
+def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
+    class TaskDefaults:
+        body_count_weight = 0.012
+        volume_weight = 0.034
+        volume_penalty_cutoff = 0.056
+        min_body_volume = 0.000078
+        max_volume = 0.9
+        fluid_density = 0.8
+        fluid_viscosity = 0.00003
+        fluid_shape = "none"
+        fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
+
+    monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            module.__file__,
+            "--task",
+            "flying_x",
+            "--body-count-weight",
+            "0.2",
+            "--volume-weight",
+            "0.3",
+            "--volume-penalty-cutoff",
+            "0.4",
+            "--min-body-volume",
+            "0.0005",
+            "--max-volume",
+            "1.6",
+            "--fluid-density",
+            "1.7",
+            "--fluid-viscosity",
+            "0.00008",
+            "--fluid-shape",
+            "ellipsoid",
+            "--fluid-coef",
+            "0.6",
+            "0.7",
+            "0.8",
+            "0.9",
+            "1.0",
+        ],
+    )
+
+    args = module.parse_args()
+
+    assert args.body_count_weight == pytest.approx(0.2)
+    assert args.volume_weight == pytest.approx(0.3)
+    assert args.volume_penalty_cutoff == pytest.approx(0.4)
+    assert args.min_body_volume == pytest.approx(0.0005)
+    assert args.max_volume == pytest.approx(1.6)
+    assert args.fluid_density == pytest.approx(1.7)
+    assert args.fluid_viscosity == pytest.approx(0.00008)
+    assert args.fluid_shape == "ellipsoid"
+    assert args.fluid_coef == pytest.approx([0.6, 0.7, 0.8, 0.9, 1.0])
+
+
 def test_evolve_accepts_volume_weight(monkeypatch):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--volume-weight", "0.25"]
