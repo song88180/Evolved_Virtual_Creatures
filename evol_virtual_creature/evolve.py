@@ -131,6 +131,7 @@ def initial_population(
     rng: random.Random,
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
+    allow_root_mutation: bool = True,
 ) -> list[Genotype]:
     """Build the starting population from the seed genotype and random mutations."""
     population = [copy.deepcopy(seed_genotype)]
@@ -142,6 +143,7 @@ def initial_population(
             rng,
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
+            allow_root_mutation=allow_root_mutation,
         )
         population.append(genotype)
     return population
@@ -157,6 +159,7 @@ def next_population(
     rng: random.Random,
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
+    allow_root_mutation: bool = True,
 ) -> list[Genotype]:
     """Select elites and tournament winners, then mutate them into the next generation."""
     next_generation = [
@@ -174,6 +177,7 @@ def next_population(
             rng,
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
+            allow_root_mutation=allow_root_mutation,
         )
         next_generation.append(child)
 
@@ -197,6 +201,7 @@ def mutate_quietly(
     rng: random.Random,
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
+    allow_root_mutation: bool = True,
 ) -> None:
     """Apply genotype mutations while suppressing mutation log output."""
     if mutation_count == 0:
@@ -207,6 +212,7 @@ def mutate_quietly(
             rng=rng,
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
+            allow_root_mutation=allow_root_mutation,
         )
 
 

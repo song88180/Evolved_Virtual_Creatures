@@ -485,3 +485,33 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
     after_builder = PhenotypeBuilder(genotype, max_node=100)
     after_builder.build()
     assert after_builder.body_counter == before_builder.body_counter
+
+
+def test_disallow_root_mutation_excludes_root_node_fields():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.3, 0.2, 0.1),
+                joint_type="free",
+                orientation=(0.0, 0.0, 0.0),
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    paths = genotype._collect_mutable_parameters(
+        allow_topology_mutations=False,
+        allow_root_mutation=False,
+    )
+
+    assert not any(path[:2] == ("node", "body") for path in paths)
+    assert ("node", "limb", "joint_type") in paths
+    assert any(path[0] == "connection" for path in paths)
+

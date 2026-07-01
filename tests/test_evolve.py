@@ -322,6 +322,16 @@ def test_evolve_allows_topology_mutations_by_default(monkeypatch):
     assert not evolve_cli.parse_args().disallow_topology_mutations
 
 
+def test_evolve_accepts_disallow_root_mutation(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--disallow-root-mutation"])
+    assert evolve_cli.parse_args().disallow_root_mutation
+
+
+def test_evolve_allows_root_mutation_by_default(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert not evolve_cli.parse_args().disallow_root_mutation
+
+
 def test_evolve_accepts_allow_slide_joint(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--allow-slide-joint"])
     assert evolve_cli.parse_args().allow_slide_joint
@@ -642,6 +652,7 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
         _rng,
         allow_topology_mutations=True,
         allow_slide_joint=False,
+        allow_root_mutation=True,
     ):
         settings.append((allow_topology_mutations, allow_slide_joint))
 
@@ -670,6 +681,7 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
         _rng,
         allow_topology_mutations=True,
         allow_slide_joint=False,
+        allow_root_mutation=True,
     ):
         settings.append((allow_topology_mutations, allow_slide_joint))
 
@@ -701,6 +713,7 @@ def test_population_helpers_forward_allow_slide_joint(monkeypatch):
         _rng,
         allow_topology_mutations=True,
         allow_slide_joint=False,
+        allow_root_mutation=True,
     ):
         settings.append(allow_slide_joint)
 
@@ -724,3 +737,43 @@ def test_population_helpers_forward_allow_slide_joint(monkeypatch):
     )
 
     assert settings == [True, True]
+
+
+def test_population_helpers_forward_root_mutation_setting(monkeypatch):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    evaluated = [
+        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+    ]
+    settings = []
+
+    def record_mutation(
+        _genotype,
+        _mutation_count,
+        _rng,
+        allow_topology_mutations=True,
+        allow_slide_joint=False,
+        allow_root_mutation=True,
+    ):
+        settings.append(allow_root_mutation)
+
+    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
+    evolve_lib.initial_population(
+        seed_genotype=genotype,
+        population_size=2,
+        initial_mutations=1,
+        rng=random.Random(1),
+        allow_root_mutation=False,
+    )
+    evolve_lib.next_population(
+        evaluated=evaluated,
+        population_size=2,
+        elite_count=1,
+        tournament_size=1,
+        min_mutations=1,
+        max_mutations=1,
+        rng=random.Random(1),
+        allow_root_mutation=False,
+    )
+
+    assert settings == [False, False]
+

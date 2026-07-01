@@ -76,6 +76,7 @@ def main() -> None:
         rng=rng,
         allow_topology_mutations=not args.disallow_topology_mutations,
         allow_slide_joint=args.allow_slide_joint,
+        allow_root_mutation=not args.disallow_root_mutation,
     )
 
     best_so_far: EvaluatedCreature | None = None
@@ -126,6 +127,7 @@ def main() -> None:
                 rng=rng,
                 allow_topology_mutations=not args.disallow_topology_mutations,
                 allow_slide_joint=args.allow_slide_joint,
+                allow_root_mutation=not args.disallow_root_mutation,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -264,6 +266,11 @@ def parse_args() -> argparse.Namespace:
             "Only mutate properties of existing node and connection genes; "
             "do not add, remove, replace, or relink genes."
         ),
+    )
+    parser.add_argument(
+        "--disallow-root-mutation",
+        action="store_true",
+        help="Do not mutate the root node gene during evolution.",
     )
     parser.add_argument(
         "--allow-slide-joint",
