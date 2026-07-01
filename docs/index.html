@@ -111,6 +111,7 @@
   "nodes": {
     "body": {
       "size": [0.15, 0.08, 0.06],
+      "shape": "box",
       "joint_type": "free",
       "children": [
         {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]}
@@ -132,7 +133,12 @@
 }</code></pre>
           </figure>
           <p>
-            Nodes and connections may also include <code>orientation</code> as
+            Nodes may include <code>shape</code> as <code>box</code>,
+            <code>ellipsoid</code>, <code>capsule</code>, or
+            <code>cylinder</code>. The <code>size</code> vector stores local
+            bounding half extents. Capsules and cylinders use local X as their
+            main axis and normalize Y/Z to the same circular radius. Nodes and
+            connections may also include <code>orientation</code> as
             Euler angles in degrees. A root node orientation rotates the root
             body relative to world axes. A connection orientation rotates the
             child body relative to its parent; the child local <code>+X</code>
@@ -158,7 +164,7 @@
               <p>
                 The expanded MuJoCo XML model. <code>PhenotypeBuilder</code>
                 validates the graph, emits body quaternions from genetic
-                orientations, keeps rotated child boxes attached to parent
+                orientations, keeps rotated child body shapes attached to parent
                 faces, creates joints, and records actuator controller metadata.
               </p>
             </section>

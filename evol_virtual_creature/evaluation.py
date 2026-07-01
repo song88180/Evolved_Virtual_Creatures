@@ -547,7 +547,7 @@ def initialize_walking_model(
     root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
     floor_z = float(data.geom_xpos[floor_id, 2])
     lowest_z = min(
-        _box_lowest_world_z(model, data, geom_id)
+        _geom_lowest_world_z(model, data, geom_id)
         for geom_id in range(model.ngeom)
         if model.geom_bodyid[geom_id] != 0
     )
@@ -580,7 +580,7 @@ def initialize_flying_model(
     root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
     floor_z = float(data.geom_xpos[floor_id, 2])
     lowest_z = min(
-        _box_lowest_world_z(model, data, geom_id)
+        _geom_lowest_world_z(model, data, geom_id)
         for geom_id in range(model.ngeom)
         if model.geom_bodyid[geom_id] != 0
     )
@@ -593,15 +593,30 @@ def initialize_flying_model(
     return None
 
 
-def _box_lowest_world_z(
+def _geom_lowest_world_z(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     geom_id: int,
 ) -> float:
     rotation = data.geom_xmat[geom_id].reshape(3, 3)
-    vertical_half_extent = float(
-        np.abs(rotation[2]) @ model.geom_size[geom_id, :3]
-    )
+    geom_type = model.geom_type[geom_id]
+    size = model.geom_size[geom_id]
+    if geom_type in {
+        mujoco.mjtGeom.mjGEOM_BOX,
+        mujoco.mjtGeom.mjGEOM_ELLIPSOID,
+    }:
+        vertical_half_extent = float(np.abs(rotation[2]) @ size[:3])
+    elif geom_type in {
+        mujoco.mjtGeom.mjGEOM_CAPSULE,
+        mujoco.mjtGeom.mjGEOM_CYLINDER,
+    }:
+        radius = float(size[0])
+        half_length = float(size[1])
+        axis_vertical = float(rotation[2, 2])
+        radial_vertical = math.sqrt(max(0.0, 1.0 - axis_vertical * axis_vertical))
+        vertical_half_extent = abs(axis_vertical) * half_length + radius * radial_vertical
+    else:
+        vertical_half_extent = float(np.max(size[:3]))
     return float(data.geom_xpos[geom_id, 2] - vertical_half_extent)
 
 
@@ -1007,9 +1022,26 @@ def _creature_body_volumes(model: mujoco.MjModel) -> dict[int, float]:
         body_id = int(model.geom_bodyid[geom_id])
         if body_id == 0:
             continue
-        if model.geom_type[geom_id] != mujoco.mjtGeom.mjGEOM_BOX:
+        geom_type = model.geom_type[geom_id]
+        size = model.geom_size[geom_id]
+        if geom_type == mujoco.mjtGeom.mjGEOM_BOX:
+            volume = 8.0 * float(np.prod(size[:3]))
+        elif geom_type == mujoco.mjtGeom.mjGEOM_ELLIPSOID:
+            volume = 4.0 / 3.0 * math.pi * float(np.prod(size[:3]))
+        elif geom_type == mujoco.mjtGeom.mjGEOM_CAPSULE:
+            radius = float(size[0])
+            half_length = float(size[1])
+            volume = (
+                2.0 * math.pi * radius * radius * half_length
+                + 4.0 / 3.0 * math.pi * radius ** 3
+            )
+        elif geom_type == mujoco.mjtGeom.mjGEOM_CYLINDER:
+            radius = float(size[0])
+            half_length = float(size[1])
+            volume = 2.0 * math.pi * radius * radius * half_length
+        else:
             continue
-        body_volumes[body_id] += 8.0 * float(np.prod(model.geom_size[geom_id, :3]))
+        body_volumes[body_id] += volume
     return body_volumes
 
 

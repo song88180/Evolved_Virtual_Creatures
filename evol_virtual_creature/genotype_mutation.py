@@ -6,11 +6,14 @@ import random
 
 from .genes import (
     CHILD_JOINT_TYPES,
+    BODY_SHAPES,
+    ROUND_BODY_SHAPES,
     ATTACHMENT_FACES,
     SYMMETRY_PLANES,
     ConnectionGene,
     NodeGene,
     child_orientation_is_valid,
+    normalize_size,
     orientation_for_parent_face,
     wrap_degrees,
 )
@@ -115,6 +118,7 @@ class GenotypeMutationMixin:
         node_mutation_specs = (
             "size",
             "joint_type",
+            "shape",
             "recursive_limit",
             "orientation",
         )
@@ -278,6 +282,7 @@ class GenotypeMutationMixin:
                 min_mutation_std,
             )
             setattr(owner, field_name, mutated_value)
+            self._repair_node_size_if_needed(owner, field_name)
             self._repair_connection_orientation_if_needed(owner, field_name)
             return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
 
@@ -300,7 +305,9 @@ class GenotypeMutationMixin:
 
         final_values = type(original_values)(values)
         setattr(owner, field_name, final_values)
+        self._repair_node_size_if_needed(owner, field_name)
         self._repair_connection_orientation_if_needed(owner, field_name)
+        final_values = getattr(owner, field_name)
 
         return (
             f"{target}.{field_name}[{index}]: {old_value!r} -> {mutated_value!r}"
@@ -368,6 +375,7 @@ class GenotypeMutationMixin:
         field_specs = {
             "size": ("positive", self.MIN_SIZE_MUTATION_STD, False),
             "joint_type": ("child_joint_type", 0.0, False),
+            "shape": ("body_shape", 0.0, False),
             "recursive_limit": (
                 "positive_integer",
                 self.MIN_INTEGER_MUTATION_STD,
@@ -411,6 +419,17 @@ class GenotypeMutationMixin:
             ),
         }
         return field_specs[field_name]
+
+    def _repair_node_size_if_needed(
+        self,
+        owner: Any,
+        field_name: str,
+    ) -> None:
+        if not isinstance(owner, NodeGene):
+            return
+        if field_name not in {"shape", "size"}:
+            return
+        owner.size = normalize_size(owner.size, owner.shape)
 
     def _repair_connection_orientation_if_needed(
         self,
@@ -463,6 +482,11 @@ class GenotypeMutationMixin:
                     for joint_type in self._child_joint_types_for_mutation()
                     if joint_type != value
                 ]
+            )
+
+        if mutation_kind == "body_shape":
+            return random_source.choice(
+                [shape for shape in BODY_SHAPES if shape != value]
             )
 
         if mutation_kind == "attachment_face":
@@ -803,6 +827,7 @@ class GenotypeMutationMixin:
             joint_type=random_source.choice(
                 self._child_joint_types_for_mutation()
             ),
+            shape=random_source.choice(BODY_SHAPES),
             recursive_limit=random_source.randint(1, 8),
             orientation=tuple(
                 random_source.uniform(-180.0, 180.0) for _ in range(3)
@@ -874,18 +899,35 @@ class GenotypeMutationMixin:
         child_node: NodeGene,
         parent_node: NodeGene,
     ) -> None:
-        child_node.size = tuple(
-            max(
-                parent_dimension * self.NEW_CHILD_SIZE_MIN_SCALE,
-                min(
-                    child_dimension,
-                    parent_dimension * self.NEW_CHILD_SIZE_MAX_SCALE,
-                ),
+        if child_node.shape in ROUND_BODY_SHAPES:
+            parent_radius_extent = min(parent_node.size[1], parent_node.size[2])
+            radius = min(child_node.size[1], child_node.size[2])
+            child_node.size = (
+                self._clamp_child_dimension(child_node.size[0], parent_node.size[0]),
+                self._clamp_child_dimension(radius, parent_radius_extent),
+                self._clamp_child_dimension(radius, parent_radius_extent),
             )
+            return
+
+        child_node.size = tuple(
+            self._clamp_child_dimension(child_dimension, parent_dimension)
             for child_dimension, parent_dimension in zip(
                 child_node.size,
                 parent_node.size,
             )
+        )
+
+    def _clamp_child_dimension(
+        self,
+        child_dimension: float,
+        parent_dimension: float,
+    ) -> float:
+        return max(
+            parent_dimension * self.NEW_CHILD_SIZE_MIN_SCALE,
+            min(
+                child_dimension,
+                parent_dimension * self.NEW_CHILD_SIZE_MAX_SCALE,
+            ),
         )
 
     def _add_new_connection(
@@ -1036,6 +1078,7 @@ class GenotypeMutationMixin:
         mutable_fields = (
             "size",
             "joint_type",
+            "shape",
             "recursive_limit",
             "orientation",
         )
@@ -1063,6 +1106,7 @@ class GenotypeMutationMixin:
                     min_mutation_std,
                 ),
             )
+            self._repair_node_size_if_needed(owner, field_name)
             return field_name
 
         original_values = getattr(owner, field_name)
@@ -1081,6 +1125,7 @@ class GenotypeMutationMixin:
                 values[1] += min_mutation_std
 
         setattr(owner, field_name, type(original_values)(values))
+        self._repair_node_size_if_needed(owner, field_name)
         return f"{field_name}[{index}]"
 
     def _resolve_new_node_path(

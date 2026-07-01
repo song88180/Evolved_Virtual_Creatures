@@ -18,6 +18,8 @@ SYMMETRY_PLANES = ("xy", "xz", "yz")
 ARTICULATED_JOINT_TYPES = ("hinge", "slide", "ball")
 CHILD_JOINT_TYPES = ("fixed", *ARTICULATED_JOINT_TYPES)
 JOINT_TYPES = ("free", *CHILD_JOINT_TYPES)
+BODY_SHAPES = ("box", "ellipsoid", "capsule", "cylinder")
+ROUND_BODY_SHAPES = ("capsule", "cylinder")
 IDENTITY_ORIENTATION = (0.0, 0.0, 0.0)
 FACE_ALIGNED_ORIENTATIONS = {
     "+x": (0.0, 0.0, 0.0),
@@ -50,6 +52,23 @@ def normalize_surface_uv(
         raise ValueError(f"{field_name} coordinates must be finite")
     if any(value < -1.0 or value > 1.0 for value in normalized):
         raise ValueError(f"{field_name} coordinates must be between -1 and 1")
+    return normalized
+
+
+def normalize_size(
+    size: Tuple[float, float, float],
+    shape: str,
+) -> Tuple[float, float, float]:
+    if len(size) != 3:
+        raise ValueError("size must contain exactly three dimensions")
+    normalized = tuple(float(value) for value in size)
+    if any(not math.isfinite(value) for value in normalized):
+        raise ValueError("size dimensions must be finite")
+    if any(value <= 0.0 for value in normalized):
+        raise ValueError("size dimensions must be greater than zero")
+    if shape in ROUND_BODY_SHAPES:
+        radius = min(normalized[1], normalized[2])
+        normalized = (normalized[0], radius, radius)
     return normalized
 
 
@@ -163,8 +182,16 @@ class NodeGene:
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
+    shape: str = "box"
 
     def __post_init__(self):
+        if self.shape not in BODY_SHAPES:
+            valid_shapes = ", ".join(BODY_SHAPES)
+            raise ValueError(
+                f"Unknown body shape {self.shape!r}; expected one of "
+                f"{valid_shapes}"
+            )
+        self.size = normalize_size(self.size, self.shape)
         self.orientation = normalize_orientation(self.orientation)
         if self.joint_type not in JOINT_TYPES:
             valid_types = ", ".join(JOINT_TYPES)

@@ -143,11 +143,12 @@
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph, including the optional root-body orientation.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = \"box\")",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
-            "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "MuJoCo box half-size for generated geometry."},
+            "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Local bounding half extents for generated geometry. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius."},
             "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
+            "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
             "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."},
             "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."}
@@ -156,14 +157,15 @@
         },
         "Attributes": {
           "name": {"Type": "str", "Description": "Symbolic node name."},
-          "size": {"Type": "Tuple[float, float, float]", "Description": "Generated box geometry size."},
+          "size": {"Type": "Tuple[float, float, float]", "Description": "Generated body geometry half extents."},
+          "shape": {"Type": "str", "Description": "Generated body geometry shape."},
           "joint_type": {"Type": "str", "Description": "Generated joint type."},
           "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
           "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."},
           "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees; used for the generated root body when this node is the genotype root."}
         },
         "Methods": {},
-        "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\", orientation=(0.0, 0.0, 15.0))"
+        "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\", orientation=(0.0, 0.0, 15.0), shape=\"ellipsoid\")"
       }
     },
     "Functions": {

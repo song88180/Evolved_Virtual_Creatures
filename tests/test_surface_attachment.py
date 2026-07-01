@@ -223,6 +223,89 @@ def test_orientation_round_trips_through_json(tmp_path):
     assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
+def test_shape_round_trips_through_json(tmp_path):
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                shape="ellipsoid",
+            ),
+            "limb": NodeGene(name="limb", size=(0.1, 0.08, 0.04), shape="capsule"),
+        },
+    )
+    path = tmp_path / "shaped.json"
+
+    save_genotype_to_json(genotype, path)
+    data = json.loads(path.read_text())
+    loaded = load_genotype_from_json(path)
+
+    assert data["nodes"]["body"]["shape"] == "ellipsoid"
+    assert data["nodes"]["limb"]["shape"] == "capsule"
+    assert loaded.nodes["body"].shape == "ellipsoid"
+    assert loaded.nodes["limb"].shape == "capsule"
+    assert loaded.nodes["limb"].size == (0.1, 0.04, 0.04)
+
+
+def test_missing_shape_loads_as_box(tmp_path):
+    genotype_path = tmp_path / "missing_shape.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
+        },
+    }))
+
+    genotype = load_genotype_from_json(genotype_path)
+
+    assert genotype.nodes["body"].shape == "box"
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected_type", "expected_size"),
+    [
+        ("box", mujoco.mjtGeom.mjGEOM_BOX, (0.3, 0.2, 0.1)),
+        ("ellipsoid", mujoco.mjtGeom.mjGEOM_ELLIPSOID, (0.3, 0.2, 0.1)),
+        ("capsule", mujoco.mjtGeom.mjGEOM_CAPSULE, (0.1, 0.3, 0.0)),
+        ("cylinder", mujoco.mjtGeom.mjGEOM_CYLINDER, (0.1, 0.3, 0.0)),
+    ],
+)
+def test_body_shapes_emit_expected_mujoco_geom_and_compile(
+    shape,
+    expected_type,
+    expected_size,
+):
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.3, 0.2, 0.1),
+                "shape": shape,
+                "joint_type": "free",
+            }
+        },
+    )
+
+    mjcf = PhenotypeBuilder(genotype, max_node=1).build()
+    xml_root = ET.fromstring(mjcf)
+    geom = xml_root.find("./worldbody/body/geom")
+    model = mujoco.MjModel.from_xml_string(mjcf)
+    body_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "body_1_geom")
+
+    assert geom.get("type") == shape
+    assert model.geom_type[body_geom_id] == expected_type
+    assert model.geom_size[body_geom_id, :3] == pytest.approx(expected_size)
+    if shape in {"capsule", "cylinder"}:
+        assert _vector(geom, "fromto") == pytest.approx(
+            (-0.3, 0.0, 0.0, 0.3, 0.0, 0.0)
+        )
+        assert _vector(geom, "size") == pytest.approx((0.1,))
+    else:
+        assert _vector(geom, "size") == pytest.approx((0.3, 0.2, 0.1))
+
+
 def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
     genotype_path = tmp_path / "fixed_default.json"
     genotype_path.write_text(json.dumps({

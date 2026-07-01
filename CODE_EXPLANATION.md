@@ -90,12 +90,14 @@ class NodeGene:
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
     orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    shape: str = "box"
 ```
 
 A `NodeGene` describes one reusable body-part type. It includes:
 
 - `name`: a symbolic name such as `"body"`, `"segment"`, or `"limb"`.
-- `size`: the MuJoCo box geometry size for this body part.
+- `size`: local bounding half extents for this body part.
+- `shape`: body geometry shape: `"box"`, `"ellipsoid"`, `"capsule"`, or `"cylinder"`. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius.
 - `joint_type`: `"free"` for the root body, or `"hinge"`, `"slide"`, or `"ball"` for articulated parts.
 - `recursive_limit`: how many times this node type can appear along one recursive path.
 - `children`: connections from this node to other nodes.
@@ -121,7 +123,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_type`, `recursive_limit`, and `orientation`, plus connection fields such as `parent_face`, `surface_uv`, `orientation`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Orientation components mutate with normal angular noise and are wrapped into `[-180, 180]` degrees. If a connection `parent_face` or `orientation` mutation violates the child-normal constraint, the connection is repaired to a face-aligned orientation. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
+Mutable parameters include node fields such as `size`, `shape`, `joint_type`, `recursive_limit`, and `orientation`, plus connection fields such as `parent_face`, `surface_uv`, `orientation`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Orientation components mutate with normal angular noise and are wrapped into `[-180, 180]` degrees. If a connection `parent_face` or `orientation` mutation violates the child-normal constraint, the connection is repaired to a face-aligned orientation. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
 
 The method prints the mutation details as it applies them:
 
@@ -149,7 +151,7 @@ body -> segment -> segment -> ... -> segment
             limbs      limbs          limbs
 ```
 
-JSON arrays are used for vector values such as `size`, `surface_uv`, `axis`, and `orientation`. Existing JSON files without `orientation` still load: missing root orientations default to identity, and missing connection orientations default to identity for `+x` attachments or to a compatible face-aligned orientation for non-`+x` attachments migrated from older schemas.
+JSON arrays are used for vector values such as `size`, `surface_uv`, `axis`, and `orientation`. Node `shape` defaults to `"box"` when omitted. Existing JSON files without `orientation` still load: missing root orientations default to identity, and missing connection orientations default to identity for `+x` attachments or to a compatible face-aligned orientation for non-`+x` attachments migrated from older schemas.
 
 The file defines three node types:
 

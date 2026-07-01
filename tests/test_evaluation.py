@@ -516,22 +516,40 @@ def test_evaluation_rejects_numerical_instability(monkeypatch):
     assert result.build_failed
     assert result.failure_reason == NUMERICAL_INSTABILITY_REASON
 
-def test_creature_volume_sums_generated_box_volumes_only():
+@pytest.mark.parametrize(
+    ("geom_xml", "expected_volume"),
+    [
+        ('<geom type="box" size="1 2 3"/>', 48.0),
+        ('<geom type="ellipsoid" size="1 2 3"/>', 8.0 * math.pi),
+        (
+            '<geom type="capsule" size="0.5" fromto="-2 0 0 2 0 0"/>',
+            7.0 / 6.0 * math.pi,
+        ),
+        (
+            '<geom type="cylinder" size="0.5" fromto="-2 0 0 2 0 0"/>',
+            math.pi,
+        ),
+    ],
+)
+def test_creature_volume_sums_generated_body_volumes_only(
+    geom_xml,
+    expected_volume,
+):
     model = mujoco.MjModel.from_xml_string(
-        """
+        f"""
         <mujoco>
           <worldbody>
             <geom type="plane" size="5 5 0.1"/>
             <body>
               <freejoint/>
-              <geom type="box" size="1 2 3"/>
+              {geom_xml}
             </body>
           </worldbody>
         </mujoco>
         """
     )
 
-    assert _creature_volume(model) == pytest.approx(48.0)
+    assert _creature_volume(model) == pytest.approx(expected_volume)
 
 
 def test_volume_penalty_has_cutoff_then_grows_linearly():

@@ -3,6 +3,8 @@ import random
 import pytest
 
 from evol_virtual_creature.genes import (
+    BODY_SHAPES,
+    ROUND_BODY_SHAPES,
     ConnectionGene,
     NodeGene,
     child_orientation_is_valid,
@@ -43,6 +45,9 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
 
     child = genotype.nodes[child_name]
     assert child.joint_type in {"fixed", "hinge", "ball"}
+    assert child.shape in BODY_SHAPES
+    if child.shape in ROUND_BODY_SHAPES:
+        assert child.size[1] == child.size[2]
     assert all(
         parent_dimension * genotype.NEW_CHILD_SIZE_MIN_SCALE
         <= child_dimension
@@ -206,6 +211,32 @@ def test_joint_type_mutation_allows_slide_when_enabled():
     assert genotype.nodes["limb"].joint_type == "slide"
 
 
+def test_shape_mutation_repairs_round_cross_section():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.3, 0.2, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    genotype._mutate_parameter_path(("node", "limb", "shape"), random.Random(5))
+
+    limb = genotype.nodes["limb"]
+    assert limb.shape in BODY_SHAPES
+    if limb.shape in ROUND_BODY_SHAPES:
+        assert limb.size[1] == limb.size[2]
+
+
 def test_node_accepts_fixed_joint_type():
     node = NodeGene(name="rigid", size=(0.1, 0.1, 0.1), joint_type="fixed")
 
@@ -215,6 +246,18 @@ def test_node_accepts_fixed_joint_type():
 def test_node_rejects_unknown_joint_type():
     with pytest.raises(ValueError, match="Unknown joint type"):
         NodeGene(name="bad", size=(0.1, 0.1, 0.1), joint_type="welded")
+
+
+def test_node_validates_and_normalizes_body_shape():
+    assert NodeGene(name="round", size=(0.3, 0.2, 0.1), shape="capsule").size == (
+        0.3,
+        0.1,
+        0.1,
+    )
+    node = NodeGene(name="body", size=(0.3, 0.2, 0.1), shape="ellipsoid")
+    assert node.shape == "ellipsoid"
+    with pytest.raises(ValueError, match="Unknown body shape"):
+        NodeGene(name="bad", size=(0.1, 0.1, 0.1), shape="cone")
 
 
 def test_template_new_node_addition_attaches_connection_before_mutating_it():
@@ -331,7 +374,7 @@ def test_destination_replacement_child_node_size_scales_from_connection_parent(
         )
     )
 
-MUTABLE_NODE_FIELDS = {"size", "joint_type", "orientation"}
+MUTABLE_NODE_FIELDS = {"size", "joint_type", "shape", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
     "surface_uv",
@@ -450,6 +493,7 @@ MUTABLE_EFFECT_CASES = [
     for index in range(3)
 ] + [
     pytest.param("node", "joint_type", None, id="node-joint-type"),
+    pytest.param("node", "shape", None, id="node-shape"),
     pytest.param("node", "orientation", 0, id="node-orientation-roll"),
     pytest.param("node", "orientation", 1, id="node-orientation-pitch"),
     pytest.param("node", "orientation", 2, id="node-orientation-yaw"),
@@ -506,6 +550,8 @@ def test_every_mutable_gene_field_can_change_phenotype_or_controller(
             node_name = "segment"
         elif field_name == "orientation":
             node_name = "body"
+        elif field_name == "shape":
+            node_name = "limb"
         else:
             node_name = "limb"
         path = ("node", node_name, field_name)

@@ -292,7 +292,7 @@ class PhenotypeBuilder:
             node_depth,
             logical_path,
         )
-        self.add_geom(parent_xml, effective_size, geom_center)
+        self.add_geom(parent_xml, node, effective_size, geom_center)
 
         next_depths = self.next_depths(current_depths, node.name, node_depth)
         self.add_children(
@@ -419,13 +419,30 @@ class PhenotypeBuilder:
     def add_geom(
         self,
         parent_xml: ET.Element,
+        node: NodeGene,
         size: Sequence[float],
         geom_center: tuple[float, float, float],
     ):
         geom = ET.SubElement(parent_xml, "geom")
         geom.set("name", f"{parent_xml.get('name')}_geom")
-        geom.set("size", vec_to_str(size))
-        geom.set("pos", vec_to_str(geom_center))
+        geom.set("type", node.shape)
+        if node.shape in {"capsule", "cylinder"}:
+            radius = min(float(size[1]), float(size[2]))
+            geom.set("size", str(radius))
+            geom.set(
+                "fromto",
+                vec_to_str((
+                    geom_center[0] - float(size[0]),
+                    geom_center[1],
+                    geom_center[2],
+                    geom_center[0] + float(size[0]),
+                    geom_center[1],
+                    geom_center[2],
+                )),
+            )
+        else:
+            geom.set("size", vec_to_str(size))
+            geom.set("pos", vec_to_str(geom_center))
         geom.set("rgba", "0.933333 0.603922 0.301961 1")
 
     def next_depths(
