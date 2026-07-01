@@ -21,11 +21,17 @@ This mirrors evolutionary robotics terminology. The genotype is the recipe, and 
 
 The code is split by responsibility:
 
-- `generate_model.py`: thin command-line entrypoint.
-- `evol_virtual_creature/genotype.py`: genotype dataclasses and mutation logic.
-- `evol_virtual_creature/genotype_io.py`: JSON genotype loading.
+- `generate_model.py`: command-line entrypoint for loading, mutating, building, saving, and viewing one creature.
+- `evaluate.py`: command-line entrypoint for scoring one genotype on a locomotion task.
+- `evolve.py`: command-line entrypoint for population-based mutation search.
+- `evol_virtual_creature/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
+- `evol_virtual_creature/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
+- `evol_virtual_creature/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
+- `evol_virtual_creature/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
 - `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
-- `evol_virtual_creature/phenotype.py`: MJCF phenotype generation.
+- `evol_virtual_creature/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
+- `evol_virtual_creature/evaluation.py`: task-specific MuJoCo rollouts and fitness calculations.
+- `evol_virtual_creature/video.py`: optional evaluation video rendering helpers.
 - `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
 
 ## Genotype Data Structures
@@ -52,6 +58,7 @@ class ConnectionGene:
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
+    orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 ```
 
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
@@ -59,6 +66,7 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `child`: the name of the child node to attach.
 - `parent_face`: the parent box face where the child joint is attached.
 - `surface_uv`: normalized coordinates from `-1` to `1` along the two remaining axes in X/Y/Z order.
+- `orientation`: child body Euler orientation in degrees relative to the parent body.
 - `symmetry`: any subset of `"xy"`, `"xz"`, and `"yz"`; every selected plane doubles the child subtree.
 - `axis`: the translation axis for slide joints, rotation axis for hinge joints, or motor torque axis for ball joints.
 - `scale`: geometric scale applied by connection hierarchy order: `node.size * scale ** (order - 1)`. Symmetry siblings created from the same parent share an order.
@@ -67,7 +75,7 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
 - `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters.
 
-The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, frequency, and phase. Their hinge axes are reflected so equal controls produce mirror-symmetric motion.
+The connection orientation is constrained: after applying the Euler rotation, the child body's local `+X` axis must point within 90 degrees of the selected parent face normal. This prevents children from being genetically oriented back into or sideways across the parent attachment surface. The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, frequency, and phase. Their hinge axes and body orientations are reflected so equal controls produce mirror-symmetric motion.
 
 With all three symmetry planes selected, one connection generates `2 ** 3 = 8` mirrored child subtrees. Copies are retained even when an attachment lies directly on a symmetry plane.
 
@@ -81,6 +89,7 @@ class NodeGene:
     joint_type: str = "hinge"
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
+    orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 ```
 
 A `NodeGene` describes one reusable body-part type. It includes:
@@ -90,6 +99,7 @@ A `NodeGene` describes one reusable body-part type. It includes:
 - `joint_type`: `"free"` for the root body, or `"hinge"`, `"slide"`, or `"ball"` for articulated parts.
 - `recursive_limit`: how many times this node type can appear along one recursive path.
 - `children`: connections from this node to other nodes.
+- `orientation`: Euler orientation in degrees. Only the root node's orientation is used as the generated root body's world-relative initial orientation.
 
 The `field(default_factory=list)` call is important. It gives each `NodeGene` its own independent child list instead of accidentally sharing one list between all instances.
 
@@ -111,7 +121,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `joint_type`, and `recursive_limit`, plus connection fields such as `parent_face`, `surface_uv`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
+Mutable parameters include node fields such as `size`, `joint_type`, `recursive_limit`, and `orientation`, plus connection fields such as `parent_face`, `surface_uv`, `orientation`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Orientation components mutate with normal angular noise and are wrapped into `[-180, 180]` degrees. If a connection `parent_face` or `orientation` mutation violates the child-normal constraint, the connection is repaired to a face-aligned orientation. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
 
 The method prints the mutation details as it applies them:
 
@@ -139,7 +149,7 @@ body -> segment -> segment -> ... -> segment
             limbs      limbs          limbs
 ```
 
-JSON arrays are used for vector values such as `size`, `surface_uv`, and `axis`.
+JSON arrays are used for vector values such as `size`, `surface_uv`, `axis`, and `orientation`. Existing JSON files without `orientation` still load: missing root orientations default to identity, and missing connection orientations default to identity for `+x` attachments or to a compatible face-aligned orientation for non-`+x` attachments migrated from older schemas.
 
 The file defines three node types:
 
@@ -154,7 +164,8 @@ The key recursive detail is this connection:
   "child": "segment",
   "axis": [0, 1, 0],
   "parent_face": "-x",
-  "surface_uv": [0.0, 0.0]
+  "surface_uv": [0.0, 0.0],
+  "orientation": [0.0, 0.0, 180.0]
 }
 ```
 
@@ -167,6 +178,7 @@ segment.children.append(ConnectionGene(
     child="limb",
     axis=(1, 0, 0),
     parent_face="+y",
+    orientation=(0.0, 0.0, 90.0),
     symmetry=("xz",),
 ))
 ```
@@ -223,12 +235,15 @@ floor.set("size", "5 5 0.1")
 floor.set("pos", "0 0 -0.05")
 ```
 
-The root body is created at position `0 0 0.6`, high enough to sit above the floor:
+The root body is created at position `0 0 0.6`, high enough to sit above the floor. Its `quat` attribute is derived from the root node's Euler `orientation`:
 
 ```python
-root_body = ET.SubElement(worldbody, "body")
-root_body.set("name", self.new_body_name(root_node.name))
-root_body.set("pos", "0 0 0.6")
+root_body = self.create_body(
+    worldbody,
+    root_node,
+    "0 0 0.6",
+    quat=matrix_to_quat(euler_degrees_to_matrix(root_node.orientation)),
+)
 ```
 
 After creating the root body, `build()` calls `add_node_to_body()` to recursively fill in the body tree.
@@ -311,25 +326,30 @@ For the self-recursive `segment` node, this check stops expansion after ten segm
 For each allowed connection, the code creates a nested MuJoCo `<body>`:
 
 ```python
-base_body_pos, base_geom_center = _surface_attachment_transform(
-    parent_size=node.size,
+base_body_pos = _surface_attachment_position(
+    parent_size=effective_size,
     parent_geom_center=geom_center,
-    child_size=child_node.size,
     parent_face=conn.parent_face,
     surface_uv=conn.surface_uv,
 )
+base_rotation = euler_degrees_to_matrix(conn.orientation)
 child_logical_path = (*logical_path, connection_index)
 for local_reflection in _symmetry_reflections(conn.symmetry):
     child_reflection = _compose_reflections(reflection, local_reflection)
-    child_body_pos = _reflect_point(
-        base_body_pos, geom_center, child_reflection
-    )
-    child_geom_center = _reflect_vector(
-        base_geom_center, child_reflection
+    child_body_pos = _reflect_point(base_body_pos, geom_center, child_reflection)
+    child_rotation = _reflect_rotation_matrix(base_rotation, child_reflection)
+    child_normal = _reflect_vector(FACE_NORMALS[conn.parent_face], child_reflection)
+    child_geom_center = _child_geom_center_for_attachment(
+        child_size,
+        child_normal,
+        child_rotation,
     )
     child_axis = _reflect_axial_vector(conn.axis, child_reflection)
     child_body = self.create_body(
-        parent_xml, child_node, vec_to_str(child_body_pos)
+        parent_xml,
+        child_node,
+        vec_to_str(child_body_pos),
+        quat=matrix_to_quat(child_rotation),
     )
 ```
 
@@ -350,7 +370,7 @@ self.add_node_to_body(
 )
 ```
 
-This recursive nesting turns the compact genotype graph into a full MuJoCo body hierarchy. Reflection state propagates into descendants, while mirrored actuators share a logical path so their controller signals remain identical.
+This recursive nesting turns the compact genotype graph into a full MuJoCo body hierarchy. The child body origin stays at the parent attachment point. The child body's `quat` carries the genetic orientation, and the child geom center is offset so the rotated box still touches the selected parent face. Reflection state propagates into descendants, while mirrored actuators share a logical path so their controller signals remain identical.
 
 ## Utility Function
 
@@ -430,7 +450,6 @@ The exact XML can differ from run to run because the genotype is randomly mutate
 
 The current script is intentionally minimal, but it leaves several natural places to grow:
 
-- Use `ConnectionGene.axis` to influence child orientation, not just joint axes.
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
 - Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward distance from the starting point. Flying tasks start above the floor, use horizontal distance divided by 10, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs.

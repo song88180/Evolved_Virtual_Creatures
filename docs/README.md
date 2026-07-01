@@ -12,3 +12,11 @@ To publish it:
 6. Save the settings.
 
 GitHub will serve `docs/index.html` as the project documentation page.
+
+
+## Editing the Documentation
+
+- `index.html`: main user-facing guide and concept overview.
+- `api-reference.json`: structured API content rendered by `api.html`.
+- `api.html`: static renderer for the API JSON; usually does not need edits when APIs change.
+- `styles.css`: documentation site styling.

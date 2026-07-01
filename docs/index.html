@@ -121,7 +121,7 @@
       "recursive_limit": 10,
       "children": [
         {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]},
-        {"child": "limb", "axis": [1, 0, 0], "parent_face": "+y", "surface_uv": [0, 0], "symmetry": ["xz"]}
+        {"child": "limb", "axis": [1, 0, 0], "parent_face": "+y", "surface_uv": [0, 0], "orientation": [0, 0, 90], "symmetry": ["xz"]}
       ]
     },
     "limb": {
@@ -131,6 +131,15 @@
   }
 }</code></pre>
           </figure>
+          <p>
+            Nodes and connections may also include <code>orientation</code> as
+            Euler angles in degrees. A root node orientation rotates the root
+            body relative to world axes. A connection orientation rotates the
+            child body relative to its parent; the child local <code>+X</code>
+            axis must point within 90 degrees of the selected parent face
+            normal. Older JSON files without <code>orientation</code> load with
+            compatible identity or face-aligned defaults.
+          </p>
         </section>
 
         <section id="concepts" class="doc-section">
@@ -140,16 +149,17 @@
               <h3>Genotype</h3>
               <p>
                 The recipe layer. It stores reusable node genes, connection
-                genes, controller parameters, and archived genetic material used
-                by topology mutations.
+                genes, Euler body orientations, controller parameters, and
+                archived genetic material used by topology mutations.
               </p>
             </section>
             <section>
               <h3>Phenotype</h3>
               <p>
                 The expanded MuJoCo XML model. <code>PhenotypeBuilder</code>
-                validates the graph, creates bodies and hinge joints, and
-                records actuator controller metadata.
+                validates the graph, emits body quaternions from genetic
+                orientations, keeps rotated child boxes attached to parent
+                faces, creates joints, and records actuator controller metadata.
               </p>
             </section>
             <section>

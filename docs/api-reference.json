@@ -5,6 +5,7 @@
       "Main_Use_Cases": [
         "Represent symbolic body-part nodes before MuJoCo XML generation",
         "Represent directed connections between node genes",
+        "Store genetic Euler orientations for root and child bodies",
         "Store open-loop motor control parameters on each connection"
       ],
       "Related_Modules": [
@@ -16,9 +17,9 @@
     },
     "Classes": {
       "ConnectionGene": {
-        "Purpose": "Describes how a parent genotype node attaches a child node and how the generated hinge actuator should be controlled.",
+        "Purpose": "Describes how a parent genotype node attaches and orients a child node and how the generated actuator should be controlled.",
         "Constructor": {
-          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0)",
+          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
           "Parameters": {
             "child": {
               "Type": "str",
@@ -34,6 +35,11 @@
               "Type": "Tuple[float, float]",
               "Default": "(0.0, 0.0)",
               "Description": "Normalized coordinates from -1 to 1 along the two remaining axes in X/Y/Z order."
+            },
+            "orientation": {
+              "Type": "Tuple[float, float, float]",
+              "Default": "(0.0, 0.0, 0.0)",
+              "Description": "Child body Euler orientation in degrees relative to the parent body. The rotated child local +X axis must point within 90 degrees of the selected parent face normal."
             },
             "symmetry": {
               "Type": "Tuple[str, ...]",
@@ -102,6 +108,7 @@
           "child": {"Type": "str", "Description": "Name of the child node."},
           "parent_face": {"Type": "str", "Description": "Selected parent attachment face."},
           "surface_uv": {"Type": "Tuple[float, float]", "Description": "Normalized coordinates on the selected face."},
+          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Relative child body Euler orientation in degrees, validated against the parent attachment normal."},
           "symmetry": {"Type": "Tuple[str, ...]", "Description": "Selected parent-local mirror planes."},
           "axis": {"Type": "Tuple[float, float, float]", "Description": "Joint or actuator axis for the connection."},
           "scale": {"Type": "float", "Description": "Hierarchy scaling factor applied as scale ** (order - 1)."},
@@ -131,18 +138,19 @@
             "Example": "phase = connection.phase_for(depth=2, order=0)"
           }
         },
-        "Example": "connection = ConnectionGene(child=\"tail\", axis=(0.0, 1.0, 0.0), parent_face=\"-x\", surface_uv=(0.0, 0.0), symmetry=(\"xz\",))"
+        "Example": "connection = ConnectionGene(child=\"tail\", axis=(0.0, 1.0, 0.0), parent_face=\"-x\", surface_uv=(0.0, 0.0), orientation=(0.0, 0.0, 180.0), symmetry=(\"xz\",))"
       },
       "NodeGene": {
-        "Purpose": "Describes one reusable body-part type in the genotype graph.",
+        "Purpose": "Describes one reusable body-part type in the genotype graph, including the optional root-body orientation.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list))",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "MuJoCo box half-size for generated geometry."},
             "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
-            "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."}
+            "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."},
+            "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."}
           },
           "Raises": []
         },
@@ -151,13 +159,34 @@
           "size": {"Type": "Tuple[float, float, float]", "Description": "Generated box geometry size."},
           "joint_type": {"Type": "str", "Description": "Generated joint type."},
           "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
-          "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."}
+          "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."},
+          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees; used for the generated root body when this node is the genotype root."}
         },
         "Methods": {},
-        "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\")"
+        "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\", orientation=(0.0, 0.0, 15.0))"
       }
     },
-    "Functions": {},
+    "Functions": {
+      "child_orientation_is_valid": {
+        "Signature": "child_orientation_is_valid(parent_face: str, orientation: Tuple[float, float, float]) -> bool",
+        "Purpose": "Return whether a child orientation keeps the child local +X axis within 90 degrees of the selected parent face normal.",
+        "Parameters": {
+          "parent_face": {"Type": "str", "Description": "Attachment face such as +x, -y, or +z."},
+          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees."}
+        },
+        "Returns": {"Type": "bool", "Description": "True when the orientation satisfies the child-normal constraint."},
+        "Raises": [],
+        "Example": "child_orientation_is_valid(\"+y\", (0.0, 0.0, 90.0))"
+      },
+      "euler_degrees_to_matrix": {
+        "Signature": "euler_degrees_to_matrix(orientation: Tuple[float, float, float]) -> Tuple[Tuple[float, float, float], ...]",
+        "Purpose": "Convert roll, pitch, yaw Euler angles in degrees to the rotation matrix used for genotype orientation checks and MJCF quaternion generation.",
+        "Parameters": {"orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler angles in degrees."}},
+        "Returns": {"Type": "Tuple[Tuple[float, float, float], ...]", "Description": "3x3 rotation matrix."},
+        "Raises": [],
+        "Example": "rotation = euler_degrees_to_matrix((0.0, 0.0, 45.0))"
+      }
+    },
     "Exceptions": {}
   },
   "evol_virtual_creature.genotype": {
