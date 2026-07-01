@@ -481,25 +481,19 @@ class PhenotypeBuilder:
                 child_body_pos = _reflect_point(
                     base_body_pos,
                     geom_center,
-                    child_reflection,
+                    local_reflection,
                 )
                 child_rotation = _reflect_rotation_matrix(
                     base_rotation,
-                    child_reflection,
-                )
-                child_normal = _reflect_vector(
-                    FACE_NORMALS[conn.parent_face],
-                    child_reflection,
+                    local_reflection,
                 )
                 child_geom_center = _child_geom_center_for_attachment(
                     child_size,
-                    child_normal,
-                    child_rotation,
                 )
                 child_axis = (
-                    _reflect_vector(conn.axis, child_reflection)
+                    _reflect_vector(conn.axis, local_reflection)
                     if child_node.joint_type == "slide"
-                    else _reflect_axial_vector(conn.axis, child_reflection)
+                    else _reflect_axial_vector(conn.axis, local_reflection)
                 )
                 child_body = self.create_body(
                     parent_xml,
@@ -614,19 +608,8 @@ def _surface_attachment_position(
 
 def _child_geom_center_for_attachment(
     child_size: Sequence[float],
-    parent_normal: Sequence[float],
-    child_rotation: Sequence[Sequence[float]],
 ) -> Tuple[float, float, float]:
-    normal_in_child = _matrix_transpose_vector_multiply(
-        child_rotation,
-        parent_normal,
-    )
-    support = sum(
-        abs(component) * half_size
-        for component, half_size in zip(normal_in_child, child_size)
-    )
-    center_in_parent = tuple(component * support for component in parent_normal)
-    return _matrix_transpose_vector_multiply(child_rotation, center_in_parent)
+    return (float(child_size[0]), 0.0, 0.0)
 
 
 def _reflect_rotation_matrix(
@@ -641,16 +624,6 @@ def _reflect_rotation_matrix(
             for column in range(3)
         )
         for row in range(3)
-    )
-
-
-def _matrix_transpose_vector_multiply(
-    matrix: Sequence[Sequence[float]],
-    vector: Sequence[float],
-) -> Tuple[float, float, float]:
-    return tuple(
-        sum(matrix[row][column] * vector[row] for row in range(3))
-        for column in range(3)
     )
 
 

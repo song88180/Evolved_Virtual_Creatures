@@ -138,7 +138,7 @@ def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
     ]
     assert [_vector(body.find("geom"), "pos") for body in segment_bodies] == [
         pytest.approx((0.4, 0.0, 0.0)),
-        pytest.approx((-0.4, 0.0, 0.0)),
+        pytest.approx((0.4, 0.0, 0.0)),
     ]
     assert [_vector(body.find("joint"), "axis") for body in segment_bodies] == [
         pytest.approx((0.0, 1.0, 0.0)),
@@ -148,11 +148,11 @@ def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
     tip_bodies = [body.find("body") for body in segment_bodies]
     assert [_vector(body, "pos") for body in tip_bodies] == [
         pytest.approx((0.8, 0.0, 0.0)),
-        pytest.approx((-0.8, 0.0, 0.0)),
+        pytest.approx((0.8, 0.0, 0.0)),
     ]
     assert [_vector(body.find("joint"), "axis") for body in tip_bodies] == [
         pytest.approx((0.0, 0.0, 1.0)),
-        pytest.approx((0.0, 0.0, -1.0)),
+        pytest.approx((0.0, 0.0, 1.0)),
     ]
 
     controllers = builder.actuator_controllers

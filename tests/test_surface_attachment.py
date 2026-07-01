@@ -2,6 +2,7 @@ import json
 import xml.etree.ElementTree as ET
 
 import mujoco
+import numpy as np
 import pytest
 
 from evol_virtual_creature.genes import (
@@ -21,6 +22,30 @@ from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 def _vector(element, attribute):
     return tuple(float(value) for value in element.get(attribute).split())
+
+
+def _joint_position_in_body_frame(model, data, joint_name, body_name):
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    body_rotation = data.xmat[body_id].reshape(3, 3)
+    return body_rotation.T @ (data.xanchor[joint_id] - data.xpos[body_id])
+
+
+def _joint_position_in_geom_frame(model, data, joint_name, geom_name):
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+    geom_rotation = data.geom_xmat[geom_id].reshape(3, 3)
+    return geom_rotation.T @ (data.xanchor[joint_id] - data.geom_xpos[geom_id])
+
+
+def _assert_joint_on_child_attachment_face(model, data, joint_name, geom_name):
+    geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+    half_sizes = model.geom_size[geom_id, :3]
+    joint_local = _joint_position_in_geom_frame(model, data, joint_name, geom_name)
+
+    assert joint_local[0] == pytest.approx(-half_sizes[0])
+    assert joint_local[1] == pytest.approx(0.0)
+    assert joint_local[2] == pytest.approx(0.0)
 
 
 def test_connection_rejects_invalid_surface_attachment():
@@ -250,17 +275,19 @@ def test_oriented_root_and_child_emit_quat_and_compile():
     assert model.nbody == 3
 
 
-def test_rotated_child_geom_meets_parent_surface():
+def test_rotated_child_joint_lies_on_parent_and_child_surfaces():
     genotype = build_genotype(
         root="body",
         spec={
             "body": {
                 "size": (2.0, 1.0, 0.5),
                 "joint_type": "free",
+                "orientation": (0.0, 0.0, 45.0),
                 "children": [{
                     "child": "limb",
                     "axis": (0, 1, 0),
                     "parent_face": "+x",
+                    "surface_uv": (0.25, -0.5),
                     "orientation": (0.0, 0.0, 45.0),
                 }],
             },
@@ -273,13 +300,20 @@ def test_rotated_child_geom_meets_parent_surface():
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    child_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "limb_2_geom")
-    rotation = data.geom_xmat[child_geom_id].reshape(3, 3)
-    half_sizes = model.geom_size[child_geom_id, :3]
-    x_support = abs(rotation[0]) @ half_sizes
-    child_inner_surface_x = data.geom_xpos[child_geom_id, 0] - x_support
+    parent_local_joint = _joint_position_in_body_frame(
+        model,
+        data,
+        "limb_joint_2",
+        "body_1",
+    )
 
-    assert child_inner_surface_x == pytest.approx(2.0)
+    assert parent_local_joint == pytest.approx(np.array((2.0, 0.25, -0.25)))
+    _assert_joint_on_child_attachment_face(
+        model,
+        data,
+        "limb_joint_2",
+        "limb_2_geom",
+    )
 
 
 def test_child_hinge_and_geom_meet_parent_surface():
@@ -540,3 +574,41 @@ def test_recursive_attachment_uses_parent_geom_center():
     assert _vector(tip_body.find("geom"), "pos") == pytest.approx(
         (0.1, 0.0, 0.0)
     )
+
+
+def test_symmetric_rotated_children_attach_at_child_surface():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(1.0, 1.0, 1.0),
+                joint_type="free",
+                children=[ConnectionGene(
+                    child="limb",
+                    axis=(0, 1, 0),
+                    parent_face="+x",
+                    orientation=(0.0, 0.0, 45.0),
+                    symmetry=("xz",),
+                )],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.4, 0.3, 0.2),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    mjcf = PhenotypeBuilder(genotype, max_node=3).build()
+    model = mujoco.MjModel.from_xml_string(mjcf)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    for index in (2, 3):
+        _assert_joint_on_child_attachment_face(
+            model,
+            data,
+            f"limb_joint_{index}",
+            f"limb_{index}_geom",
+        )
