@@ -6,10 +6,75 @@ from typing import List, Tuple
 
 
 ATTACHMENT_FACES = ("+x", "-x", "+y", "-y", "+z", "-z")
+FACE_NORMALS = {
+    "+x": (1.0, 0.0, 0.0),
+    "-x": (-1.0, 0.0, 0.0),
+    "+y": (0.0, 1.0, 0.0),
+    "-y": (0.0, -1.0, 0.0),
+    "+z": (0.0, 0.0, 1.0),
+    "-z": (0.0, 0.0, -1.0),
+}
 SYMMETRY_PLANES = ("xy", "xz", "yz")
 ARTICULATED_JOINT_TYPES = ("hinge", "slide", "ball")
 CHILD_JOINT_TYPES = ("fixed", *ARTICULATED_JOINT_TYPES)
 JOINT_TYPES = ("free", *CHILD_JOINT_TYPES)
+IDENTITY_ORIENTATION = (0.0, 0.0, 0.0)
+FACE_ALIGNED_ORIENTATIONS = {
+    "+x": (0.0, 0.0, 0.0),
+    "-x": (0.0, 0.0, 180.0),
+    "+y": (0.0, 0.0, 90.0),
+    "-y": (0.0, 0.0, -90.0),
+    "+z": (0.0, -90.0, 0.0),
+    "-z": (0.0, 90.0, 0.0),
+}
+
+
+def normalize_orientation(orientation: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    if len(orientation) != 3:
+        raise ValueError("orientation must contain exactly three Euler angles")
+    normalized = tuple(float(value) for value in orientation)
+    if any(not math.isfinite(value) for value in normalized):
+        raise ValueError("orientation angles must be finite")
+    return normalized
+
+
+def wrap_degrees(angle: float) -> float:
+    return (float(angle) + 180.0) % 360.0 - 180.0
+
+
+def euler_degrees_to_matrix(
+    orientation: Tuple[float, float, float],
+) -> Tuple[Tuple[float, float, float], ...]:
+    roll, pitch, yaw = (math.radians(angle) for angle in orientation)
+    cx, sx = math.cos(roll), math.sin(roll)
+    cy, sy = math.cos(pitch), math.sin(pitch)
+    cz, sz = math.cos(yaw), math.sin(yaw)
+    return (
+        (cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx),
+        (sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx),
+        (-sy, cy * sx, cy * cx),
+    )
+
+
+def child_orientation_dot(parent_face: str, orientation: Tuple[float, float, float]) -> float:
+    normal = FACE_NORMALS[parent_face]
+    rotation = euler_degrees_to_matrix(orientation)
+    rotated_child_x_axis = (rotation[0][0], rotation[1][0], rotation[2][0])
+    return sum(
+        axis_component * normal_component
+        for axis_component, normal_component in zip(rotated_child_x_axis, normal)
+    )
+
+
+def child_orientation_is_valid(
+    parent_face: str,
+    orientation: Tuple[float, float, float],
+) -> bool:
+    return child_orientation_dot(parent_face, orientation) > 1e-12
+
+
+def orientation_for_parent_face(parent_face: str) -> Tuple[float, float, float]:
+    return FACE_ALIGNED_ORIENTATIONS[parent_face]
 
 
 @dataclass
@@ -29,6 +94,7 @@ class ConnectionGene:
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
+    orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
 
     def __post_init__(self):
         if self.parent_face not in ATTACHMENT_FACES:
@@ -36,6 +102,12 @@ class ConnectionGene:
             raise ValueError(
                 f"Unknown parent face {self.parent_face!r}; expected one of "
                 f"{valid_faces}"
+            )
+        self.orientation = normalize_orientation(self.orientation)
+        if not child_orientation_is_valid(self.parent_face, self.orientation):
+            raise ValueError(
+                "connection orientation must rotate the child local +X axis "
+                "within 90 degrees of the parent attachment surface normal"
             )
         if len(self.surface_uv) != 2:
             raise ValueError("surface_uv must contain exactly two coordinates")
@@ -77,8 +149,10 @@ class NodeGene:
     joint_type: str = "hinge"
     recursive_limit: int = 1
     children: List[ConnectionGene] = field(default_factory=list)
+    orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
 
     def __post_init__(self):
+        self.orientation = normalize_orientation(self.orientation)
         if self.joint_type not in JOINT_TYPES:
             valid_types = ", ".join(JOINT_TYPES)
             raise ValueError(

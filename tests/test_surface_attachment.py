@@ -4,7 +4,11 @@ import xml.etree.ElementTree as ET
 import mujoco
 import pytest
 
-from evol_virtual_creature.genes import ConnectionGene, NodeGene
+from evol_virtual_creature.genes import (
+    ConnectionGene,
+    NodeGene,
+    child_orientation_is_valid,
+)
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.genotype_io import (
     build_genotype,
@@ -28,6 +32,30 @@ def test_connection_rejects_invalid_surface_attachment():
             child="child",
             axis=(0, 1, 0),
             surface_uv=(1.1, 0.0),
+        )
+
+
+def test_connection_rejects_invalid_child_orientation():
+    with pytest.raises(ValueError, match="orientation must contain exactly three"):
+        ConnectionGene(child="child", axis=(0, 1, 0), orientation=(0.0, 0.0))
+
+    with pytest.raises(ValueError, match="orientation angles must be finite"):
+        ConnectionGene(child="child", axis=(0, 1, 0), orientation=(0.0, float("nan"), 0.0))
+
+    with pytest.raises(ValueError, match="within 90 degrees"):
+        ConnectionGene(
+            child="child",
+            axis=(0, 1, 0),
+            parent_face="+y",
+            orientation=(0.0, 0.0, 0.0),
+        )
+
+    with pytest.raises(ValueError, match="within 90 degrees"):
+        ConnectionGene(
+            child="child",
+            axis=(0, 1, 0),
+            parent_face="+x",
+            orientation=(0.0, 0.0, 90.0),
         )
 
 
@@ -71,6 +99,11 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
     assert connection.surface_uv == pytest.approx((0.0, 0.5))
     assert genotype.archived_connections[0].parent_face == "-z"
     assert genotype.archived_connections[0].surface_uv == (0.0, 0.0)
+    assert child_orientation_is_valid(connection.parent_face, connection.orientation)
+    assert child_orientation_is_valid(
+        genotype.archived_connections[0].parent_face,
+        genotype.archived_connections[0].orientation,
+    )
 
     migrated_path = tmp_path / "migrated.json"
     save_genotype_to_json(genotype, migrated_path)
@@ -79,9 +112,60 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
     ][0]
     assert "pos" not in saved_connection
     assert saved_connection["parent_face"] == "-y"
+    assert "orientation" in saved_connection
     saved_data = json.loads(migrated_path.read_text())
     assert "joint_axis" not in saved_data["nodes"]["limb"]
     assert "joint_axis" not in saved_data["archived_nodes"][0]
+
+
+def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
+    genotype_path = tmp_path / "identity_orientation.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+            },
+            "limb": {"size": [0.1, 0.1, 0.1]},
+        },
+    }))
+
+    genotype = load_genotype_from_json(genotype_path)
+
+    assert genotype.nodes["body"].orientation == (0.0, 0.0, 0.0)
+    assert genotype.nodes["body"].children[0].orientation == (0.0, 0.0, 0.0)
+
+
+def test_orientation_round_trips_through_json(tmp_path):
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                orientation=(10.0, 20.0, 30.0),
+                children=[ConnectionGene(
+                    child="limb",
+                    axis=(0, 1, 0),
+                    orientation=(0.0, 0.0, 30.0),
+                )],
+            ),
+            "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
+        },
+    )
+    path = tmp_path / "oriented.json"
+
+    save_genotype_to_json(genotype, path)
+    data = json.loads(path.read_text())
+    loaded = load_genotype_from_json(path)
+
+    assert data["nodes"]["body"]["orientation"] == [10.0, 20.0, 30.0]
+    assert data["nodes"]["body"]["children"][0]["orientation"] == [0.0, 0.0, 30.0]
+    assert loaded.nodes["body"].orientation == (10.0, 20.0, 30.0)
+    assert loaded.nodes["body"].children[0].orientation == (0.0, 0.0, 30.0)
 
 
 def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
@@ -134,6 +218,68 @@ def test_fixed_joint_emits_rigid_child_without_joint_or_motor():
     assert model.nbody == 3
     assert model.nv == 6
     assert model.nu == 0
+
+
+def test_oriented_root_and_child_emit_quat_and_compile():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                orientation=(0.0, 0.0, 45.0),
+                children=[ConnectionGene(
+                    child="limb",
+                    axis=(0, 1, 0),
+                    orientation=(0.0, 0.0, 30.0),
+                )],
+            ),
+            "limb": NodeGene(name="limb", size=(0.1, 0.05, 0.05)),
+        },
+    )
+
+    mjcf = PhenotypeBuilder(genotype, max_node=2).build()
+    xml_root = ET.fromstring(mjcf)
+    root_body = xml_root.find("./worldbody/body")
+    child_body = root_body.find("body")
+
+    assert root_body.get("quat") != "1.0 0.0 0.0 0.0"
+    assert child_body.get("quat") != "1.0 0.0 0.0 0.0"
+    model = mujoco.MjModel.from_xml_string(mjcf)
+    assert model.nbody == 3
+
+
+def test_rotated_child_geom_meets_parent_surface():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (2.0, 1.0, 0.5),
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": (0, 1, 0),
+                    "parent_face": "+x",
+                    "orientation": (0.0, 0.0, 45.0),
+                }],
+            },
+            "limb": {"size": (0.4, 0.3, 0.2), "joint_type": "hinge"},
+        },
+    )
+
+    mjcf = PhenotypeBuilder(genotype, max_node=10).build()
+    model = mujoco.MjModel.from_xml_string(mjcf)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+
+    child_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "limb_2_geom")
+    rotation = data.geom_xmat[child_geom_id].reshape(3, 3)
+    half_sizes = model.geom_size[child_geom_id, :3]
+    x_support = abs(rotation[0]) @ half_sizes
+    child_inner_surface_x = data.geom_xpos[child_geom_id, 0] - x_support
+
+    assert child_inner_surface_x == pytest.approx(2.0)
 
 
 def test_child_hinge_and_geom_meet_parent_surface():
@@ -374,6 +520,7 @@ def test_recursive_attachment_uses_parent_geom_center():
                     child="tip",
                     axis=(1, 0, 0),
                     parent_face="+y",
+                    orientation=(0.0, 0.0, 90.0),
                 )],
             ),
             "tip": NodeGene(name="tip", size=(0.1, 0.2, 0.1)),
@@ -391,5 +538,5 @@ def test_recursive_attachment_uses_parent_geom_center():
     )
     assert _vector(tip_body, "pos") == pytest.approx((0.4, 0.3, 0.0))
     assert _vector(tip_body.find("geom"), "pos") == pytest.approx(
-        (0.0, 0.2, 0.0)
+        (0.1, 0.0, 0.0)
     )

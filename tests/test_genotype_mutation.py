@@ -2,7 +2,11 @@ import random
 
 import pytest
 
-from evol_virtual_creature.genes import ConnectionGene, NodeGene
+from evol_virtual_creature.genes import (
+    ConnectionGene,
+    NodeGene,
+    child_orientation_is_valid,
+)
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 from evol_virtual_creature.graph_analysis import (
@@ -47,6 +51,8 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert all(-1.0 <= value <= 1.0 for value in connection.surface_uv)
     assert set(connection.symmetry) <= {"xy", "xz", "yz"}
     assert all(-1.0 <= value <= 1.0 for value in connection.axis)
+    assert all(-180.0 <= value <= 180.0 for value in connection.orientation)
+    assert child_orientation_is_valid(connection.parent_face, connection.orientation)
     assert 0.5 <= connection.scale <= 1.5
     assert 20.0 <= connection.motor_gear <= 200.0
     assert -2.0 <= connection.ctrlrange[0] < 0.0
@@ -225,10 +231,11 @@ def test_template_new_node_addition_attaches_connection_before_mutating_it():
     assert "connection new-node addition" in description
     assert any(node.children for node in genotype.nodes.values())
 
-MUTABLE_NODE_FIELDS = {"size", "joint_type"}
+MUTABLE_NODE_FIELDS = {"size", "joint_type", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
     "surface_uv",
+    "orientation",
     "axis",
     "scale",
     "motor_enabled",
@@ -258,6 +265,7 @@ def _mutable_effect_genotype(field_name):
         axis=(0.3, 0.4, 0.5),
         parent_face="+x",
         surface_uv=(0.2, -0.3),
+        orientation=(0.0, 0.0, 10.0),
         motor_gear=80.0,
         ctrlrange=(-0.8, 1.2),
         control_amp=0.2,
@@ -270,6 +278,7 @@ def _mutable_effect_genotype(field_name):
             name="body",
             size=(0.3, 0.2, 0.1),
             joint_type="free",
+            orientation=(0.0, 0.0, 10.0),
             children=body_children,
         ),
         "limb": NodeGene(
@@ -339,11 +348,17 @@ MUTABLE_EFFECT_CASES = [
     for index in range(3)
 ] + [
     pytest.param("node", "joint_type", None, id="node-joint-type"),
+    pytest.param("node", "orientation", 0, id="node-orientation-roll"),
+    pytest.param("node", "orientation", 1, id="node-orientation-pitch"),
+    pytest.param("node", "orientation", 2, id="node-orientation-yaw"),
     pytest.param("node", "recursive_limit", None, id="node-recursive-limit"),
 ] + [
     pytest.param("connection", "parent_face", None, id="connection-parent-face"),
     pytest.param("connection", "surface_uv", 0, id="connection-surface-u"),
     pytest.param("connection", "surface_uv", 1, id="connection-surface-v"),
+    pytest.param("connection", "orientation", 0, id="connection-orientation-roll"),
+    pytest.param("connection", "orientation", 1, id="connection-orientation-pitch"),
+    pytest.param("connection", "orientation", 2, id="connection-orientation-yaw"),
     pytest.param("connection", "symmetry", None, id="connection-symmetry"),
 ] + [
     pytest.param("connection", "axis", index, id=f"connection-axis-{index}")
@@ -383,7 +398,12 @@ def test_every_mutable_gene_field_can_change_phenotype_or_controller(
     before = _phenotype_and_controller_snapshot(genotype)
 
     if owner_type == "node":
-        node_name = "segment" if field_name == "recursive_limit" else "limb"
+        if field_name == "recursive_limit":
+            node_name = "segment"
+        elif field_name == "orientation":
+            node_name = "body"
+        else:
+            node_name = "limb"
         path = ("node", node_name, field_name)
     else:
         path = ("connection", connection, field_name)
@@ -394,6 +414,22 @@ def test_every_mutable_gene_field_can_change_phenotype_or_controller(
     after = _phenotype_and_controller_snapshot(genotype)
 
     assert after != before
+
+def test_connection_orientation_mutation_preserves_child_normal_constraint():
+    genotype, connection = _mutable_effect_genotype("orientation")
+
+    genotype._mutate_parameter_path(
+        ("connection", connection, "orientation", 2),
+        random.Random(7),
+    )
+    assert child_orientation_is_valid(connection.parent_face, connection.orientation)
+
+    genotype._mutate_parameter_path(
+        ("connection", connection, "parent_face"),
+        random.Random(1),
+    )
+    assert child_orientation_is_valid(connection.parent_face, connection.orientation)
+
 
 def test_topology_mutations_register_body_count_fields():
     genotype, _ = _mutable_effect_genotype("axis")

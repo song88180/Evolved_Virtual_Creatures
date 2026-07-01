@@ -5,7 +5,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
-from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES
+from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES, euler_degrees_to_matrix
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .graph_analysis import (
     GenotypeGraphAnalyzer,
@@ -29,8 +29,8 @@ PLANE_REFLECTIONS = {
 }
 IDENTITY_REFLECTION = (1.0, 1.0, 1.0)
 DEFAULT_ARTICULATED_ROOT_AXIS = (0.0, 1.0, 0.0)
-DEFAULT_FLYING_FLUID_DENSITY = 1.225
-DEFAULT_FLYING_FLUID_VISCOSITY = 0.000018
+DEFAULT_FLYING_FLUID_DENSITY = 10 #1.225
+DEFAULT_FLYING_FLUID_VISCOSITY = 1.8e-4 #0.000018
 DEFAULT_FLYING_FLUID_SHAPE = "ellipsoid"
 DEFAULT_FLYING_FLUID_COEF = (0.5, 0.25, 1.5, 1.0, 1.0)
 
@@ -127,7 +127,12 @@ class PhenotypeBuilder:
         self.actuator_xml = ET.SubElement(self.mujoco_xml, "actuator")
 
         root_node = self.genotype.nodes[self.genotype.root]
-        root_body = self.create_body(worldbody, root_node, "0 0 0.6")
+        root_body = self.create_body(
+            worldbody,
+            root_node,
+            "0 0 0.6",
+            quat=matrix_to_quat(euler_degrees_to_matrix(root_node.orientation)),
+        )
 
         self.add_node_to_body(
             parent_xml=root_body,
@@ -245,6 +250,7 @@ class PhenotypeBuilder:
         parent_xml: ET.Element,
         node: NodeGene,
         pos: str,
+        quat: Sequence[float] | None = None,
     ) -> ET.Element:
         if self.body_counter >= self.max_node:
             raise PhenotypeNodeLimitExceeded(
@@ -255,6 +261,8 @@ class PhenotypeBuilder:
         body = ET.SubElement(parent_xml, "body")
         body.set("name", self.new_body_name(node.name))
         body.set("pos", pos)
+        if quat is not None:
+            body.set("quat", vec_to_str(quat))
         return body
 
     def add_node_to_body(
@@ -457,13 +465,13 @@ class PhenotypeBuilder:
             )
             child_connection_orders = dict(connection_orders)
             child_connection_orders[connection_key] = connection_order
-            base_body_pos, base_geom_center = _surface_attachment_transform(
+            base_body_pos = _surface_attachment_position(
                 parent_size=effective_size,
                 parent_geom_center=geom_center,
-                child_size=child_size,
                 parent_face=conn.parent_face,
                 surface_uv=conn.surface_uv,
             )
+            base_rotation = euler_degrees_to_matrix(conn.orientation)
             child_logical_path = (*logical_path, connection_index)
             for local_reflection in _symmetry_reflections(conn.symmetry):
                 child_reflection = _compose_reflections(
@@ -475,9 +483,18 @@ class PhenotypeBuilder:
                     geom_center,
                     child_reflection,
                 )
-                child_geom_center = _reflect_vector(
-                    base_geom_center,
+                child_rotation = _reflect_rotation_matrix(
+                    base_rotation,
                     child_reflection,
+                )
+                child_normal = _reflect_vector(
+                    FACE_NORMALS[conn.parent_face],
+                    child_reflection,
+                )
+                child_geom_center = _child_geom_center_for_attachment(
+                    child_size,
+                    child_normal,
+                    child_rotation,
                 )
                 child_axis = (
                     _reflect_vector(conn.axis, child_reflection)
@@ -488,6 +505,7 @@ class PhenotypeBuilder:
                     parent_xml,
                     child_node,
                     vec_to_str(child_body_pos),
+                    quat=matrix_to_quat(child_rotation),
                 )
 
                 self.add_node_to_body(
@@ -570,13 +588,12 @@ def _reflect_axial_vector(
     )
 
 
-def _surface_attachment_transform(
+def _surface_attachment_position(
     parent_size: Sequence[float],
     parent_geom_center: Sequence[float],
-    child_size: Sequence[float],
     parent_face: str,
     surface_uv: Sequence[float],
-) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+) -> Tuple[float, float, float]:
     try:
         normal = FACE_NORMALS[parent_face]
     except KeyError as exc:
@@ -592,11 +609,81 @@ def _surface_attachment_transform(
     for coordinate, axis in zip(surface_uv, tangent_axes):
         joint_pos[axis] += coordinate * parent_size[axis]
 
-    child_geom_center = tuple(
-        normal[axis] * child_size[axis]
-        for axis in range(3)
+    return tuple(joint_pos)
+
+
+def _child_geom_center_for_attachment(
+    child_size: Sequence[float],
+    parent_normal: Sequence[float],
+    child_rotation: Sequence[Sequence[float]],
+) -> Tuple[float, float, float]:
+    normal_in_child = _matrix_transpose_vector_multiply(
+        child_rotation,
+        parent_normal,
     )
-    return tuple(joint_pos), child_geom_center
+    support = sum(
+        abs(component) * half_size
+        for component, half_size in zip(normal_in_child, child_size)
+    )
+    center_in_parent = tuple(component * support for component in parent_normal)
+    return _matrix_transpose_vector_multiply(child_rotation, center_in_parent)
+
+
+def _reflect_rotation_matrix(
+    rotation: Sequence[Sequence[float]],
+    reflection: Sequence[float],
+) -> Tuple[Tuple[float, float, float], ...]:
+    determinant = reflection[0] * reflection[1] * reflection[2]
+    column_signs = (1.0, 1.0, determinant)
+    return tuple(
+        tuple(
+            reflection[row] * rotation[row][column] * column_signs[column]
+            for column in range(3)
+        )
+        for row in range(3)
+    )
+
+
+def _matrix_transpose_vector_multiply(
+    matrix: Sequence[Sequence[float]],
+    vector: Sequence[float],
+) -> Tuple[float, float, float]:
+    return tuple(
+        sum(matrix[row][column] * vector[row] for row in range(3))
+        for column in range(3)
+    )
+
+
+def matrix_to_quat(
+    matrix: Sequence[Sequence[float]],
+) -> Tuple[float, float, float, float]:
+    trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
+    if trace > 0.0:
+        scale = math.sqrt(trace + 1.0) * 2.0
+        w = 0.25 * scale
+        x = (matrix[2][1] - matrix[1][2]) / scale
+        y = (matrix[0][2] - matrix[2][0]) / scale
+        z = (matrix[1][0] - matrix[0][1]) / scale
+    elif matrix[0][0] > matrix[1][1] and matrix[0][0] > matrix[2][2]:
+        scale = math.sqrt(1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2.0
+        w = (matrix[2][1] - matrix[1][2]) / scale
+        x = 0.25 * scale
+        y = (matrix[0][1] + matrix[1][0]) / scale
+        z = (matrix[0][2] + matrix[2][0]) / scale
+    elif matrix[1][1] > matrix[2][2]:
+        scale = math.sqrt(1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2.0
+        w = (matrix[0][2] - matrix[2][0]) / scale
+        x = (matrix[0][1] + matrix[1][0]) / scale
+        y = 0.25 * scale
+        z = (matrix[1][2] + matrix[2][1]) / scale
+    else:
+        scale = math.sqrt(1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2.0
+        w = (matrix[1][0] - matrix[0][1]) / scale
+        x = (matrix[0][2] + matrix[2][0]) / scale
+        y = (matrix[1][2] + matrix[2][1]) / scale
+        z = 0.25 * scale
+    norm = math.sqrt(w * w + x * x + y * y + z * z)
+    return (w / norm, x / norm, y / norm, z / norm)
 
 
 def _normalized_vector(vector: Sequence[float]) -> Tuple[float, float, float]:

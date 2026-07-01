@@ -6,6 +6,7 @@ from dataclasses import asdict
 import json
 
 from .genotype import ConnectionGene, Genotype, NodeGene
+from .genes import orientation_for_parent_face
 
 
 GenotypeSpec = Mapping[str, Mapping[str, Any]]
@@ -145,21 +146,34 @@ def _normalize_connection_data(
     if "parent_face" in normalized or "surface_uv" in normalized:
         normalized.setdefault("parent_face", "+x")
         normalized.setdefault("surface_uv", (0.0, 0.0))
+        normalized.setdefault(
+            "orientation",
+            orientation_for_parent_face(normalized["parent_face"]),
+        )
         return normalized
 
     if legacy_pos is None:
         normalized.setdefault("parent_face", "+x")
         normalized.setdefault("surface_uv", (0.0, 0.0))
+        normalized.setdefault("orientation", (0.0, 0.0, 0.0))
         return normalized
 
     if parent_size is None:
         normalized["parent_face"] = _legacy_pos_to_face(legacy_pos)
         normalized["surface_uv"] = (0.0, 0.0)
+        normalized.setdefault(
+            "orientation",
+            orientation_for_parent_face(normalized["parent_face"]),
+        )
         return normalized
 
     parent_face, surface_uv = _legacy_pos_to_surface(legacy_pos, parent_size)
     normalized.setdefault("parent_face", parent_face)
     normalized.setdefault("surface_uv", surface_uv)
+    normalized.setdefault(
+        "orientation",
+        orientation_for_parent_face(normalized["parent_face"]),
+    )
     return normalized
 
 

@@ -10,6 +10,9 @@ from .genes import (
     SYMMETRY_PLANES,
     ConnectionGene,
     NodeGene,
+    child_orientation_is_valid,
+    orientation_for_parent_face,
+    wrap_degrees,
 )
 
 
@@ -25,6 +28,7 @@ class GenotypeMutationMixin:
     MIN_CONTROL_AMP_MUTATION_STD: ClassVar[float] = 0.01
     MIN_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
+    MIN_ORIENTATION_MUTATION_STD: ClassVar[float] = 5.0
     MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
 
     def mutation(
@@ -106,10 +110,12 @@ class GenotypeMutationMixin:
             "size",
             "joint_type",
             "recursive_limit",
+            "orientation",
         )
         connection_mutation_specs = (
             "parent_face",
             "surface_uv",
+            "orientation",
             "symmetry",
             "axis",
             "scale",
@@ -264,6 +270,7 @@ class GenotypeMutationMixin:
                 min_mutation_std,
             )
             setattr(owner, field_name, mutated_value)
+            self._repair_connection_orientation_if_needed(owner, field_name)
             return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
 
         original_values = getattr(owner, field_name)
@@ -285,6 +292,7 @@ class GenotypeMutationMixin:
 
         final_values = type(original_values)(values)
         setattr(owner, field_name, final_values)
+        self._repair_connection_orientation_if_needed(owner, field_name)
 
         return (
             f"{target}.{field_name}[{index}]: {old_value!r} -> {mutated_value!r}"
@@ -363,6 +371,11 @@ class GenotypeMutationMixin:
                 self.MIN_SURFACE_COORD_MUTATION_STD,
                 False,
             ),
+            "orientation": (
+                "orientation_degrees",
+                self.MIN_ORIENTATION_MUTATION_STD,
+                False,
+            ),
             "symmetry": ("symmetry_planes", 0.0, False),
             "axis": ("relative", self.MIN_AXIS_MUTATION_STD, False),
             "scale": ("positive", self.MIN_SCALE_MUTATION_STD, False),
@@ -385,6 +398,32 @@ class GenotypeMutationMixin:
             ),
         }
         return field_specs[field_name]
+
+    def _repair_connection_orientation_if_needed(
+        self,
+        owner: Any,
+        field_name: str,
+    ) -> None:
+        if not isinstance(owner, ConnectionGene):
+            return
+        if field_name not in {"parent_face", "orientation"}:
+            return
+        if child_orientation_is_valid(owner.parent_face, owner.orientation):
+            return
+        owner.orientation = orientation_for_parent_face(owner.parent_face)
+
+    def _random_valid_connection_orientation(
+        self,
+        parent_face: str,
+        random_source: random.Random,
+    ) -> Tuple[float, float, float]:
+        for _ in range(100):
+            orientation = tuple(
+                random_source.uniform(-180.0, 180.0) for _ in range(3)
+            )
+            if child_orientation_is_valid(parent_face, orientation):
+                return orientation
+        return orientation_for_parent_face(parent_face)
 
     def _child_joint_types_for_mutation(self) -> Tuple[str, ...]:
         if getattr(self, "_allow_slide_joint_for_mutation", False):
@@ -468,6 +507,15 @@ class GenotypeMutationMixin:
                 value,
                 min_mutation_std,
                 random_source,
+            )
+
+        if mutation_kind == "orientation_degrees":
+            return wrap_degrees(
+                value + self._normal_mutation_delta(
+                    value,
+                    min_mutation_std,
+                    random_source,
+                )
             )
 
         if mutation_kind == "bounded_surface_coordinate":
@@ -581,6 +629,7 @@ class GenotypeMutationMixin:
         connection_fields = (
             "parent_face",
             "surface_uv",
+            "orientation",
             "symmetry",
             "axis",
             "scale",
@@ -603,6 +652,7 @@ class GenotypeMutationMixin:
             setattr(connection, field_name, getattr(source_connection, field_name))
         connection.child = destination
         self._disable_terminal_only_for_self_link(connection, origin)
+        self._repair_connection_orientation_if_needed(connection, "orientation")
 
         changed_fields = [
             field_name
@@ -731,6 +781,9 @@ class GenotypeMutationMixin:
                 self._child_joint_types_for_mutation()
             ),
             recursive_limit=random_source.randint(1, 8),
+            orientation=tuple(
+                random_source.uniform(-180.0, 180.0) for _ in range(3)
+            ),
         )
 
     def _random_fresh_connection(
@@ -739,13 +792,18 @@ class GenotypeMutationMixin:
         random_source: random.Random,
     ) -> ConnectionGene:
         ctrlrange_limit = random_source.uniform(0.5, 2.0)
+        parent_face = random_source.choice(ATTACHMENT_FACES)
         return ConnectionGene(
             child=destination_node.name,
             axis=self._random_axis(random_source),
-            parent_face=random_source.choice(ATTACHMENT_FACES),
+            parent_face=parent_face,
             surface_uv=(
                 random_source.uniform(-1.0, 1.0),
                 random_source.uniform(-1.0, 1.0),
+            ),
+            orientation=self._random_valid_connection_orientation(
+                parent_face,
+                random_source,
             ),
             symmetry=tuple(
                 plane
@@ -818,6 +876,7 @@ class GenotypeMutationMixin:
             connection_description = "randomized all connection fields"
 
         self._disable_terminal_only_for_self_link(new_connection, origin_node.name)
+        self._repair_connection_orientation_if_needed(new_connection, "orientation")
 
         return new_index, source_label, connection_description
 
@@ -913,6 +972,7 @@ class GenotypeMutationMixin:
             "size",
             "joint_type",
             "recursive_limit",
+            "orientation",
         )
         field_name = random_source.choice(mutable_fields)
         base_path = ("new_node", node, field_name)
@@ -973,6 +1033,7 @@ class GenotypeMutationMixin:
         mutable_fields = (
             "parent_face",
             "surface_uv",
+            "orientation",
             "symmetry",
             "axis",
             "scale",
