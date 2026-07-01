@@ -489,6 +489,7 @@ class PhenotypeBuilder:
                 )
                 child_geom_center = _child_geom_center_for_attachment(
                     child_size,
+                    conn.child_surface_uv,
                 )
                 child_axis = (
                     _reflect_vector(conn.axis, local_reflection)
@@ -608,8 +609,13 @@ def _surface_attachment_position(
 
 def _child_geom_center_for_attachment(
     child_size: Sequence[float],
+    child_surface_uv: Sequence[float],
 ) -> Tuple[float, float, float]:
-    return (float(child_size[0]), 0.0, 0.0)
+    return (
+        float(child_size[0]),
+        -float(child_surface_uv[0]) * float(child_size[1]),
+        -float(child_surface_uv[1]) * float(child_size[2]),
+    )
 
 
 def _reflect_rotation_matrix(

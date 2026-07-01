@@ -38,14 +38,20 @@ def _joint_position_in_geom_frame(model, data, joint_name, geom_name):
     return geom_rotation.T @ (data.xanchor[joint_id] - data.geom_xpos[geom_id])
 
 
-def _assert_joint_on_child_attachment_face(model, data, joint_name, geom_name):
+def _assert_joint_on_child_attachment_face(
+    model,
+    data,
+    joint_name,
+    geom_name,
+    child_surface_uv=(0.0, 0.0),
+):
     geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
     half_sizes = model.geom_size[geom_id, :3]
     joint_local = _joint_position_in_geom_frame(model, data, joint_name, geom_name)
 
     assert joint_local[0] == pytest.approx(-half_sizes[0])
-    assert joint_local[1] == pytest.approx(0.0)
-    assert joint_local[2] == pytest.approx(0.0)
+    assert joint_local[1] == pytest.approx(child_surface_uv[0] * half_sizes[1])
+    assert joint_local[2] == pytest.approx(child_surface_uv[1] * half_sizes[2])
 
 
 def test_connection_rejects_invalid_surface_attachment():
@@ -57,6 +63,23 @@ def test_connection_rejects_invalid_surface_attachment():
             child="child",
             axis=(0, 1, 0),
             surface_uv=(1.1, 0.0),
+        )
+
+    with pytest.raises(ValueError, match="child_surface_uv must contain exactly two"):
+        ConnectionGene(child="child", axis=(0, 1, 0), child_surface_uv=(0.0,))
+
+    with pytest.raises(ValueError, match="child_surface_uv coordinates must be finite"):
+        ConnectionGene(
+            child="child",
+            axis=(0, 1, 0),
+            child_surface_uv=(0.0, float("nan")),
+        )
+
+    with pytest.raises(ValueError, match="child_surface_uv coordinates must be between"):
+        ConnectionGene(
+            child="child",
+            axis=(0, 1, 0),
+            child_surface_uv=(0.0, -1.1),
         )
 
 
@@ -122,8 +145,10 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
 
     assert connection.parent_face == "-y"
     assert connection.surface_uv == pytest.approx((0.0, 0.5))
+    assert connection.child_surface_uv == (0.0, 0.0)
     assert genotype.archived_connections[0].parent_face == "-z"
     assert genotype.archived_connections[0].surface_uv == (0.0, 0.0)
+    assert genotype.archived_connections[0].child_surface_uv == (0.0, 0.0)
     assert child_orientation_is_valid(connection.parent_face, connection.orientation)
     assert child_orientation_is_valid(
         genotype.archived_connections[0].parent_face,
@@ -137,6 +162,7 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
     ][0]
     assert "pos" not in saved_connection
     assert saved_connection["parent_face"] == "-y"
+    assert saved_connection["child_surface_uv"] == [0.0, 0.0]
     assert "orientation" in saved_connection
     saved_data = json.loads(migrated_path.read_text())
     assert "joint_axis" not in saved_data["nodes"]["limb"]
@@ -161,6 +187,7 @@ def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
 
     assert genotype.nodes["body"].orientation == (0.0, 0.0, 0.0)
     assert genotype.nodes["body"].children[0].orientation == (0.0, 0.0, 0.0)
+    assert genotype.nodes["body"].children[0].child_surface_uv == (0.0, 0.0)
 
 
 def test_orientation_round_trips_through_json(tmp_path):
@@ -176,6 +203,7 @@ def test_orientation_round_trips_through_json(tmp_path):
                     child="limb",
                     axis=(0, 1, 0),
                     orientation=(0.0, 0.0, 30.0),
+                    child_surface_uv=(0.25, -0.5),
                 )],
             ),
             "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
@@ -189,8 +217,10 @@ def test_orientation_round_trips_through_json(tmp_path):
 
     assert data["nodes"]["body"]["orientation"] == [10.0, 20.0, 30.0]
     assert data["nodes"]["body"]["children"][0]["orientation"] == [0.0, 0.0, 30.0]
+    assert data["nodes"]["body"]["children"][0]["child_surface_uv"] == [0.25, -0.5]
     assert loaded.nodes["body"].orientation == (10.0, 20.0, 30.0)
     assert loaded.nodes["body"].children[0].orientation == (0.0, 0.0, 30.0)
+    assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
 def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
@@ -288,6 +318,7 @@ def test_rotated_child_joint_lies_on_parent_and_child_surfaces():
                     "axis": (0, 1, 0),
                     "parent_face": "+x",
                     "surface_uv": (0.25, -0.5),
+                    "child_surface_uv": (-0.25, 0.75),
                     "orientation": (0.0, 0.0, 45.0),
                 }],
             },
@@ -313,6 +344,7 @@ def test_rotated_child_joint_lies_on_parent_and_child_surfaces():
         data,
         "limb_joint_2",
         "limb_2_geom",
+        (-0.25, 0.75),
     )
 
 
@@ -328,6 +360,7 @@ def test_child_hinge_and_geom_meet_parent_surface():
                     "axis": (0, 1, 0),
                     "parent_face": "+x",
                     "surface_uv": (0.5, -0.5),
+                    "child_surface_uv": (0.25, -0.75),
                 }],
             },
             "limb": {"size": (0.4, 0.3, 0.2), "joint_type": "hinge"},
@@ -342,7 +375,7 @@ def test_child_hinge_and_geom_meet_parent_surface():
 
     assert _vector(child_body, "pos") == pytest.approx((2.0, 0.5, -0.25))
     assert _vector(child_joint, "pos") == pytest.approx((0.0, 0.0, 0.0))
-    assert _vector(child_geom, "pos") == pytest.approx((0.4, 0.0, 0.0))
+    assert _vector(child_geom, "pos") == pytest.approx((0.4, -0.075, 0.15))
 
     parent_surface_x = 2.0
     child_inner_surface_x = (
@@ -589,6 +622,7 @@ def test_symmetric_rotated_children_attach_at_child_surface():
                     axis=(0, 1, 0),
                     parent_face="+x",
                     orientation=(0.0, 0.0, 45.0),
+                    child_surface_uv=(0.25, -0.5),
                     symmetry=("xz",),
                 )],
             ),
@@ -611,4 +645,5 @@ def test_symmetric_rotated_children_attach_at_child_surface():
             data,
             f"limb_joint_{index}",
             f"limb_{index}_geom",
+            (0.25, -0.5),
         )

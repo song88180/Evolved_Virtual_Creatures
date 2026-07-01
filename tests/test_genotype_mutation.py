@@ -57,6 +57,7 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
 
     assert connection.parent_face in {"+x", "-x", "+y", "-y", "+z", "-z"}
     assert all(-1.0 <= value <= 1.0 for value in connection.surface_uv)
+    assert all(-1.0 <= value <= 1.0 for value in connection.child_surface_uv)
     assert set(connection.symmetry) <= {"xy", "xz", "yz"}
     assert all(-1.0 <= value <= 1.0 for value in connection.axis)
     assert all(-180.0 <= value <= 180.0 for value in connection.orientation)
@@ -74,6 +75,7 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
         "+x",
         (0.0, 0.0),
     )
+    assert connection.child_surface_uv != (0.0, 0.0)
     assert connection.axis != (0.0, 1.0, 0.0)
 
 
@@ -333,6 +335,7 @@ MUTABLE_NODE_FIELDS = {"size", "joint_type", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
     "surface_uv",
+    "child_surface_uv",
     "orientation",
     "axis",
     "scale",
@@ -363,6 +366,7 @@ def _mutable_effect_genotype(field_name):
         axis=(0.3, 0.4, 0.5),
         parent_face="+x",
         surface_uv=(0.2, -0.3),
+        child_surface_uv=(0.1, -0.2),
         orientation=(0.0, 0.0, 10.0),
         motor_gear=80.0,
         ctrlrange=(-0.8, 1.2),
@@ -454,6 +458,8 @@ MUTABLE_EFFECT_CASES = [
     pytest.param("connection", "parent_face", None, id="connection-parent-face"),
     pytest.param("connection", "surface_uv", 0, id="connection-surface-u"),
     pytest.param("connection", "surface_uv", 1, id="connection-surface-v"),
+    pytest.param("connection", "child_surface_uv", 0, id="connection-child-surface-u"),
+    pytest.param("connection", "child_surface_uv", 1, id="connection-child-surface-v"),
     pytest.param("connection", "orientation", 0, id="connection-orientation-roll"),
     pytest.param("connection", "orientation", 1, id="connection-orientation-pitch"),
     pytest.param("connection", "orientation", 2, id="connection-orientation-yaw"),

@@ -38,6 +38,21 @@ def normalize_orientation(orientation: Tuple[float, float, float]) -> Tuple[floa
     return normalized
 
 
+def normalize_surface_uv(
+    surface_uv: Tuple[float, float],
+    field_name: str,
+) -> Tuple[float, float]:
+    if len(surface_uv) != 2:
+        raise ValueError(f"{field_name} must contain exactly two coordinates")
+
+    normalized = tuple(float(value) for value in surface_uv)
+    if any(not math.isfinite(value) for value in normalized):
+        raise ValueError(f"{field_name} coordinates must be finite")
+    if any(value < -1.0 or value > 1.0 for value in normalized):
+        raise ValueError(f"{field_name} coordinates must be between -1 and 1")
+    return normalized
+
+
 def wrap_degrees(angle: float) -> float:
     return (float(angle) + 180.0) % 360.0 - 180.0
 
@@ -83,6 +98,7 @@ class ConnectionGene:
     axis: Tuple[float, float, float]
     parent_face: str = "+x"
     surface_uv: Tuple[float, float] = (0.0, 0.0)
+    child_surface_uv: Tuple[float, float] = (0.0, 0.0)
     symmetry: Tuple[str, ...] = ()
     scale: float = 1.0
     terminal_only: bool = False
@@ -109,14 +125,11 @@ class ConnectionGene:
                 "connection orientation must rotate the child local +X axis "
                 "within 90 degrees of the parent attachment surface normal"
             )
-        if len(self.surface_uv) != 2:
-            raise ValueError("surface_uv must contain exactly two coordinates")
-
-        self.surface_uv = tuple(float(value) for value in self.surface_uv)
-        if any(not math.isfinite(value) for value in self.surface_uv):
-            raise ValueError("surface_uv coordinates must be finite")
-        if any(value < -1.0 or value > 1.0 for value in self.surface_uv):
-            raise ValueError("surface_uv coordinates must be between -1 and 1")
+        self.surface_uv = normalize_surface_uv(self.surface_uv, "surface_uv")
+        self.child_surface_uv = normalize_surface_uv(
+            self.child_surface_uv,
+            "child_surface_uv",
+        )
 
         unknown_planes = set(self.symmetry) - set(SYMMETRY_PLANES)
         if unknown_planes:

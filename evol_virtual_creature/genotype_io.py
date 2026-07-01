@@ -143,6 +143,7 @@ def _normalize_connection_data(
 ) -> Dict[str, Any]:
     normalized = dict(connection_data)
     legacy_pos = normalized.pop("pos", None)
+    normalized.setdefault("child_surface_uv", (0.0, 0.0))
     if "parent_face" in normalized or "surface_uv" in normalized:
         normalized.setdefault("parent_face", "+x")
         normalized.setdefault("surface_uv", (0.0, 0.0))

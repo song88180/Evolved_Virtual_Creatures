@@ -121,6 +121,7 @@ class GenotypeMutationMixin:
         connection_mutation_specs = (
             "parent_face",
             "surface_uv",
+            "child_surface_uv",
             "orientation",
             "symmetry",
             "axis",
@@ -374,6 +375,11 @@ class GenotypeMutationMixin:
             ),
             "parent_face": ("attachment_face", 0.0, False),
             "surface_uv": (
+                "bounded_surface_coordinate",
+                self.MIN_SURFACE_COORD_MUTATION_STD,
+                False,
+            ),
+            "child_surface_uv": (
                 "bounded_surface_coordinate",
                 self.MIN_SURFACE_COORD_MUTATION_STD,
                 False,
@@ -636,6 +642,7 @@ class GenotypeMutationMixin:
         connection_fields = (
             "parent_face",
             "surface_uv",
+            "child_surface_uv",
             "orientation",
             "symmetry",
             "axis",
@@ -814,6 +821,10 @@ class GenotypeMutationMixin:
             axis=self._random_axis(random_source),
             parent_face=parent_face,
             surface_uv=(
+                random_source.uniform(-1.0, 1.0),
+                random_source.uniform(-1.0, 1.0),
+            ),
+            child_surface_uv=(
                 random_source.uniform(-1.0, 1.0),
                 random_source.uniform(-1.0, 1.0),
             ),
@@ -1087,6 +1098,7 @@ class GenotypeMutationMixin:
         mutable_fields = (
             "parent_face",
             "surface_uv",
+            "child_surface_uv",
             "orientation",
             "symmetry",
             "axis",
