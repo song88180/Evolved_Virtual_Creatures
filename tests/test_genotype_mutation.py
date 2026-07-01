@@ -43,7 +43,15 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
 
     child = genotype.nodes[child_name]
     assert child.joint_type in {"fixed", "hinge", "ball"}
-    assert all(0.04 <= value <= 0.30 for value in child.size)
+    assert all(
+        parent_dimension * genotype.NEW_CHILD_SIZE_MIN_SCALE
+        <= child_dimension
+        <= parent_dimension * genotype.NEW_CHILD_SIZE_MAX_SCALE
+        for child_dimension, parent_dimension in zip(
+            child.size,
+            genotype.nodes[genotype.root].size,
+        )
+    )
     assert 1 <= child.recursive_limit <= 8
     assert child.size != (0.1, 0.05, 0.05)
 
@@ -230,6 +238,96 @@ def test_template_new_node_addition_attaches_connection_before_mutating_it():
 
     assert "connection new-node addition" in description
     assert any(node.children for node in genotype.nodes.values())
+
+
+def test_template_new_child_node_size_scales_from_connection_parent(monkeypatch):
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.4, 0.2, 0.1),
+                joint_type="free",
+            ),
+            "segment": NodeGene(
+                name="segment",
+                size=(0.02, 0.02, 0.02),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    def force_oversized_child(node, _rng):
+        node.size = (10.0, 10.0, 10.0)
+        return "size"
+
+    monkeypatch.setattr(genotype, "_mutate_new_node", force_oversized_child)
+
+    genotype._mutate_connection_new_node_addition(random.Random(1))
+
+    new_node_name = next(
+        name for name in genotype.nodes if name.startswith("segment_mut")
+    )
+    parent_node = next(
+        node
+        for node in genotype.nodes.values()
+        if any(connection.child == new_node_name for connection in node.children)
+    )
+    child_node = genotype.nodes[new_node_name]
+    assert all(
+        parent_dimension * genotype.NEW_CHILD_SIZE_MIN_SCALE
+        <= child_dimension
+        <= parent_dimension * genotype.NEW_CHILD_SIZE_MAX_SCALE
+        for child_dimension, parent_dimension in zip(
+            child_node.size,
+            parent_node.size,
+        )
+    )
+
+
+def test_destination_replacement_child_node_size_scales_from_connection_parent(
+    monkeypatch,
+):
+    connection = ConnectionGene(child="limb", axis=(0, 1, 0))
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.5, 0.25, 0.125),
+                joint_type="free",
+                children=[connection],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.03, 0.03, 0.03),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    def force_undersized_child(node, _rng):
+        node.size = (0.0, 0.0, 0.0)
+        return "size"
+
+    monkeypatch.setattr(genotype, "_mutate_new_node", force_undersized_child)
+
+    genotype._mutate_connection_destination_node_replacement(
+        connection,
+        random.Random(1),
+    )
+
+    child_node = genotype.nodes[connection.child]
+    parent_node = genotype.nodes[genotype.root]
+    assert all(
+        parent_dimension * genotype.NEW_CHILD_SIZE_MIN_SCALE
+        <= child_dimension
+        <= parent_dimension * genotype.NEW_CHILD_SIZE_MAX_SCALE
+        for child_dimension, parent_dimension in zip(
+            child_node.size,
+            parent_node.size,
+        )
+    )
 
 MUTABLE_NODE_FIELDS = {"size", "joint_type", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {

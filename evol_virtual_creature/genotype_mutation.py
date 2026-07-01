@@ -30,6 +30,8 @@ class GenotypeMutationMixin:
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
     MIN_ORIENTATION_MUTATION_STD: ClassVar[float] = 5.0
     MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
+    NEW_CHILD_SIZE_MIN_SCALE: ClassVar[float] = 0.1
+    NEW_CHILD_SIZE_MAX_SCALE: ClassVar[float] = 1.9
 
     def mutation(
         self,
@@ -737,8 +739,13 @@ class GenotypeMutationMixin:
         origin_node = random_source.choice(possible_origins)
         node_template = random_source.choice(possible_node_templates)
         new_node = self._new_node_from_existing(node_template, random_source)
+        new_node.size = self._random_child_size_from_parent(
+            origin_node,
+            random_source,
+        )
         new_node.children = []
         mutated_node_field = self._mutate_new_node(new_node, random_source)
+        self._clamp_child_size_to_parent(new_node, origin_node)
         self.nodes[new_node.name] = new_node
         new_index, source_label, mutated_connection_description = self._add_new_connection(
             origin_node,
@@ -762,7 +769,7 @@ class GenotypeMutationMixin:
             return "fresh node-connection addition: unchanged; no valid origin node"
 
         origin_node = random_source.choice(possible_origins)
-        new_node = self._random_fresh_node(random_source)
+        new_node = self._random_fresh_node(origin_node, random_source)
         self.nodes[new_node.name] = new_node
         new_index, source_label, connection_description = self._add_new_connection(
             origin_node,
@@ -778,10 +785,14 @@ class GenotypeMutationMixin:
             f"from {source_label}; {connection_description}"
         )
 
-    def _random_fresh_node(self, random_source: random.Random) -> NodeGene:
+    def _random_fresh_node(
+        self,
+        parent_node: NodeGene,
+        random_source: random.Random,
+    ) -> NodeGene:
         return NodeGene(
             name=self._new_node_name("node"),
-            size=tuple(random_source.uniform(0.04, 0.30) for _ in range(3)),
+            size=self._random_child_size_from_parent(parent_node, random_source),
             joint_type=random_source.choice(
                 self._child_joint_types_for_mutation()
             ),
@@ -832,6 +843,39 @@ class GenotypeMutationMixin:
         if all(abs(component) < 1e-6 for component in axis):
             return (0.0, 1.0, 0.0)
         return axis
+
+    def _random_child_size_from_parent(
+        self,
+        parent_node: NodeGene,
+        random_source: random.Random,
+    ) -> Tuple[float, float, float]:
+        return tuple(
+            dimension
+            * random_source.uniform(
+                self.NEW_CHILD_SIZE_MIN_SCALE,
+                self.NEW_CHILD_SIZE_MAX_SCALE,
+            )
+            for dimension in parent_node.size
+        )
+
+    def _clamp_child_size_to_parent(
+        self,
+        child_node: NodeGene,
+        parent_node: NodeGene,
+    ) -> None:
+        child_node.size = tuple(
+            max(
+                parent_dimension * self.NEW_CHILD_SIZE_MIN_SCALE,
+                min(
+                    child_dimension,
+                    parent_dimension * self.NEW_CHILD_SIZE_MAX_SCALE,
+                ),
+            )
+            for child_dimension, parent_dimension in zip(
+                child_node.size,
+                parent_node.size,
+            )
+        )
 
     def _add_new_connection(
         self,
@@ -938,7 +982,12 @@ class GenotypeMutationMixin:
             )
 
         new_node = self._new_node_from_existing(old_node, random_source)
+        new_node.size = self._random_child_size_from_parent(
+            self.nodes[origin],
+            random_source,
+        )
         mutated_field = self._mutate_new_node(new_node, random_source)
+        self._clamp_child_size_to_parent(new_node, self.nodes[origin])
 
         self.archived_nodes.append(copy.deepcopy(old_node))
         self.nodes[new_node.name] = new_node
