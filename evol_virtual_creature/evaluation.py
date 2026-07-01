@@ -24,7 +24,7 @@ NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
 MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed volume."
 _WALKING_FLOOR_CLEARANCE = 0.05
-_FLYING_FLOOR_CLEARANCE = 1.0
+_FLYING_FLOOR_CLEARANCE = 20.0
 _DEFAULT_MIN_BODY_VOLUME = 1e-6
 
 

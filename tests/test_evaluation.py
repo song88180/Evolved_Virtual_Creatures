@@ -342,7 +342,7 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     body_geom_id = _creature_geom_ids(model)[0]
     lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
-    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 1.0)
+    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 20.0)
 
 
 def test_walking_initialization_raises_low_creature_above_floor():
