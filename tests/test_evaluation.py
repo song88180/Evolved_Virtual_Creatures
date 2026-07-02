@@ -281,7 +281,7 @@ def test_both_tasks_return_finite_results():
     assert flying_away.origin_distance >= 0.0
 
 
-def test_flying_distance_stops_at_first_ground_contact():
+def test_flying_speed_is_measured_before_first_ground_contact():
     genotype = build_genotype(
         root="body",
         spec={
@@ -292,7 +292,7 @@ def test_flying_distance_stops_at_first_ground_contact():
         },
     )
     config = FlyingAwayEvaluationConfig(
-        episode_seconds=0.7,
+        episode_seconds=3.0,
         fluid_density=0.0,
         fluid_viscosity=0.0,
     )
@@ -317,7 +317,13 @@ def test_flying_distance_stops_at_first_ground_contact():
     assert metrics["first_ground_contact_time"] is not None
     assert metrics["simulated_seconds"] == pytest.approx(config.episode_seconds)
     assert metrics["origin_distance"] > 0.0
-    assert abs(float(data.qpos[0]) - metrics["origin_distance"]) > 0.1
+    assert metrics["average_origin_speed"] == pytest.approx(
+        metrics["origin_distance"] / metrics["first_ground_contact_time"]
+    )
+    assert metrics["simulated_seconds"] > metrics["first_ground_contact_time"]
+    assert metrics["average_origin_speed"] > (
+        metrics["origin_distance"] / metrics["simulated_seconds"]
+    )
 
 
 def test_flying_initialization_raises_low_creature_above_floor():
@@ -677,9 +683,10 @@ def test_swimming_away_fitness_maximizes_final_distance():
     assert result.origin_distance >= abs(result.forward_distance)
 
 
-def test_flying_fitness_uses_distance_over_ten_and_penalizes_ground_contact():
+def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     config = FlyingAwayEvaluationConfig(
         energy_weight=0.0,
+        height_loss_weight=1.0,
         angular_speed_weight=0.0,
         body_count_weight=0.0,
         volume_weight=0.0,
@@ -687,6 +694,7 @@ def test_flying_fitness_uses_distance_over_ten_and_penalizes_ground_contact():
     metrics = {
         "origin_distance": 20.0,
         "forward_distance": 12.0,
+        "average_origin_speed": 4.0,
         "height_loss": 0.5,
         "ground_touch_penalty": 0.25,
         "no_ground_touch_bonus": 0.0,
@@ -696,15 +704,15 @@ def test_flying_fitness_uses_distance_over_ten_and_penalizes_ground_contact():
         "total_volume": 0.0,
     }
 
-    assert _flying_fitness(config, metrics, "origin_distance") == pytest.approx(
-        20.0 / 10.0 - 0.5 - 0.25
+    assert _flying_fitness(config, metrics, "average_origin_speed") == pytest.approx(
+        0.4 - 0.5 - 0.25
     )
 
     metrics["height_loss"] = 0.0
     metrics["ground_touch_penalty"] = 0.0
     metrics["no_ground_touch_bonus"] = config.no_ground_touch_bonus
-    assert _flying_fitness(config, metrics, "origin_distance") == pytest.approx(
-        20.0 / 10.0 + config.no_ground_touch_bonus
+    assert _flying_fitness(config, metrics, "average_origin_speed") == pytest.approx(
+        0.4 + config.no_ground_touch_bonus
     )
 
 

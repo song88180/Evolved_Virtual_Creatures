@@ -349,7 +349,7 @@ def evaluate_x_axis_flying(
     genotype: Genotype,
     config: FlyingEvaluationConfig | None = None,
 ) -> FlyingEvaluationResult:
-    """Score flight by horizontal positive-x travel while penalizing altitude loss."""
+    """Score flight by horizontal pre-contact speed while penalizing altitude loss."""
     config = config or FlyingEvaluationConfig()
     built = _build_model(genotype, config, "flying_x")
     if isinstance(built, str):
@@ -364,7 +364,7 @@ def evaluate_x_axis_flying(
     if isinstance(metrics, str):
         return _failed_flying(config, metrics)
 
-    fitness = _flying_fitness(config, metrics, distance_metric="forward_distance")
+    fitness = _flying_fitness(config, metrics, speed_metric="average_origin_speed")
     if not math.isfinite(fitness):
         return _failed_flying(config, "Simulation produced a non-finite fitness.")
 
@@ -375,7 +375,7 @@ def evaluate_flying_away(
     genotype: Genotype,
     config: FlyingAwayEvaluationConfig | None = None,
 ) -> FlyingEvaluationResult:
-    """Score flight by horizontal distance from the starting point."""
+    """Score flight by horizontal pre-contact speed from the starting point."""
     config = config or FlyingAwayEvaluationConfig()
     built = _build_model(genotype, config, "flying_away")
     if isinstance(built, str):
@@ -390,7 +390,7 @@ def evaluate_flying_away(
     if isinstance(metrics, str):
         return _failed_flying(config, metrics)
 
-    fitness = _flying_fitness(config, metrics, distance_metric="origin_distance")
+    fitness = _flying_fitness(config, metrics, speed_metric="average_origin_speed")
     if not math.isfinite(fitness):
         return _failed_flying(config, "Simulation produced a non-finite fitness.")
 
@@ -753,9 +753,11 @@ def _run_flying_episode(
     forward_distance = float(horizontal_displacement @ np.asarray(target_direction))
     origin_distance = float(np.linalg.norm(horizontal_displacement))
     simulated_seconds = max(float(data.time), model.opt.timestep)
+    measurement_seconds = simulated_seconds
     ground_touch_penalty = 0.0
     no_ground_touch_bonus = config.no_ground_touch_bonus
     if first_ground_contact_time is not None:
+        measurement_seconds = max(first_ground_contact_time, model.opt.timestep)
         touch_fraction = min(first_ground_contact_time / config.episode_seconds, 1.0)
         ground_touch_penalty = config.ground_touch_weight * (1.0 - touch_fraction)
         no_ground_touch_bonus = 0.0
@@ -766,9 +768,9 @@ def _run_flying_episode(
 
     return {
         "origin_distance": origin_distance,
-        "average_origin_speed": origin_distance / simulated_seconds,
+        "average_origin_speed": origin_distance / measurement_seconds,
         "forward_distance": forward_distance,
-        "average_forward_speed": forward_distance / simulated_seconds,
+        "average_forward_speed": forward_distance / measurement_seconds,
         "sideways_drift": abs(float(lateral[1])),
         "height_loss": height_loss,
         "first_ground_contact_time": first_ground_contact_time,
@@ -786,10 +788,10 @@ def _run_flying_episode(
 def _flying_fitness(
     config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
     metrics: dict,
-    distance_metric: str,
+    speed_metric: str,
 ) -> float:
     return (
-        config.distance_weight * metrics[distance_metric]
+        config.distance_weight * metrics[speed_metric]
         + metrics["no_ground_touch_bonus"]
         - config.height_loss_weight * metrics["height_loss"]
         - metrics["ground_touch_penalty"]
