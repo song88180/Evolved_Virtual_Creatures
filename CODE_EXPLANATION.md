@@ -54,7 +54,7 @@ class ConnectionGene:
     motor_gear: float = 2.0
     ctrlrange: Tuple[float, float] = (-1.0, 1.0)
     control_amp: float = 0.1
-    control_freq: float = 0.1
+    control_freq: float = 0.1  # harmonic multiplier
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
@@ -73,9 +73,9 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `terminal_only`: adds the child only on the terminal occurrence of the parent node. A terminal-only connection cannot point back to its own node.
 - `motor_enabled`: whether the articulated joint on this connection gets a motor.
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
-- `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters.
+- `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters. `control_freq` is an actuator-specific harmonic multiplier applied to the genotype's global base frequency.
 
-The connection orientation is constrained: after applying the Euler rotation, the child body's local `+X` axis must point within 90 degrees of the selected parent face normal. This prevents children from being genetically oriented back into or sideways across the parent attachment surface. The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, frequency, and phase. Their hinge axes and body orientations are reflected so equal controls produce mirror-symmetric motion.
+The connection orientation is constrained: after applying the Euler rotation, the child body's local `+X` axis must point within 90 degrees of the selected parent face normal. This prevents children from being genetically oriented back into or sideways across the parent attachment surface. The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, harmonic frequency multiplier, and phase. Their hinge axes and body orientations are reflected so equal controls produce mirror-symmetric motion.
 
 With all three symmetry planes selected, one connection generates `2 ** 3 = 8` mirrored child subtrees. Copies are retained even when an attachment lies directly on a symmetry plane.
 
@@ -427,7 +427,7 @@ for actuator_id, controller in zip(actuator_ids, builder.actuator_controllers):
     )
 ```
 
-`builder.actuator_controllers` stores the controller recipe for each generated motor. Each motor gets its own amplitude, frequency, and phase based on the connection gene that created it. This makes the controller part of the genotype, so mutation can affect both body shape and motion.
+`builder.actuator_controllers` stores the controller recipe for each generated motor. Each motor gets its own amplitude and phase from the connection gene that created it, while frequency is the genotype global base frequency multiplied by the connection's harmonic frequency multiplier. This makes the controller part of the genotype, so mutation can affect both body shape and motion.
 
 Then the simulation advances one step and synchronizes the viewer:
 

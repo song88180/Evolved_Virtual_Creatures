@@ -23,7 +23,11 @@ def _referenced_child_node_names(spec: GenotypeSpec) -> set[str]:
     }
 
 
-def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
+def build_genotype(
+    root: str,
+    spec: GenotypeSpec,
+    global_control_freq: float = 1.0,
+) -> Genotype:
     """
     Build a concrete genotype from a compact declarative recipe.
 
@@ -64,7 +68,11 @@ def build_genotype(root: str, spec: GenotypeSpec) -> Genotype:
             )
             nodes[node_name].children.append(ConnectionGene(**connection_data))
 
-    return Genotype(root=root, nodes=nodes)
+    return Genotype(
+        root=root,
+        nodes=nodes,
+        global_control_freq=global_control_freq,
+    )
 
 
 def load_genotype_from_json(path: str | Path) -> Genotype:
@@ -75,6 +83,7 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
     genotype = build_genotype(
         root=genotype_data["root"],
         spec=genotype_data["nodes"],
+        global_control_freq=genotype_data.get("global_control_freq", 1.0),
     )
     genotype.archived_connections = [
         ConnectionGene(**_normalize_connection_data(connection))
@@ -101,6 +110,7 @@ def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
     """Convert a genotype into the JSON recipe shape used by this project."""
     return {
         "root": genotype.root,
+        "global_control_freq": genotype.global_control_freq,
         "nodes": {
             node_name: _node_to_dict(node)
             for node_name, node in genotype.nodes.items()

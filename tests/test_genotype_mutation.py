@@ -72,7 +72,7 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert -2.0 <= connection.ctrlrange[0] < 0.0
     assert 0.0 < connection.ctrlrange[1] <= 2.0
     assert 0.02 <= connection.control_amp <= 0.50
-    assert 1.0 <= connection.control_freq <= 15.0
+    assert connection.control_freq in genotype.HARMONIC_CONTROL_FREQS
     assert -3.141592653589793 <= connection.control_phase <= 3.141592653589793
     assert -2.0 <= connection.control_phase_depth_scale <= 2.0
     assert -2.0 <= connection.control_phase_order_scale <= 2.0
@@ -549,6 +549,7 @@ def test_non_topology_mutations_only_register_body_count_stable_fields():
     node_fields = {path[2] for path in paths if path[0] == "node"}
     connection_fields = {path[2] for path in paths if path[0] == "connection"}
 
+    assert ("genotype", "global_control_freq") in paths
     assert node_fields == MUTABLE_NODE_FIELDS
     assert connection_fields == MUTABLE_CONNECTION_FIELDS
 
@@ -629,6 +630,46 @@ def test_every_mutable_gene_field_can_change_phenotype_or_controller(
     after = _phenotype_and_controller_snapshot(genotype)
 
     assert after != before
+
+
+def test_global_control_frequency_mutates_continuously():
+    genotype, _ = _mutable_effect_genotype("axis")
+    genotype.global_control_freq = 2.0
+
+    description = genotype._mutate_parameter_path(
+        ("genotype", "global_control_freq"),
+        random.Random(7),
+    )
+
+    assert "genotype.global_control_freq" in description
+    assert genotype.global_control_freq > 0.0
+    assert genotype.global_control_freq != pytest.approx(2.0)
+    assert genotype.global_control_freq not in genotype.HARMONIC_CONTROL_FREQS
+
+
+def test_connection_control_frequency_mutates_to_harmonic_multiplier():
+    genotype, connection = _mutable_effect_genotype("control_freq")
+    connection.control_freq = 2.0
+
+    genotype._mutate_parameter_path(
+        ("connection", connection, "control_freq"),
+        random.Random(7),
+    )
+
+    assert connection.control_freq in genotype.HARMONIC_CONTROL_FREQS
+    assert connection.control_freq != 2.0
+
+
+def test_legacy_connection_control_frequency_snaps_to_nearest_harmonic():
+    genotype, connection = _mutable_effect_genotype("control_freq")
+    connection.control_freq = 2.6
+
+    genotype._mutate_parameter_path(
+        ("connection", connection, "control_freq"),
+        random.Random(7),
+    )
+
+    assert connection.control_freq == pytest.approx(3.0)
 
 def test_connection_orientation_mutation_preserves_child_normal_constraint():
     genotype, connection = _mutable_effect_genotype("orientation")

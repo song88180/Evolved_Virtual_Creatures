@@ -84,7 +84,7 @@
             "control_freq": {
               "Type": "float",
               "Default": "10",
-              "Description": "Frequency multiplier for the sine-wave open-loop controller."
+              "Description": "Harmonic multiplier applied to Genotype.global_control_freq for the sine-wave controller."
             },
             "control_phase": {
               "Type": "float",
@@ -117,7 +117,7 @@
           "motor_gear": {"Type": "float", "Description": "MuJoCo motor gear value."},
           "ctrlrange": {"Type": "Tuple[float, float]", "Description": "MuJoCo motor control range."},
           "control_amp": {"Type": "float", "Description": "Open-loop control amplitude."},
-          "control_freq": {"Type": "float", "Description": "Open-loop control frequency."},
+          "control_freq": {"Type": "float", "Description": "Actuator-specific harmonic frequency multiplier."},
           "control_phase": {"Type": "float", "Description": "Open-loop base phase."},
           "control_phase_depth_scale": {"Type": "float", "Description": "Depth-based phase scale."},
           "control_phase_order_scale": {"Type": "float", "Description": "Actuator-order-based phase scale."}
@@ -210,10 +210,11 @@
       "Genotype": {
         "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
         "Constructor": {
-          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], global_control_freq: float = 1.0, archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
           "Parameters": {
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
+            "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base angular frequency multiplied by each connection control_freq harmonic."},
             "archived_connections": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Inactive connection genes retained as mutation templates."},
             "archived_nodes": {"Type": "List[NodeGene]", "Default": "field(default_factory=list)", "Description": "Inactive node genes retained as mutation templates."}
           },
@@ -222,6 +223,7 @@
         "Attributes": {
           "root": {"Type": "str", "Description": "Root node name."},
           "nodes": {"Type": "Dict[str, NodeGene]", "Description": "Active node genes."},
+          "global_control_freq": {"Type": "float", "Description": "Continuous base actuator frequency shared by all generated controllers."},
           "archived_connections": {"Type": "List[ConnectionGene]", "Description": "Archived connection templates."},
           "archived_nodes": {"Type": "List[NodeGene]", "Description": "Archived node templates."}
         },
@@ -262,11 +264,12 @@
     "Classes": {},
     "Functions": {
       "build_genotype": {
-        "Signature": "build_genotype(root: str, spec: GenotypeSpec) -> Genotype",
+        "Signature": "build_genotype(root: str, spec: GenotypeSpec, global_control_freq: float = 1.0) -> Genotype",
         "Purpose": "Build a concrete Genotype from a compact declarative mapping.",
         "Parameters": {
           "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
-          "spec": {"Type": "GenotypeSpec", "Default": "required", "Description": "Mapping from node names to node keyword data and optional children connection lists."}
+          "spec": {"Type": "GenotypeSpec", "Default": "required", "Description": "Mapping from node names to node keyword data and optional children connection lists."},
+          "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."}
         },
         "Returns": {"Type": "Genotype", "Description": "A genotype with NodeGene and ConnectionGene objects linked according to spec."},
         "Raises": ["KeyError"],
@@ -346,7 +349,8 @@
           "MIN_MOTOR_GEAR_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for motor gear mutations."},
           "MIN_CTRLRANGE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control range mutations."},
           "MIN_CONTROL_AMP_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control amplitude mutations."},
-          "MIN_CONTROL_FREQ_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control frequency mutations."},
+          "MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for global control frequency mutations."},
+          "HARMONIC_CONTROL_FREQS": {"Type": "ClassVar[Tuple[float, ...]]", "Description": "Allowed actuator-specific harmonic frequency multipliers."},
           "MIN_PHASE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for phase mutations."},
           "MIN_POSITIVE_VALUE": {"Type": "ClassVar[float]", "Description": "Lower clamp used for positive-valued mutations."}
         },
@@ -515,7 +519,7 @@
           "Parameters": {
             "motor_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo motor name."},
             "amp": {"Type": "float", "Default": "required", "Description": "Controller amplitude."},
-            "freq": {"Type": "float", "Default": "required", "Description": "Controller frequency multiplier."},
+            "freq": {"Type": "float", "Default": "required", "Description": "Effective sine control frequency after global base frequency and connection harmonic multiplier are combined."},
             "phase": {"Type": "float", "Default": "required", "Description": "Controller phase offset."}
           },
           "Raises": []
@@ -523,7 +527,7 @@
         "Attributes": {
           "motor_name": {"Type": "str", "Description": "Generated motor name."},
           "amp": {"Type": "float", "Description": "Sine control amplitude."},
-          "freq": {"Type": "float", "Description": "Sine control frequency."},
+          "freq": {"Type": "float", "Description": "Effective sine control frequency."},
           "phase": {"Type": "float", "Description": "Sine control phase."}
         },
         "Methods": {},

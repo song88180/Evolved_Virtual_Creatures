@@ -29,8 +29,15 @@ class GenotypeMutationMixin:
     MIN_MOTOR_GEAR_MUTATION_STD: ClassVar[float] = 0.1
     MIN_CTRLRANGE_MUTATION_STD: ClassVar[float] = 0.01
     MIN_CONTROL_AMP_MUTATION_STD: ClassVar[float] = 0.01
-    MIN_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
+    MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
+    HARMONIC_CONTROL_FREQS: ClassVar[Tuple[float, ...]] = (
+        0.5,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+    )
     MIN_ORIENTATION_MUTATION_STD: ClassVar[float] = 5.0
     MIN_POSITIVE_VALUE: ClassVar[float] = 1e-6
     DEFAULT_TOPOLOGY_MUTATION_RATE_MIN: ClassVar[float] = 0.05
@@ -177,7 +184,9 @@ class GenotypeMutationMixin:
         allow_topology_mutations: bool = True,
         allow_root_mutation: bool = True,
     ) -> List[Tuple[Any, ...]]:
-        mutable_parameters: List[Tuple[Any, ...]] = []
+        mutable_parameters: List[Tuple[Any, ...]] = [
+            ("genotype", "global_control_freq"),
+        ]
         if allow_topology_mutations:
             mutable_parameters.extend((
                 ("connection_addition",),
@@ -386,6 +395,9 @@ class GenotypeMutationMixin:
     def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
         parameter_type = parameter_path[0]
 
+        if parameter_type == "genotype":
+            return "genotype"
+
         if parameter_type == "node":
             _, node_name, *_ = parameter_path
             return f"node '{node_name}'"
@@ -421,6 +433,10 @@ class GenotypeMutationMixin:
         parameter_path: Tuple[Any, ...],
     ) -> Tuple[Any, str, Optional[int]]:
         parameter_type = parameter_path[0]
+
+        if parameter_type == "genotype":
+            _, field_name, *maybe_index = parameter_path
+            return self, field_name, self._path_index(maybe_index)
 
         if parameter_type == "node":
             _, node_name, field_name, *maybe_index = parameter_path
@@ -474,7 +490,12 @@ class GenotypeMutationMixin:
             "motor_gear": ("positive", self.MIN_MOTOR_GEAR_MUTATION_STD, False),
             "ctrlrange": ("relative", self.MIN_CTRLRANGE_MUTATION_STD, True),
             "control_amp": ("positive", self.MIN_CONTROL_AMP_MUTATION_STD, False),
-            "control_freq": ("positive", self.MIN_CONTROL_FREQ_MUTATION_STD, False),
+            "control_freq": ("harmonic_control_freq", 0.0, False),
+            "global_control_freq": (
+                "positive",
+                self.MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD,
+                False,
+            ),
             "control_phase": ("relative", self.MIN_PHASE_MUTATION_STD, False),
             "control_phase_depth_scale": (
                 "relative",
@@ -578,6 +599,18 @@ class GenotypeMutationMixin:
 
         if mutation_kind == "boolean":
             return not value
+
+        if mutation_kind == "harmonic_control_freq":
+            value_as_float = float(value)
+            harmonics = self.HARMONIC_CONTROL_FREQS
+            if value_as_float not in harmonics:
+                return min(
+                    harmonics,
+                    key=lambda candidate: abs(candidate - value_as_float),
+                )
+            return random_source.choice(
+                [candidate for candidate in harmonics if candidate != value_as_float]
+            )
 
         if mutation_kind in {"integer", "positive_integer"}:
             value_as_int = int(value)
@@ -937,7 +970,7 @@ class GenotypeMutationMixin:
             motor_gear=random_source.uniform(20.0, 200.0),
             ctrlrange=(-ctrlrange_limit, ctrlrange_limit),
             control_amp=random_source.uniform(0.02, 0.50),
-            control_freq=random_source.uniform(1.0, 15.0),
+            control_freq=random_source.choice(self.HARMONIC_CONTROL_FREQS),
             control_phase=random_source.uniform(-3.141592653589793, 3.141592653589793),
             control_phase_depth_scale=random_source.uniform(-2.0, 2.0),
             control_phase_order_scale=random_source.uniform(-2.0, 2.0),

@@ -223,6 +223,72 @@ def test_orientation_round_trips_through_json(tmp_path):
     assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
+def test_global_control_frequency_round_trips_through_json(tmp_path):
+    genotype = Genotype(
+        root="body",
+        global_control_freq=2.5,
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+            ),
+        },
+    )
+    path = tmp_path / "global_freq.json"
+
+    save_genotype_to_json(genotype, path)
+    data = json.loads(path.read_text())
+    loaded = load_genotype_from_json(path)
+
+    assert data["global_control_freq"] == pytest.approx(2.5)
+    assert loaded.global_control_freq == pytest.approx(2.5)
+
+
+def test_missing_global_control_frequency_loads_default(tmp_path):
+    genotype_path = tmp_path / "missing_global_freq.json"
+    genotype_path.write_text(
+        json.dumps({
+            "root": "body",
+            "nodes": {
+                "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
+            },
+        })
+    )
+
+    genotype = load_genotype_from_json(genotype_path)
+
+    assert genotype.global_control_freq == pytest.approx(1.0)
+
+
+def test_global_control_frequency_scales_actuator_controllers():
+    genotype = build_genotype(
+        "body",
+        {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [
+                    {
+                        "child": "limb",
+                        "axis": [0.0, 1.0, 0.0],
+                        "control_freq": 3.0,
+                    },
+                ],
+            },
+            "limb": {
+                "size": [0.1, 0.1, 0.1],
+                "joint_type": "hinge",
+            },
+        },
+        global_control_freq=2.5,
+    )
+
+    builder = PhenotypeBuilder(genotype, max_node=10)
+    builder.build()
+
+    assert builder.actuator_controllers[0].freq == pytest.approx(7.5)
+
 def test_shape_round_trips_through_json(tmp_path):
     genotype = Genotype(
         root="body",
@@ -251,12 +317,14 @@ def test_shape_round_trips_through_json(tmp_path):
 
 def test_missing_shape_loads_as_box(tmp_path):
     genotype_path = tmp_path / "missing_shape.json"
-    genotype_path.write_text(json.dumps({
-        "root": "body",
-        "nodes": {
-            "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
-        },
-    }))
+    genotype_path.write_text(
+        json.dumps({
+            "root": "body",
+            "nodes": {
+                "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
+            },
+        })
+    )
 
     genotype = load_genotype_from_json(genotype_path)
 

@@ -385,7 +385,10 @@ class PhenotypeBuilder:
         motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
-        control_freq = incoming_conn.control_freq if incoming_conn else 4.0
+        control_freq = (
+            self.genotype.global_control_freq
+            * (incoming_conn.control_freq if incoming_conn else 4.0)
+        )
         control_order = self.control_orders.setdefault(
             logical_path,
             len(self.control_orders),
