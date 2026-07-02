@@ -1,0 +1,27 @@
+{
+  "root": "body",
+  "nodes": {
+    "body": {
+      "size": [0.08, 0.048, 0.032],
+      "joint_type": "free",
+      "orientation": [0.0, 8.0, 0.0],
+      "recursive_limit": 1,
+      "children": [
+        {
+          "child": "wing",
+          "axis": [0.0, 1.0, 0.0],
+          "parent_face": "+y",
+          "surface_uv": [0.0, 0.0],
+          "orientation": [0.0, 0.0, 90.0],
+          "symmetry": ["xz"],
+          "motor_enabled": false
+        }
+      ]
+    },
+    "wing": {
+      "size": [0.22, 0.072, 0.006],
+      "joint_type": "fixed",
+      "recursive_limit": 1
+    }
+  }
+}
