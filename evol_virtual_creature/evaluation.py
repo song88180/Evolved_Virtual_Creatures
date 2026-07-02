@@ -348,7 +348,7 @@ def evaluate_origin_distance(
         return _failed_origin_distance(config, metrics)
 
     fitness = (
-        config.distance_weight * metrics["origin_distance"]
+        config.distance_weight * metrics["average_origin_speed"]
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]

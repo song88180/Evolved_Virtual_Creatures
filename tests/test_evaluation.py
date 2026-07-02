@@ -764,7 +764,7 @@ def test_control_energy_scales_with_squared_motor_gear():
     assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)
 
 
-def test_swimming_away_fitness_maximizes_final_distance():
+def test_swimming_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_origin_distance(
         genotype,
@@ -777,7 +777,7 @@ def test_swimming_away_fitness_maximizes_final_distance():
         ),
     )
 
-    assert result.fitness == pytest.approx(result.origin_distance)
+    assert result.fitness == pytest.approx(result.average_origin_speed)
     assert result.origin_distance >= abs(result.forward_distance)
 
 
