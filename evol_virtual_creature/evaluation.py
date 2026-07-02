@@ -23,9 +23,14 @@ DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
 MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed volume."
+MINIMUM_TOTAL_VOLUME_REASON = (
+    "Creature total volume is below the minimum allowed volume."
+)
 _WALKING_FLOOR_CLEARANCE = 0.05
-_FLYING_FLOOR_CLEARANCE = 20.0
+_FLYING_FLOOR_CLEARANCE = 5.0
 _DEFAULT_MIN_BODY_VOLUME = 1e-6
+_DEFAULT_MIN_TOTAL_VOLUME = 0.0
+_DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,7 @@ class SwimmingEvaluationConfig:
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -73,6 +79,7 @@ class WalkingEvaluationConfig:
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -96,6 +103,7 @@ class SwimmingAwayEvaluationConfig:
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -120,6 +128,7 @@ class WalkingAwayEvaluationConfig:
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -140,16 +149,18 @@ class FlyingEvaluationConfig:
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 0.1
-    energy_weight: float = 1e-7
+    distance_weight: float = 1
+    energy_weight: float = 1e-9
     angular_speed_weight: float = 0.01
-    height_loss_weight: float = 1.0
-    ground_touch_weight: float = 1.0
-    no_ground_touch_bonus: float = 1.0
+    height_loss_weight: float = 0.01
+    ground_touch_weight: float = 0.0
+    no_ground_touch_bonus: float = 0.1
+    fitness_gain_fraction: float = 0.5
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_FLYING_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -170,16 +181,18 @@ class FlyingAwayEvaluationConfig:
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 0.1
-    energy_weight: float = 1e-7
+    distance_weight: float = 1
+    energy_weight: float = 1e-9
     angular_speed_weight: float = 0.01
-    height_loss_weight: float = 1.0
-    ground_touch_weight: float = 1.0
-    no_ground_touch_bonus: float = 1.0
+    height_loss_weight: float = 0.01
+    ground_touch_weight: float = 0.0
+    no_ground_touch_bonus: float = 0.1
+    fitness_gain_fraction: float = 0.5
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
     min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
+    min_total_volume: float = _DEFAULT_FLYING_MIN_TOTAL_VOLUME
     max_volume: float = 1.0
     build_failure_fitness: float = -1_000.0
     max_abs_state_value: float = 1_000_000.0
@@ -270,6 +283,9 @@ class FlyingEvaluationResult:
     first_ground_contact_time: float | None
     ground_touch_penalty: float
     no_ground_touch_bonus: float
+    controlled_fitness: float
+    passive_fitness: float
+    fitness_gain: float
     control_energy: float
     mean_angular_speed: float
     simulated_seconds: float
@@ -360,11 +376,16 @@ def evaluate_x_axis_flying(
     if failure is not None:
         return _failed_flying(config, failure)
 
-    metrics = _run_flying_episode(model, data, builder, config)
-    if isinstance(metrics, str):
-        return _failed_flying(config, metrics)
-
-    fitness = _flying_fitness(config, metrics, speed_metric="average_origin_speed")
+    evaluated = _flying_metrics_with_passive_baseline(
+        model,
+        data,
+        builder,
+        config,
+        speed_metric="average_forward_speed",
+    )
+    if isinstance(evaluated, str):
+        return _failed_flying(config, evaluated)
+    metrics, fitness = evaluated
     if not math.isfinite(fitness):
         return _failed_flying(config, "Simulation produced a non-finite fitness.")
 
@@ -386,15 +407,72 @@ def evaluate_flying_away(
     if failure is not None:
         return _failed_flying(config, failure)
 
-    metrics = _run_flying_episode(model, data, builder, config)
-    if isinstance(metrics, str):
-        return _failed_flying(config, metrics)
-
-    fitness = _flying_fitness(config, metrics, speed_metric="average_origin_speed")
+    evaluated = _flying_metrics_with_passive_baseline(
+        model,
+        data,
+        builder,
+        config,
+        speed_metric="average_origin_speed",
+    )
+    if isinstance(evaluated, str):
+        return _failed_flying(config, evaluated)
+    metrics, fitness = evaluated
     if not math.isfinite(fitness):
         return _failed_flying(config, "Simulation produced a non-finite fitness.")
 
     return FlyingEvaluationResult(fitness=fitness, **metrics)
+
+def _flying_metrics_with_passive_baseline(
+    model: mujoco.MjModel,
+    initialized_data: mujoco.MjData,
+    builder: PhenotypeBuilder,
+    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
+    speed_metric: str,
+):
+    controlled_data = _copy_simulation_state(model, initialized_data)
+    passive_data = _copy_simulation_state(model, initialized_data)
+
+    controlled_metrics = _run_flying_episode(
+        model, controlled_data, builder, config, apply_controls=True
+    )
+    if isinstance(controlled_metrics, str):
+        return controlled_metrics
+    passive_metrics = _run_flying_episode(
+        model, passive_data, builder, config, apply_controls=False
+    )
+    if isinstance(passive_metrics, str):
+        return passive_metrics
+
+    controlled_fitness = _flying_fitness(config, controlled_metrics, speed_metric)
+    passive_fitness = _flying_fitness(config, passive_metrics, speed_metric)
+    fitness_gain = controlled_fitness - passive_fitness
+    gain_fraction = config.fitness_gain_fraction
+    fitness = (
+        fitness_gain * gain_fraction
+        + controlled_fitness * (1.0 - gain_fraction)
+    )
+    controlled_metrics["controlled_fitness"] = controlled_fitness
+    controlled_metrics["passive_fitness"] = passive_fitness
+    controlled_metrics["fitness_gain"] = fitness_gain
+    return controlled_metrics, fitness
+
+
+def _copy_simulation_state(
+    model: mujoco.MjModel, source: mujoco.MjData
+) -> mujoco.MjData:
+    copied = mujoco.MjData(model)
+    copied.time = source.time
+    copied.qpos[:] = source.qpos
+    copied.qvel[:] = source.qvel
+    copied.ctrl[:] = source.ctrl
+    if copied.act.size:
+        copied.act[:] = source.act
+    if copied.mocap_pos.size:
+        copied.mocap_pos[:] = source.mocap_pos
+    if copied.mocap_quat.size:
+        copied.mocap_quat[:] = source.mocap_quat
+    mujoco.mj_forward(model, copied)
+    return copied
 
 
 def evaluate_walking_away(
@@ -690,6 +768,7 @@ def _run_flying_episode(
     data: mujoco.MjData,
     builder: PhenotypeBuilder,
     config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
+    apply_controls: bool = True,
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
     body_count = max(model.nbody - 1, 0)
@@ -716,7 +795,10 @@ def _run_flying_episode(
     for _ in range(max_steps):
         if data.time >= config.episode_seconds:
             break
-        _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
+        if apply_controls:
+            _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
+        else:
+            data.ctrl[actuator_ids] = 0.0
         ctrl = data.ctrl.copy()
         mujoco.mj_step(model, data)
         if (
@@ -940,6 +1022,9 @@ def _failed_flying(
         first_ground_contact_time=None,
         ground_touch_penalty=0.0,
         no_ground_touch_bonus=0.0,
+        controlled_fitness=0.0,
+        passive_fitness=0.0,
+        fitness_gain=0.0,
         control_energy=0.0,
         mean_angular_speed=0.0,
         simulated_seconds=0.0,
@@ -1052,18 +1137,25 @@ def _creature_volume_failure_reason(
     config: EvaluationConfig,
 ) -> str | None:
     min_body_volume = getattr(config, "min_body_volume", 0.0)
-    if min_body_volume <= 0.0:
-        return None
+    body_volumes = _creature_body_volumes(model)
+    if min_body_volume > 0.0:
+        for body_id, body_volume in body_volumes.items():
+            if body_volume >= min_body_volume:
+                continue
+            body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            if body_name is None:
+                body_name = f"body {body_id}"
+            return (
+                f"{MINIMUM_BODY_VOLUME_REASON} {body_name!r} has volume "
+                f"{body_volume:.6g} m^3; minimum is {min_body_volume:.6g} m^3."
+            )
 
-    for body_id, body_volume in _creature_body_volumes(model).items():
-        if body_volume >= min_body_volume:
-            continue
-        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
-        if body_name is None:
-            body_name = f"body {body_id}"
+    min_total_volume = getattr(config, "min_total_volume", 0.0)
+    total_volume = sum(body_volumes.values())
+    if total_volume < min_total_volume:
         return (
-            f"{MINIMUM_BODY_VOLUME_REASON} {body_name!r} has volume "
-            f"{body_volume:.6g} m^3; minimum is {min_body_volume:.6g} m^3."
+            f"{MINIMUM_TOTAL_VOLUME_REASON} Creature has volume "
+            f"{total_volume:.6g} m^3; minimum is {min_total_volume:.6g} m^3."
         )
     return None
 

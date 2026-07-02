@@ -348,7 +348,7 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     body_geom_id = _creature_geom_ids(model)[0]
     lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
-    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 20.0)
+    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 5.0)
 
 
 def test_walking_initialization_raises_low_creature_above_floor():
@@ -630,6 +630,27 @@ def test_body_below_minimum_volume_is_rejected_before_flying_bonus():
     assert "below the minimum allowed volume" in result.failure_reason
     assert result.no_ground_touch_bonus == 0.0
 
+def test_flying_total_volume_below_minimum_is_rejected_before_simulation():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.02, 0.02, 0.02),
+                "joint_type": "free",
+            }
+        },
+    )
+
+    result = evaluate_x_axis_flying(
+        genotype,
+        FlyingEvaluationConfig(episode_seconds=0.02),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert "total volume is below the minimum allowed volume" in result.failure_reason
+    assert result.no_ground_touch_bonus == 0.0
+
 
 def _single_motor_genotype(motor_gear):
     return build_genotype(
@@ -685,6 +706,7 @@ def test_swimming_away_fitness_maximizes_final_distance():
 
 def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     config = FlyingAwayEvaluationConfig(
+        distance_weight=0.1,
         energy_weight=0.0,
         height_loss_weight=1.0,
         angular_speed_weight=0.0,
@@ -695,6 +717,7 @@ def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
         "origin_distance": 20.0,
         "forward_distance": 12.0,
         "average_origin_speed": 4.0,
+        "average_forward_speed": 2.0,
         "height_loss": 0.5,
         "ground_touch_penalty": 0.25,
         "no_ground_touch_bonus": 0.0,
@@ -714,6 +737,93 @@ def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     assert _flying_fitness(config, metrics, "average_origin_speed") == pytest.approx(
         0.4 + config.no_ground_touch_bonus
     )
+
+
+def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    observed = {}
+    metrics = {
+        "origin_distance": 4.0,
+        "average_origin_speed": 4.0,
+        "forward_distance": 2.0,
+        "average_forward_speed": 2.0,
+        "sideways_drift": 0.0,
+        "height_loss": 0.0,
+        "first_ground_contact_time": None,
+        "ground_touch_penalty": 0.0,
+        "no_ground_touch_bonus": 0.0,
+        "controlled_fitness": 2.0,
+        "passive_fitness": 0.5,
+        "fitness_gain": 1.5,
+        "control_energy": 0.0,
+        "mean_angular_speed": 0.0,
+        "simulated_seconds": 1.0,
+        "actuator_count": 0,
+        "body_count": 0,
+        "total_volume": 0.0,
+    }
+
+    def fake_baseline(_model, _data, _builder, _config, speed_metric):
+        observed["speed_metric"] = speed_metric
+        return metrics, 1.75
+
+    monkeypatch.setattr(
+        evaluation,
+        "_build_model",
+        lambda *_args: (object(), object(), object()),
+    )
+    monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
+    monkeypatch.setattr(
+        evaluation, "_flying_metrics_with_passive_baseline", fake_baseline
+    )
+
+    result = evaluate_x_axis_flying(
+        load_genotype_from_json(GENOTYPE_PATH), FlyingEvaluationConfig()
+    )
+
+    assert observed["speed_metric"] == "average_forward_speed"
+    assert result.fitness == pytest.approx(1.75)
+
+
+def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    controlled_metrics = {
+        "average_forward_speed": 2.0,
+        "height_loss": 0.0,
+        "ground_touch_penalty": 0.0,
+        "no_ground_touch_bonus": 0.0,
+        "control_energy": 0.0,
+        "mean_angular_speed": 0.0,
+        "body_count": 0,
+        "total_volume": 0.0,
+    }
+    passive_metrics = dict(controlled_metrics, average_forward_speed=0.5)
+
+    def fake_run(_model, _data, _builder, _config, apply_controls=True):
+        return controlled_metrics.copy() if apply_controls else passive_metrics.copy()
+
+    config = FlyingEvaluationConfig(
+        distance_weight=1.0,
+        energy_weight=0.0,
+        height_loss_weight=0.0,
+        angular_speed_weight=0.0,
+        body_count_weight=0.0,
+        volume_weight=0.0,
+        fitness_gain_fraction=0.5,
+    )
+    monkeypatch.setattr(evaluation, "_copy_simulation_state", lambda *_args: object())
+    monkeypatch.setattr(evaluation, "_run_flying_episode", fake_run)
+
+    metrics, fitness = evaluation._flying_metrics_with_passive_baseline(
+        object(), object(), object(), config, "average_forward_speed"
+    )
+
+    assert metrics["controlled_fitness"] == pytest.approx(2.0)
+    assert metrics["passive_fitness"] == pytest.approx(0.5)
+    assert metrics["fitness_gain"] == pytest.approx(1.5)
+    assert fitness == pytest.approx(1.75)
 
 
 def test_walking_away_fitness_maximizes_final_distance():

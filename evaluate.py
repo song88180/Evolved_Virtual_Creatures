@@ -44,6 +44,7 @@ def main():
         "volume_weight": args.volume_weight,
         "volume_penalty_cutoff": args.volume_penalty_cutoff,
         "min_body_volume": args.min_body_volume,
+        "min_total_volume": args.min_total_volume,
         "max_volume": args.max_volume,
         "self_collision": args.self_collision,
         "disallow_collision": args.disallow_collision,
@@ -54,6 +55,7 @@ def main():
             fluid_viscosity=args.fluid_viscosity,
             fluid_shape=args.fluid_shape,
             fluid_coef=tuple(args.fluid_coef),
+            fitness_gain_fraction=args.fitness_gain_fraction,
         )
     config = config_type(**config_kwargs)
     result = evaluate_for_task(genotype, config)
@@ -91,6 +93,9 @@ def main():
             print(f"First ground contact: {result.first_ground_contact_time:.2f}")
         print(f"Ground touch penalty: {result.ground_touch_penalty:.6f}")
         print(f"No-ground-touch bonus: {result.no_ground_touch_bonus:.6f}")
+        print(f"Controlled fitness: {result.controlled_fitness:.6f}")
+        print(f"Passive fitness: {result.passive_fitness:.6f}")
+        print(f"Fitness gain: {result.fitness_gain:.6f}")
     else:
         print(f"Height loss: {result.height_loss:.6f}")
         print(f"Mean upright error: {result.mean_upright_error:.6f}")
@@ -211,6 +216,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--min-total-volume",
+        type=float,
+        default=None,
+        help=(
+            "Minimum required total generated creature volume in cubic meters. "
+            "(default: task default)"
+        ),
+    )
+    parser.add_argument(
         "--max-volume",
         type=float,
         default=None,
@@ -237,6 +251,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "MuJoCo fluid shape approximation for flying creature geoms. "
+            "(default: task default)"
+        ),
+    )
+    parser.add_argument(
+        "--fitness-gain-fraction",
+        type=float,
+        default=None,
+        help=(
+            "Blend fraction for controlled-minus-passive flying fitness gain. "
             "(default: task default)"
         ),
     )
@@ -320,12 +343,16 @@ def parse_args() -> argparse.Namespace:
         parser.error("--max-volume must be greater than --volume-penalty-cutoff")
     if args.min_body_volume < 0.0:
         parser.error("--min-body-volume must be non-negative")
+    if args.min_total_volume < 0.0:
+        parser.error("--min-total-volume must be non-negative")
     if args.volume_weight < 0.0:
         parser.error("--volume-weight must be non-negative")
     if args.body_count_weight < 0.0:
         parser.error("--body-count-weight must be non-negative")
     if args.fluid_density < 0.0:
         parser.error("--fluid-density must be non-negative")
+    if not 0.0 <= args.fitness_gain_fraction <= 1.0:
+        parser.error("--fitness-gain-fraction must be between 0 and 1")
     if args.fluid_viscosity < 0.0:
         parser.error("--fluid-viscosity must be non-negative")
     if args.fps < 1:
@@ -347,6 +374,7 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
         "volume_weight",
         "volume_penalty_cutoff",
         "min_body_volume",
+        "min_total_volume",
         "max_volume",
     ):
         if getattr(args, name) is None:
@@ -355,7 +383,13 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
     flying_defaults = (
         task_defaults if args.task.startswith("flying") else FlyingEvaluationConfig()
     )
-    for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
+    for name in (
+        "fluid_density",
+        "fluid_viscosity",
+        "fluid_shape",
+        "fluid_coef",
+        "fitness_gain_fraction",
+    ):
         if getattr(args, name) is None:
             value = getattr(flying_defaults, name)
             if name == "fluid_coef":

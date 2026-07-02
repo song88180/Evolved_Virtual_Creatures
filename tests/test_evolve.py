@@ -91,6 +91,8 @@ def test_evaluate_accepts_flying_fluid_options(monkeypatch):
             "0.00002",
             "--fluid-shape",
             "none",
+            "--fitness-gain-fraction",
+            "0.8",
             "--fluid-coef",
             "0.1",
             "0.2",
@@ -104,6 +106,7 @@ def test_evaluate_accepts_flying_fluid_options(monkeypatch):
     assert args.fluid_viscosity == pytest.approx(0.00002)
     assert args.fluid_shape == "none"
     assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
+    assert args.fitness_gain_fraction == pytest.approx(0.8)
 
 
 def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
@@ -162,6 +165,8 @@ def test_evolve_accepts_flying_fluid_options(monkeypatch):
             "0.00002",
             "--fluid-shape",
             "none",
+            "--fitness-gain-fraction",
+            "0.8",
             "--fluid-coef",
             "0.1",
             "0.2",
@@ -175,6 +180,7 @@ def test_evolve_accepts_flying_fluid_options(monkeypatch):
     assert args.fluid_viscosity == pytest.approx(0.00002)
     assert args.fluid_shape == "none"
     assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
+    assert args.fitness_gain_fraction == pytest.approx(0.8)
 
 
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])
@@ -184,11 +190,13 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
         volume_weight = 0.034
         volume_penalty_cutoff = 0.056
         min_body_volume = 0.000078
+        min_total_volume = 0.00012
         max_volume = 0.9
         fluid_density = 0.8
         fluid_viscosity = 0.00003
         fluid_shape = "none"
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
+        fitness_gain_fraction = 0.7
 
     monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
     monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
@@ -199,11 +207,13 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
     assert args.volume_weight == pytest.approx(0.034)
     assert args.volume_penalty_cutoff == pytest.approx(0.056)
     assert args.min_body_volume == pytest.approx(0.000078)
+    assert args.min_total_volume == pytest.approx(0.00012)
     assert args.max_volume == pytest.approx(0.9)
     assert args.fluid_density == pytest.approx(0.8)
     assert args.fluid_viscosity == pytest.approx(0.00003)
     assert args.fluid_shape == "none"
     assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
+    assert args.fitness_gain_fraction == pytest.approx(0.7)
 
 
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])
@@ -213,11 +223,13 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
         volume_weight = 0.034
         volume_penalty_cutoff = 0.056
         min_body_volume = 0.000078
+        min_total_volume = 0.00012
         max_volume = 0.9
         fluid_density = 0.8
         fluid_viscosity = 0.00003
         fluid_shape = "none"
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
+        fitness_gain_fraction = 0.7
 
     monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
     monkeypatch.setattr(
@@ -235,6 +247,8 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
             "0.4",
             "--min-body-volume",
             "0.0005",
+            "--min-total-volume",
+            "0.0006",
             "--max-volume",
             "1.6",
             "--fluid-density",
@@ -243,6 +257,8 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
             "0.00008",
             "--fluid-shape",
             "ellipsoid",
+            "--fitness-gain-fraction",
+            "0.8",
             "--fluid-coef",
             "0.6",
             "0.7",
@@ -258,10 +274,12 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
     assert args.volume_weight == pytest.approx(0.3)
     assert args.volume_penalty_cutoff == pytest.approx(0.4)
     assert args.min_body_volume == pytest.approx(0.0005)
+    assert args.min_total_volume == pytest.approx(0.0006)
     assert args.max_volume == pytest.approx(1.6)
     assert args.fluid_density == pytest.approx(1.7)
     assert args.fluid_viscosity == pytest.approx(0.00008)
     assert args.fluid_shape == "ellipsoid"
+    assert args.fitness_gain_fraction == pytest.approx(0.8)
     assert args.fluid_coef == pytest.approx([0.6, 0.7, 0.8, 0.9, 1.0])
 
 
