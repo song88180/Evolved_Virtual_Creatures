@@ -503,6 +503,7 @@ def evaluate_walking_away(
         builder,
         config,
         root_body_name=f"{genotype.root}_1",
+        horizontal_origin_distance=True,
     )
     if isinstance(metrics, str):
         return _failed_walking(config, metrics)
@@ -513,7 +514,7 @@ def evaluate_walking_away(
         if key != "vertical_drift"
     }
     fitness = (
-        config.distance_weight * walking_metrics["origin_distance"]
+        config.distance_weight * walking_metrics["average_origin_speed"]
         - config.energy_weight * walking_metrics["control_energy"]
         - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
         - config.body_count_weight * walking_metrics["body_count"]
@@ -896,6 +897,7 @@ def _run_controlled_episode(
     builder: PhenotypeBuilder,
     config: EvaluationConfig,
     root_body_name: str | None = None,
+    horizontal_origin_distance: bool = False,
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
     body_count = max(model.nbody - 1, 0)
@@ -946,7 +948,10 @@ def _run_controlled_episode(
     forward_distance = float(displacement @ target_direction)
     simulated_seconds = max(float(data.time), model.opt.timestep)
     average_forward_speed = forward_distance / simulated_seconds
-    origin_distance = float(np.linalg.norm(displacement))
+    origin_displacement = displacement.copy()
+    if horizontal_origin_distance:
+        origin_displacement[2] = 0.0
+    origin_distance = float(np.linalg.norm(origin_displacement))
     average_origin_speed = origin_distance / simulated_seconds
     lateral = displacement - forward_distance * np.asarray(target_direction)
 

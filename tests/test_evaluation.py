@@ -16,6 +16,7 @@ from evol_virtual_creature.evaluation import (
     _flying_fitness,
     _has_nonparent_self_collision,
     _run_flying_episode,
+    _run_controlled_episode,
     _creature_volume,
     evaluate_flying_away,
     evaluate_origin_distance,
@@ -279,6 +280,82 @@ def test_both_tasks_return_finite_results():
     assert flying.height_loss >= 0.0
     assert flying_away.height_loss >= 0.0
     assert flying_away.origin_distance >= 0.0
+
+
+def test_controlled_episode_can_measure_horizontal_origin_distance():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    config = WalkingAwayEvaluationConfig(episode_seconds=1.0)
+
+    class Builder:
+        actuator_controllers = []
+
+    data = mujoco.MjData(model)
+    data.qvel[:3] = (3.0, 4.0, 12.0)
+    horizontal_metrics = _run_controlled_episode(
+        model,
+        data,
+        Builder(),
+        config,
+        horizontal_origin_distance=True,
+    )
+
+    data = mujoco.MjData(model)
+    data.qvel[:3] = (3.0, 4.0, 12.0)
+    spatial_metrics = _run_controlled_episode(model, data, Builder(), config)
+
+    assert not isinstance(horizontal_metrics, str)
+    assert not isinstance(spatial_metrics, str)
+    assert horizontal_metrics["origin_distance"] == pytest.approx(5.0)
+    assert horizontal_metrics["average_origin_speed"] == pytest.approx(5.0)
+    assert spatial_metrics["origin_distance"] == pytest.approx(13.0)
+
+
+def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    genotype = build_genotype(
+        root="body",
+        spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
+    )
+    metrics = {
+        "origin_distance": 20.0,
+        "average_origin_speed": 2.0,
+        "forward_distance": 0.0,
+        "average_forward_speed": 0.0,
+        "sideways_drift": 0.0,
+        "vertical_drift": 0.0,
+        "height_loss": 0.0,
+        "control_energy": 0.0,
+        "mean_angular_speed": 0.0,
+        "mean_upright_error": 0.0,
+        "simulated_seconds": 10.0,
+        "actuator_count": 0,
+        "body_count": 0,
+        "total_volume": 0.0,
+    }
+
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
+    monkeypatch.setattr(evaluation, "initialize_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "settle_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
+
+    result = evaluation.evaluate_walking_away(
+        genotype, WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0)
+    )
+
+    assert result.fitness == pytest.approx(2.0)
 
 
 def test_flying_speed_is_measured_before_first_ground_contact():
@@ -826,7 +903,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     assert fitness == pytest.approx(1.75)
 
 
-def test_walking_away_fitness_maximizes_final_distance():
+def test_walking_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_walking_away(
         genotype,
@@ -840,5 +917,5 @@ def test_walking_away_fitness_maximizes_final_distance():
         ),
     )
 
-    assert result.fitness == pytest.approx(result.origin_distance)
+    assert result.fitness == pytest.approx(result.average_origin_speed)
     assert result.origin_distance >= abs(result.forward_distance)
