@@ -547,6 +547,7 @@ def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean
         },
     )
     summary = {
+        "best_gene_count": 11,
         "best_body_count": 7,
         "build_failures": 1,
         "disqualifications": 2,
@@ -555,14 +556,14 @@ def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean
     line = evolve_cli._format_generation_progress(4, creature, summary)
 
     assert line == (
-        "gen=0004 best=2.500000 bodies=7 volume=0.125000 "
+        "gen=0004 best=2.500000 genes=11 bodies=7 volume=0.125000 "
         "energy=3.750000 failures=1 disqualified=2"
     )
     assert "best_ever=" not in line
     assert "mean=" not in line
 
 
-def test_generation_summary_counts_disqualifications():
+def test_generation_summary_counts_disqualifications_and_active_genes():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = evolve_lib.EvaluatedCreature(
         genotype=genotype,
@@ -570,8 +571,14 @@ def test_generation_summary_counts_disqualifications():
         metrics={"disqualified": True, "body_count": 1},
     )
     summary = evolve_lib.generation_summary(0, [creature], creature)
+    expected_genes = len(genotype.nodes) + sum(
+        len(node.children)
+        for node in genotype.nodes.values()
+    )
     assert summary["disqualifications"] == 1
     assert summary["build_failures"] == 0
+    assert summary["best_gene_count"] == expected_genes
+    assert summary["best_ever_gene_count"] == expected_genes
 
 
 def test_default_run_directory_uses_task_name(monkeypatch):

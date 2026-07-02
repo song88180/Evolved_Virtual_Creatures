@@ -256,11 +256,21 @@ def generation_summary(
             for creature in evaluated
             if creature.metrics.get("disqualified", False)
         ),
+        "best_gene_count": _active_gene_count(evaluated[0].genotype),
+        "best_ever_gene_count": _active_gene_count(best_so_far.genotype),
         "best_body_count": evaluated[0].metrics.get("body_count", 0),
         "best_ever_body_count": best_so_far.metrics.get("body_count", 0),
         "best_metrics": evaluated[0].metrics,
         "best_ever_metrics": best_so_far.metrics,
     }
+
+
+def _active_gene_count(genotype: Genotype) -> int:
+    """Count active node and connection genes in a genotype."""
+    return len(genotype.nodes) + sum(
+        len(node.children)
+        for node in genotype.nodes.values()
+    )
 
 
 def write_json(path: Path, data: Any) -> None:

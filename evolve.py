@@ -146,6 +146,7 @@ def _format_generation_progress(
     return (
         f"gen={generation:04d} "
         f"best={best.fitness:.6f} "
+        f"genes={summary['best_gene_count']} "
         f"bodies={summary['best_body_count']} "
         f"volume={best.metrics.get('total_volume', 0.0):.6f} "
         f"energy={best.metrics.get('control_energy', 0.0):.6f} "
