@@ -109,6 +109,7 @@ def _write_best_xml(
             fluid_viscosity=getattr(config, "fluid_viscosity", None),
             fluid_shape=getattr(config, "fluid_shape", None),
             fluid_coef=getattr(config, "fluid_coef", None),
+            gravity=getattr(config, "gravity", None),
         ).build()
     except PhenotypeBuildAbort:
         return

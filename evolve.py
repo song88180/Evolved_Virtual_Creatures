@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import replace
 from datetime import datetime
 import json
 from pathlib import Path
@@ -32,7 +33,6 @@ from evol_virtual_creature.evolve import (
 from evol_virtual_creature.genotype_io import (
     load_genotype_from_json,
 )
-
 
 DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
 DEFAULT_RUNS_DIR = Path(__file__).with_name("runs")
@@ -99,7 +99,8 @@ def main() -> None:
         metrics_path.open("w") as metrics_file,
     ):
         for generation in range(args.generations + 1):
-            evaluated = _evaluate_population(population, config, executor)
+            generation_config = _config_for_generation(config, args, generation)
+            evaluated = _evaluate_population(population, generation_config, executor)
             evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
             best = evaluated[0]
             best_so_far = best_of(best_so_far, best)
@@ -112,7 +113,7 @@ def main() -> None:
                 generation,
                 best,
                 best_so_far,
-                config,
+                generation_config,
                 save_generation_history=not args.latest_best_only,
             )
 
@@ -169,6 +170,42 @@ def _config_type_for_task(task: str):
     if task == "swimming_away":
         return SwimmingAwayEvaluationConfig
     return SwimmingEvaluationConfig
+
+
+def _parse_gravity_range(value: str) -> tuple[float, float]:
+    """Parse START,END gravity values for flying evolution."""
+    parts = value.split(",")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            "--gradual-gravity-change must be START_GRAVITY,END_GRAVITY"
+        )
+    try:
+        return float(parts[0]), float(parts[1])
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "--gradual-gravity-change values must be numbers"
+        ) from error
+
+
+def _gravity_for_generation(
+    gravity_range: tuple[float, float], generation: int, generations: int
+) -> float:
+    """Return linearly interpolated gravity for a generation."""
+    start_gravity, end_gravity = gravity_range
+    if generations == 0:
+        return start_gravity
+    fraction = generation / generations
+    return start_gravity + (end_gravity - start_gravity) * fraction
+
+
+def _config_for_generation(config, args: argparse.Namespace, generation: int):
+    """Return evaluation config with any generation-dependent settings."""
+    if args.gradual_gravity_change is None:
+        return config
+    gravity = _gravity_for_generation(
+        args.gradual_gravity_change, generation, args.generations
+    )
+    return replace(config, gravity=gravity)
 
 
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
@@ -397,6 +434,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--gradual-gravity-change",
+        type=_parse_gravity_range,
+        default=None,
+        metavar="START_GRAVITY,END_GRAVITY",
+        help=(
+            "For flying evolution, linearly interpolate z gravity from "
+            "start to end over generations."
+        ),
+    )
+    parser.add_argument(
         "--self-collision",
         action="store_true",
         help=(
@@ -503,6 +550,8 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--fluid-density must be non-negative")
     if not 0.0 <= args.fitness_gain_fraction <= 1.0:
         raise ValueError("--fitness-gain-fraction must be between 0 and 1")
+    if args.gradual_gravity_change is not None and not args.task.startswith("flying"):
+        raise ValueError("--gradual-gravity-change is only supported for flying tasks")
     if args.fluid_viscosity < 0.0:
         raise ValueError("--fluid-viscosity must be non-negative")
 
@@ -511,7 +560,6 @@ def _default_run_dir(task: str) -> Path:
     """Return a task-specific timestamped directory under ``runs/``."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return DEFAULT_RUNS_DIR / f"{task}_{timestamp}"
-
 
 if __name__ == "__main__":
     main()

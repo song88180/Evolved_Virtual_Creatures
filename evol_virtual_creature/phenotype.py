@@ -33,6 +33,7 @@ DEFAULT_FLYING_FLUID_DENSITY = 10 #1.225
 DEFAULT_FLYING_FLUID_VISCOSITY = 1.8e-4 #0.000018
 DEFAULT_FLYING_FLUID_SHAPE = "ellipsoid"
 DEFAULT_FLYING_FLUID_COEF = (0.5, 0.25, 1.5, 1.0, 1.0)
+DEFAULT_FLYING_GRAVITY = -9.81
 
 
 @dataclass
@@ -58,6 +59,7 @@ class PhenotypeBuilder:
         fluid_viscosity: float | None = None,
         fluid_shape: str | None = None,
         fluid_coef: Sequence[float] | None = None,
+        gravity: float | None = None,
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
@@ -88,6 +90,7 @@ class PhenotypeBuilder:
             if fluid_viscosity is None
             else float(fluid_viscosity)
         )
+        self.gravity = DEFAULT_FLYING_GRAVITY if gravity is None else float(gravity)
         self.fluid_shape = fluid_shape or DEFAULT_FLYING_FLUID_SHAPE
         self.fluid_coef = tuple(
             DEFAULT_FLYING_FLUID_COEF if fluid_coef is None else fluid_coef
@@ -163,7 +166,7 @@ class PhenotypeBuilder:
             option.set("density", "1000")
             option.set("viscosity", "0.001")
         elif self.task in {"flying_x", "flying_away"}:
-            option.set("gravity", "0 0 -9.81")
+            option.set("gravity", f"0 0 {self.gravity}")
             option.set("density", str(self.fluid_density))
             option.set("viscosity", str(self.fluid_viscosity))
         else:

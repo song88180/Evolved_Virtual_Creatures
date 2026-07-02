@@ -14,6 +14,7 @@ from .phenotype import (
     DEFAULT_FLYING_FLUID_DENSITY,
     DEFAULT_FLYING_FLUID_SHAPE,
     DEFAULT_FLYING_FLUID_VISCOSITY,
+    DEFAULT_FLYING_GRAVITY,
     ActuatorController,
     PhenotypeBuilder,
 )
@@ -145,6 +146,7 @@ class FlyingEvaluationConfig:
     fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
     fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
     fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
+    gravity: float = DEFAULT_FLYING_GRAVITY
     max_node: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
@@ -177,6 +179,7 @@ class FlyingAwayEvaluationConfig:
     fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
     fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
     fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
+    gravity: float = DEFAULT_FLYING_GRAVITY
     max_node: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
@@ -743,6 +746,7 @@ def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
             fluid_viscosity=getattr(config, "fluid_viscosity", None),
             fluid_shape=getattr(config, "fluid_shape", None),
             fluid_coef=getattr(config, "fluid_coef", None),
+            gravity=getattr(config, "gravity", None),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:

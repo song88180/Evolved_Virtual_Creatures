@@ -1,3 +1,4 @@
+import argparse
 from concurrent.futures import ProcessPoolExecutor
 import random
 import sys
@@ -53,7 +54,6 @@ def test_evaluate_accepts_volume_weight(monkeypatch):
     assert evaluate.parse_args().volume_weight == pytest.approx(0.25)
 
 
-
 def test_evaluate_accepts_volume_cutoff_and_maximum(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -69,7 +69,6 @@ def test_evaluate_accepts_volume_cutoff_and_maximum(monkeypatch):
     args = evaluate.parse_args()
     assert args.volume_penalty_cutoff == pytest.approx(0.2)
     assert args.max_volume == pytest.approx(2.0)
-
 
 
 def test_evaluate_accepts_self_collision(monkeypatch):
@@ -125,6 +124,7 @@ def test_evaluate_rejects_nonpositive_shadowsize(monkeypatch):
     with pytest.raises(SystemExit, match="2"):
         evaluate.parse_args()
 
+
 def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--task", "walking_x", "--threads", "3"]
@@ -149,6 +149,51 @@ def test_evaluate_and_evolve_accept_flying_tasks(monkeypatch):
 
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "flying_away"])
     assert evolve_cli.parse_args().task == "flying_away"
+
+
+def test_evolve_accepts_gradual_gravity_change_for_flying(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evolve.py",
+            "--task",
+            "flying_x",
+            "--gradual-gravity-change=-1.0,-9.81",
+        ],
+    )
+    args = evolve_cli.parse_args()
+    assert args.gradual_gravity_change == pytest.approx((-1.0, -9.81))
+
+
+def test_evolve_rejects_gradual_gravity_change_for_non_flying(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evolve.py", "--gradual-gravity-change=-1.0,-9.81"],
+    )
+    with pytest.raises(
+        ValueError,
+        match="--gradual-gravity-change is only supported for flying tasks",
+    ):
+        evolve_cli.parse_args()
+
+
+def test_gradual_gravity_change_interpolates_across_generations():
+    assert evolve_cli._gravity_for_generation((-1.0, -9.0), 0, 4) == pytest.approx(-1.0)
+    assert evolve_cli._gravity_for_generation((-1.0, -9.0), 2, 4) == pytest.approx(-5.0)
+    assert evolve_cli._gravity_for_generation((-1.0, -9.0), 4, 4) == pytest.approx(-9.0)
+
+
+def test_generation_config_applies_gradual_flying_gravity():
+    config = FlyingEvaluationConfig()
+    args = argparse.Namespace(
+        gradual_gravity_change=(-1.0, -9.0),
+        generations=4,
+    )
+    generation_config = evolve_cli._config_for_generation(config, args, 2)
+    assert generation_config.gravity == pytest.approx(-5.0)
+    assert config.gravity == pytest.approx(-9.81)
 
 
 def test_evolve_accepts_flying_fluid_options(monkeypatch):
@@ -184,6 +229,8 @@ def test_evolve_accepts_flying_fluid_options(monkeypatch):
 
 
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])
+
+
 def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
     class TaskDefaults:
         body_count_weight = 0.012
@@ -217,6 +264,8 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
 
 
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])
+
+
 def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
     class TaskDefaults:
         body_count_weight = 0.012
@@ -290,7 +339,6 @@ def test_evolve_accepts_volume_weight(monkeypatch):
     assert evolve_cli.parse_args().volume_weight == pytest.approx(0.25)
 
 
-
 def test_evolve_accepts_volume_cutoff_and_maximum(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -306,7 +354,6 @@ def test_evolve_accepts_volume_cutoff_and_maximum(monkeypatch):
     args = evolve_cli.parse_args()
     assert args.volume_penalty_cutoff == pytest.approx(0.2)
     assert args.max_volume == pytest.approx(2.0)
-
 
 
 def test_evolve_accepts_self_collision(monkeypatch):
@@ -413,6 +460,8 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
         FlyingAwayEvaluationConfig(episode_seconds=0.02),
     ],
 )
+
+
 def test_evaluate_population_runs_in_processes_and_preserves_order(config):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     population = [genotype, genotype]
@@ -485,6 +534,19 @@ def test_saved_best_xml_preserves_flying_physics(tmp_path):
     assert default_geom.get("conaffinity") == "3"
     assert floor is not None
     assert floor.get("contype") == "1"
+
+
+def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    path = tmp_path / "best.xml"
+    evolve_lib._write_best_xml(
+        path,
+        genotype,
+        FlyingEvaluationConfig(episode_seconds=0.02, gravity=-3.5),
+    )
+    option = ET.fromstring(path.read_text()).find("option")
+    assert option is not None
+    assert option.get("gravity") == "0 0 -3.5"
 
 
 def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
@@ -652,6 +714,8 @@ def test_default_run_directory_uses_task_name(monkeypatch):
         ),
     ],
 )
+
+
 def test_help_describes_parameter_defaults(
     monkeypatch, capsys, parse_args, expected_defaults
 ):
@@ -693,6 +757,7 @@ def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
     assert default_geom is not None
     assert default_geom.get("contype") == "2"
     assert default_geom.get("conaffinity") == "2"
+
 
 def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
