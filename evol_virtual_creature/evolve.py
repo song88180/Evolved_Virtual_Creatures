@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 import io
 from itertools import repeat
 import json
+import math
 import os
 from pathlib import Path
 import random
@@ -17,7 +18,7 @@ from typing import Any
 
 from .evaluation import EvaluationConfig, evaluate_for_task, task_for_config
 from .genotype import Genotype
-from .genotype_io import save_genotype_to_json
+from .genotype_io import genotype_to_dict, save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import PhenotypeBuilder
 
@@ -29,6 +30,13 @@ class EvaluatedCreature:
     genotype: Genotype
     fitness: float
     metrics: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class MutantRecord:
+    """Comparison baseline for a child that actually changed during mutation."""
+
+    previous_best_fitness: float
 
 
 def _evaluate_population(
@@ -166,14 +174,48 @@ def next_population(
     topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
 ) -> list[Genotype]:
     """Select elites and tournament winners, then mutate them into the next generation."""
+    population, _mutant_records = next_population_with_mutant_records(
+        evaluated=evaluated,
+        population_size=population_size,
+        elite_count=elite_count,
+        tournament_size=tournament_size,
+        min_mutations=min_mutations,
+        max_mutations=max_mutations,
+        rng=rng,
+        allow_topology_mutations=allow_topology_mutations,
+        allow_slide_joint=allow_slide_joint,
+        allow_root_mutation=allow_root_mutation,
+        topology_mutation_rate_min=topology_mutation_rate_min,
+        previous_best_fitness=None,
+    )
+    return population
+
+
+def next_population_with_mutant_records(
+    evaluated: list[EvaluatedCreature],
+    population_size: int,
+    elite_count: int,
+    tournament_size: int,
+    min_mutations: int,
+    max_mutations: int,
+    rng: random.Random,
+    allow_topology_mutations: bool = True,
+    allow_slide_joint: bool = False,
+    allow_root_mutation: bool = True,
+    topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
+    previous_best_fitness: float | None = None,
+) -> tuple[list[Genotype], list[MutantRecord | None]]:
+    """Select the next generation and mark children that changed by mutation."""
     next_generation = [
         copy.deepcopy(creature.genotype)
         for creature in evaluated[:elite_count]
     ]
+    mutant_records: list[MutantRecord | None] = [None] * len(next_generation)
 
     while len(next_generation) < population_size:
         parent = tournament_select(evaluated, tournament_size, rng)
         child = copy.deepcopy(parent.genotype)
+        parent_snapshot = genotype_to_dict(parent.genotype)
         mutation_count = rng.randint(min_mutations, max_mutations)
         mutate_quietly(
             child,
@@ -185,8 +227,17 @@ def next_population(
             topology_mutation_rate_min=topology_mutation_rate_min,
         )
         next_generation.append(child)
+        if (
+            previous_best_fitness is not None
+            and genotype_to_dict(child) != parent_snapshot
+        ):
+            mutant_records.append(
+                MutantRecord(previous_best_fitness=previous_best_fitness)
+            )
+        else:
+            mutant_records.append(None)
 
-    return next_generation
+    return next_generation, mutant_records
 
 
 def tournament_select(
@@ -237,6 +288,7 @@ def generation_summary(
     generation: int,
     evaluated: list[EvaluatedCreature],
     best_so_far: EvaluatedCreature,
+    mutant_records: list[MutantRecord | None] | None = None,
 ) -> dict[str, Any]:
     """Summarize generation fitness statistics for logging and metrics output."""
     fitnesses = [creature.fitness for creature in evaluated]
@@ -245,7 +297,7 @@ def generation_summary(
         for creature in evaluated
         if creature.metrics.get("build_failed", False)
     )
-    return {
+    summary = {
         "generation": generation,
         "best_fitness": evaluated[0].fitness,
         "best_ever_fitness": best_so_far.fitness,
@@ -264,6 +316,9 @@ def generation_summary(
         "best_metrics": evaluated[0].metrics,
         "best_ever_metrics": best_so_far.metrics,
     }
+    if mutant_records is not None:
+        summary.update(_mutant_type_counts(evaluated, mutant_records))
+    return summary
 
 
 def _active_gene_count(genotype: Genotype) -> int:
@@ -272,6 +327,41 @@ def _active_gene_count(genotype: Genotype) -> int:
         len(node.children)
         for node in genotype.nodes.values()
     )
+
+
+def _mutant_type_counts(
+    evaluated: list[EvaluatedCreature],
+    mutant_records: list[MutantRecord | None],
+) -> dict[str, int]:
+    """Count actual mutants by fitness relative to the previous generation best."""
+    if len(mutant_records) != len(evaluated):
+        raise ValueError("mutant records must match evaluated population length")
+
+    counts = {
+        "fitter_mutants": 0,
+        "less_fit_mutants": 0,
+        "neutral_mutants": 0,
+    }
+    for creature, record in zip(evaluated, mutant_records):
+        if record is None:
+            continue
+        if (
+            creature.metrics.get("build_failed", False)
+            or creature.metrics.get("disqualified", False)
+        ):
+            counts["less_fit_mutants"] += 1
+        elif creature.fitness > record.previous_best_fitness:
+            counts["fitter_mutants"] += 1
+        elif math.isclose(
+            creature.fitness,
+            record.previous_best_fitness,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            counts["neutral_mutants"] += 1
+        else:
+            counts["less_fit_mutants"] += 1
+    return counts
 
 
 def write_json(path: Path, data: Any) -> None:

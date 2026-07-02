@@ -27,7 +27,7 @@ from evol_virtual_creature.evolve import (
     default_thread_count,
     generation_summary,
     initial_population,
-    next_population,
+    next_population_with_mutant_records,
     write_json,
 )
 from evol_virtual_creature.genotype_io import (
@@ -84,6 +84,7 @@ def main() -> None:
     )
 
     best_so_far: EvaluatedCreature | None = None
+    mutant_records = [None] * len(population) if args.record_mutant_type else None
     metrics_path = run_dir / "metrics.jsonl"
 
     print(f"Run directory: {run_dir}")
@@ -101,11 +102,25 @@ def main() -> None:
         for generation in range(args.generations + 1):
             generation_config = _config_for_generation(config, args, generation)
             evaluated = _evaluate_population(population, generation_config, executor)
-            evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
+            if args.record_mutant_type:
+                evaluated_with_records = list(zip(evaluated, mutant_records))
+                evaluated_with_records.sort(
+                    key=lambda item: item[0].fitness, reverse=True
+                )
+                evaluated = [item[0] for item in evaluated_with_records]
+                sorted_mutant_records = [item[1] for item in evaluated_with_records]
+            else:
+                evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
+                sorted_mutant_records = None
             best = evaluated[0]
             best_so_far = best_of(best_so_far, best)
 
-            summary = generation_summary(generation, evaluated, best_so_far)
+            summary = generation_summary(
+                generation,
+                evaluated,
+                best_so_far,
+                mutant_records=sorted_mutant_records,
+            )
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
             _save_generation_best(
@@ -122,7 +137,7 @@ def main() -> None:
             if generation == args.generations:
                 break
 
-            population = next_population(
+            population, mutant_records = next_population_with_mutant_records(
                 evaluated=evaluated,
                 population_size=args.population_size,
                 elite_count=args.elite_count,
@@ -134,6 +149,7 @@ def main() -> None:
                 allow_slide_joint=args.allow_slide_joint,
                 allow_root_mutation=not args.disallow_root_mutation,
                 topology_mutation_rate_min=args.topology_mutation_rate_min,
+                previous_best_fitness=best.fitness if args.record_mutant_type else None,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -146,7 +162,7 @@ def _format_generation_progress(
     summary: dict,
 ) -> str:
     """Return the one-line progress report printed during evolution."""
-    return (
+    progress = (
         f"gen={generation:04d} "
         f"best={best.fitness:.6f} "
         f"genes={summary['best_gene_count']} "
@@ -156,6 +172,13 @@ def _format_generation_progress(
         f"failures={summary['build_failures']} "
         f"disqualified={summary['disqualifications']}"
     )
+    if "fitter_mutants" in summary:
+        progress += (
+            f" fitter={summary['fitter_mutants']}"
+            f" neutral={summary['neutral_mutants']}"
+            f" less_fit={summary['less_fit_mutants']}"
+        )
+    return progress
 
 
 def _config_type_for_task(task: str):
@@ -465,6 +488,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Keep only latest_best_genotype.json instead of saving a separate "
             "best genotype for every generation."
+        ),
+    )
+    parser.add_argument(
+        "--record-mutant-type",
+        action="store_true",
+        help=(
+            "Record per-generation counts of fitter, neutral, and less-fit "
+            "actual mutants."
         ),
     )
     parser.add_argument(
