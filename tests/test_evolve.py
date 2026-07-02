@@ -308,6 +308,32 @@ def test_evolve_accepts_latest_best_only(monkeypatch):
     assert evolve_cli.parse_args().latest_best_only
 
 
+def test_evolve_defaults_topology_mutation_rate_floor(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert evolve_cli.parse_args().topology_mutation_rate_min == pytest.approx(0.05)
+
+
+def test_evolve_accepts_topology_mutation_rate_floor(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evolve.py", "--topology-mutation-rate-min", "0.12"],
+    )
+    assert evolve_cli.parse_args().topology_mutation_rate_min == pytest.approx(0.12)
+
+
+def test_evolve_rejects_invalid_topology_mutation_rate_floor(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evolve.py", "--topology-mutation-rate-min", "1.1"],
+    )
+    with pytest.raises(
+        ValueError, match="--topology-mutation-rate-min must be between 0 and 1"
+    ):
+        evolve_cli.parse_args()
+
+
 def test_evolve_accepts_disallow_topology_mutations(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -587,6 +613,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
                 f"default: {evolve_lib.default_thread_count()}",
                 "default: 10.0",
                 "default: 500",
+                "default: 0.05",
             ),
         ),
         (
@@ -653,8 +680,11 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
         allow_topology_mutations=True,
         allow_slide_joint=False,
         allow_root_mutation=True,
+        topology_mutation_rate_min=0.05,
     ):
-        settings.append((allow_topology_mutations, allow_slide_joint))
+        settings.append(
+            (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
+        )
 
     monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
     evolve_lib.initial_population(
@@ -663,9 +693,10 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
         initial_mutations=2,
         rng=random.Random(1),
         allow_topology_mutations=False,
+        topology_mutation_rate_min=0.2,
     )
 
-    assert settings == [(False, False), (False, False)]
+    assert settings == [(False, False, 0.2), (False, False, 0.2)]
 
 
 def test_next_population_forwards_topology_mutation_setting(monkeypatch):
@@ -682,8 +713,11 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
         allow_topology_mutations=True,
         allow_slide_joint=False,
         allow_root_mutation=True,
+        topology_mutation_rate_min=0.05,
     ):
-        settings.append((allow_topology_mutations, allow_slide_joint))
+        settings.append(
+            (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
+        )
 
     monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
     evolve_lib.next_population(
@@ -695,9 +729,10 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
         max_mutations=1,
         rng=random.Random(1),
         allow_topology_mutations=False,
+        topology_mutation_rate_min=0.2,
     )
 
-    assert settings == [(False, False), (False, False)]
+    assert settings == [(False, False, 0.2), (False, False, 0.2)]
 
 
 def test_population_helpers_forward_allow_slide_joint(monkeypatch):
@@ -714,6 +749,7 @@ def test_population_helpers_forward_allow_slide_joint(monkeypatch):
         allow_topology_mutations=True,
         allow_slide_joint=False,
         allow_root_mutation=True,
+        topology_mutation_rate_min=0.05,
     ):
         settings.append(allow_slide_joint)
 
@@ -753,6 +789,7 @@ def test_population_helpers_forward_root_mutation_setting(monkeypatch):
         allow_topology_mutations=True,
         allow_slide_joint=False,
         allow_root_mutation=True,
+        topology_mutation_rate_min=0.05,
     ):
         settings.append(allow_root_mutation)
 

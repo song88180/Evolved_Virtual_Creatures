@@ -17,6 +17,7 @@ from evol_virtual_creature.evaluation import (
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
 )
+from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolve import (
     EvaluatedCreature,
     _evaluate_population,
@@ -77,6 +78,7 @@ def main() -> None:
         allow_topology_mutations=not args.disallow_topology_mutations,
         allow_slide_joint=args.allow_slide_joint,
         allow_root_mutation=not args.disallow_root_mutation,
+        topology_mutation_rate_min=args.topology_mutation_rate_min,
     )
 
     best_so_far: EvaluatedCreature | None = None
@@ -128,6 +130,7 @@ def main() -> None:
                 allow_topology_mutations=not args.disallow_topology_mutations,
                 allow_slide_joint=args.allow_slide_joint,
                 allow_root_mutation=not args.disallow_root_mutation,
+                topology_mutation_rate_min=args.topology_mutation_rate_min,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -258,6 +261,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help="Mutations used to seed initial variants around the input genotype.",
+    )
+    parser.add_argument(
+        "--topology-mutation-rate-min",
+        type=float,
+        default=Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
+        help=(
+            "Minimum independent mutation rate for topology-changing mutation "
+            "operators."
+        ),
     )
     parser.add_argument(
         "--disallow-topology-mutations",
@@ -439,6 +451,10 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-mutations must be >= --min-mutations >= 0")
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
+    if not 0.0 <= args.topology_mutation_rate_min <= 1.0:
+        raise ValueError(
+            "--topology-mutation-rate-min must be between 0 and 1"
+        )
     if args.duration <= 0.0:
         raise ValueError("--duration must be greater than zero")
     if args.max_node < 1:

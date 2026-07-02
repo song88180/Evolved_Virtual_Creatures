@@ -132,6 +132,7 @@ def initial_population(
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
     allow_root_mutation: bool = True,
+    topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
 ) -> list[Genotype]:
     """Build the starting population from the seed genotype and random mutations."""
     population = [copy.deepcopy(seed_genotype)]
@@ -144,6 +145,7 @@ def initial_population(
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
             allow_root_mutation=allow_root_mutation,
+            topology_mutation_rate_min=topology_mutation_rate_min,
         )
         population.append(genotype)
     return population
@@ -160,6 +162,7 @@ def next_population(
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
     allow_root_mutation: bool = True,
+    topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
 ) -> list[Genotype]:
     """Select elites and tournament winners, then mutate them into the next generation."""
     next_generation = [
@@ -178,6 +181,7 @@ def next_population(
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
             allow_root_mutation=allow_root_mutation,
+            topology_mutation_rate_min=topology_mutation_rate_min,
         )
         next_generation.append(child)
 
@@ -202,6 +206,7 @@ def mutate_quietly(
     allow_topology_mutations: bool = True,
     allow_slide_joint: bool = False,
     allow_root_mutation: bool = True,
+    topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
 ) -> None:
     """Apply genotype mutations while suppressing mutation log output."""
     if mutation_count == 0:
@@ -213,6 +218,7 @@ def mutate_quietly(
             allow_topology_mutations=allow_topology_mutations,
             allow_slide_joint=allow_slide_joint,
             allow_root_mutation=allow_root_mutation,
+            topology_mutation_rate_min=topology_mutation_rate_min,
         )
 
 

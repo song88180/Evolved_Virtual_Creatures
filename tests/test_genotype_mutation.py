@@ -104,6 +104,71 @@ def test_fresh_node_connection_addition_is_available_as_topology_mutation():
     assert ("fresh_node_connection_addition",) in mutable_parameters
 
 
+def test_topology_mutation_rate_floor_applies_to_topology_operators():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+    )
+
+    assert genotype._mutation_rate_for_parameter(
+        ("connection_addition",),
+        mutation_rate=0.01,
+        topology_mutation_rate_min=0.05,
+        allow_topology_mutations=True,
+    ) == pytest.approx(0.05)
+    assert genotype._mutation_rate_for_parameter(
+        ("node", "body", "size", 0),
+        mutation_rate=0.01,
+        topology_mutation_rate_min=0.05,
+        allow_topology_mutations=True,
+    ) == pytest.approx(0.01)
+    assert genotype._mutation_rate_for_parameter(
+        ("connection_addition",),
+        mutation_rate=0.01,
+        topology_mutation_rate_min=0.05,
+        allow_topology_mutations=False,
+    ) == pytest.approx(0.01)
+
+
+def test_count_based_mutation_adds_topology_floor_mutations():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+    )
+    selected_parameters = [("node", "body", "size", 0)]
+    mutable_parameters = [
+        ("node", "body", "size", 0),
+        ("connection_addition",),
+        ("connection_new_node_addition",),
+    ]
+
+    genotype._add_topology_floor_mutations(
+        selected_parameters,
+        mutable_parameters,
+        topology_mutation_rate_min=1.0,
+        random_source=random.Random(1),
+        allow_topology_mutations=True,
+    )
+
+    assert selected_parameters == [
+        ("node", "body", "size", 0),
+        ("connection_addition",),
+        ("connection_new_node_addition",),
+    ]
+
+
 def test_terminal_only_mutation_cannot_enable_on_self_connection():
     connection = ConnectionGene(child="segment", axis=(0, 1, 0))
     genotype = Genotype(
