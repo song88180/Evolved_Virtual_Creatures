@@ -105,6 +105,7 @@ def save_x_axis_video(
     speed: float = 1.0,
     shadowsize: int = 4096,
     spotlight: bool = False,
+    camera_circle_around: bool = False,
 ):
     """Render a selected swimming, walking, or flying task episode to MP4."""
     try:
@@ -183,11 +184,12 @@ def save_x_axis_video(
             f"Cannot render video because {root_body_name!r} was not found."
         )
 
-    if track_root:
+    if track_root or camera_circle_around:
         camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(model, camera)
         camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
         camera.trackbodyid = root_body_id
+        initial_camera_azimuth = float(camera.azimuth)
 
     with mujoco.Renderer(model, height=height, width=width) as renderer:
         while data.time < config.episode_seconds:
@@ -207,6 +209,10 @@ def save_x_axis_video(
             if failure is not None:
                 raise RuntimeError(f"Cannot record video: {failure}")
             if data.time >= next_frame_time:
+                if camera_circle_around:
+                    camera.azimuth = initial_camera_azimuth + (
+                        360.0 * data.time / config.episode_seconds
+                    )
                 renderer.update_scene(data, camera=camera)
                 if floor_geom_id >= 0:
                     _prevent_floor_shadow_casting(
@@ -236,6 +242,7 @@ def save_x_axis_swimming_video(
     speed: float = 1.0,
     shadowsize: int = 4096,
     spotlight: bool = False,
+    camera_circle_around: bool = False,
 ):
     """Compatibility wrapper for callers that explicitly render swimming."""
     return save_x_axis_video(
@@ -249,6 +256,7 @@ def save_x_axis_swimming_video(
         speed,
         shadowsize,
         spotlight,
+        camera_circle_around,
     )
 
 

@@ -112,11 +112,18 @@ def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate.py", "--shadowsize", "8192", "--spotlight"],
+        [
+            "evaluate.py",
+            "--shadowsize",
+            "8192",
+            "--spotlight",
+            "--camera-circle-around",
+        ],
     )
     args = evaluate.parse_args()
     assert args.shadowsize == 8192
     assert args.spotlight
+    assert args.camera_circle_around
 
 
 def test_evaluate_rejects_nonpositive_shadowsize(monkeypatch):

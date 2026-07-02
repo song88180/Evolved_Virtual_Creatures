@@ -122,6 +122,7 @@ def main():
                 speed=args.speed,
                 shadowsize=args.shadowsize,
                 spotlight=args.spotlight,
+                camera_circle_around=args.camera_circle_around,
             )
         except RuntimeError as error:
             print(error)
@@ -313,6 +314,14 @@ def parse_args() -> argparse.Namespace:
         "--track-root",
         action="store_true",
         help="Keep the video camera centered on the creature's root body.",
+    )
+    parser.add_argument(
+        "--camera-circle-around",
+        action="store_true",
+        help=(
+            "Circle the video camera 360 degrees around the creature "
+            "during the episode."
+        ),
     )
     parser.add_argument(
         "--speed",
