@@ -7,6 +7,8 @@ import pytest
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
+    MAXIMUM_CREATURE_HEIGHT_REASON,
+    WALKING_CENTER_HEIGHT_DROP_REASON,
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
     SwimmingAwayEvaluationConfig,
@@ -322,6 +324,116 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
     assert spatial_metrics["origin_distance"] == pytest.approx(13.0)
 
 
+def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    centers = iter([(0.0, 0.0, 2.0), (0.0, 0.0, 1.25)])
+    monkeypatch.setattr(
+        evaluation,
+        "_creature_center_of_mass",
+        lambda *_args: next(centers),
+    )
+
+    metrics = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        WalkingEvaluationConfig(
+            episode_seconds=0.5,
+            min_center_height_fraction=0.5,
+        ),
+        root_body_name="root",
+    )
+
+    assert not isinstance(metrics, str)
+    assert metrics["height_loss"] == pytest.approx(0.75)
+
+
+def test_controlled_episode_rejects_large_center_of_mass_drop(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    centers = iter([(0.0, 0.0, 2.0), (0.0, 0.0, 0.9)])
+    monkeypatch.setattr(
+        evaluation,
+        "_creature_center_of_mass",
+        lambda *_args: next(centers),
+    )
+
+    result = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        WalkingEvaluationConfig(
+            episode_seconds=0.5,
+            min_center_height_fraction=0.5,
+        ),
+        root_body_name="root",
+    )
+
+    assert result == WALKING_CENTER_HEIGHT_DROP_REASON
+
+
+def test_walking_rejects_creature_above_maximum_height():
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.1, 0.1, 6.0),
+                "joint_type": "free",
+            }
+        },
+    )
+
+    result = evaluate_x_axis_walking(
+        genotype,
+        WalkingEvaluationConfig(
+            episode_seconds=0.02,
+            settle_seconds=0.0,
+            max_creature_height=10.0,
+            max_volume=10.0,
+        ),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert result.failure_reason is not None
+    assert MAXIMUM_CREATURE_HEIGHT_REASON in result.failure_reason
+
+
 def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     from evol_virtual_creature import evaluation
 
@@ -349,6 +461,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
     monkeypatch.setattr(evaluation, "initialize_walking_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "settle_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
     result = evaluation.evaluate_walking_away(
@@ -914,6 +1027,7 @@ def test_walking_away_fitness_maximizes_average_origin_speed():
             angular_speed_weight=0.0,
             body_count_weight=0.0,
             volume_weight=0.0,
+            height_loss_weight=0.0,
         ),
     )
 

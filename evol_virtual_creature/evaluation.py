@@ -27,6 +27,10 @@ MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed 
 MINIMUM_TOTAL_VOLUME_REASON = (
     "Creature total volume is below the minimum allowed volume."
 )
+WALKING_CENTER_HEIGHT_DROP_REASON = (
+    "Creature center of mass dropped below the walking height threshold."
+)
+MAXIMUM_CREATURE_HEIGHT_REASON = "Creature height exceeds the maximum allowed height."
 _WALKING_FLOOR_CLEARANCE = 0.05
 _FLYING_FLOOR_CLEARANCE = 5.0
 _DEFAULT_MIN_BODY_VOLUME = 1e-6
@@ -76,6 +80,8 @@ class WalkingEvaluationConfig:
     angular_speed_weight: float = 0.01
     upright_weight: float = 0.2
     height_loss_weight: float = 0.2
+    min_center_height_fraction: float = 0.5
+    max_creature_height: float = 10.0
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
@@ -125,6 +131,9 @@ class WalkingAwayEvaluationConfig:
     distance_weight: float = 1.0
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
+    height_loss_weight: float = 0.2
+    min_center_height_fraction: float = 0.5
+    max_creature_height: float = 10.0
     body_count_weight: float = 0.001
     volume_weight: float = 0.01
     volume_penalty_cutoff: float = 0.1
@@ -492,6 +501,9 @@ def evaluate_walking_away(
     failure = initialize_walking_model(model, data)
     if failure is not None:
         return _failed_walking(config, failure)
+    failure = _walking_height_failure_reason(model, data, config)
+    if failure is not None:
+        return _failed_walking(config, failure)
     failure = settle_walking_model(model, data, config)
     if failure is not None:
         return _failed_walking(config, failure)
@@ -517,6 +529,7 @@ def evaluate_walking_away(
         config.distance_weight * walking_metrics["average_origin_speed"]
         - config.energy_weight * walking_metrics["control_energy"]
         - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
+        - config.height_loss_weight * walking_metrics["height_loss"]
         - config.body_count_weight * walking_metrics["body_count"]
         - config.volume_weight * _excess_volume(
             walking_metrics["total_volume"], config.volume_penalty_cutoff
@@ -540,6 +553,9 @@ def evaluate_x_axis_walking(
     model, data, builder = built
 
     failure = initialize_walking_model(model, data)
+    if failure is not None:
+        return _failed_walking(config, failure)
+    failure = _walking_height_failure_reason(model, data, config)
     if failure is not None:
         return _failed_walking(config, failure)
     failure = settle_walking_model(model, data, config)
@@ -675,7 +691,53 @@ def initialize_flying_model(
     return None
 
 
-def _geom_lowest_world_z(
+def _walking_height_failure_reason(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig,
+) -> str | None:
+    max_height = getattr(config, "max_creature_height", 0.0)
+    if max_height <= 0.0:
+        return None
+    height = _creature_height(model, data)
+    if height <= max_height:
+        return None
+    return (
+        f"{MAXIMUM_CREATURE_HEIGHT_REASON} Creature height is "
+        f"{height:.6f} m; maximum is {max_height:.6f} m."
+    )
+
+
+def _creature_height(model: mujoco.MjModel, data: mujoco.MjData) -> float:
+    creature_geom_ids = [
+        geom_id
+        for geom_id in range(model.ngeom)
+        if model.geom_bodyid[geom_id] != 0
+    ]
+    if not creature_geom_ids:
+        return 0.0
+    lowest_z = min(
+        _geom_lowest_world_z(model, data, geom_id)
+        for geom_id in creature_geom_ids
+    )
+    highest_z = max(
+        _geom_highest_world_z(model, data, geom_id)
+        for geom_id in creature_geom_ids
+    )
+    return max(0.0, highest_z - lowest_z)
+
+
+def _geom_highest_world_z(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> float:
+    return float(data.geom_xpos[geom_id, 2]) + _geom_vertical_half_extent(
+        model, data, geom_id
+    )
+
+
+def _geom_vertical_half_extent(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     geom_id: int,
@@ -687,8 +749,8 @@ def _geom_lowest_world_z(
         mujoco.mjtGeom.mjGEOM_BOX,
         mujoco.mjtGeom.mjGEOM_ELLIPSOID,
     }:
-        vertical_half_extent = float(np.abs(rotation[2]) @ size[:3])
-    elif geom_type in {
+        return float(np.abs(rotation[2]) @ size[:3])
+    if geom_type in {
         mujoco.mjtGeom.mjGEOM_CAPSULE,
         mujoco.mjtGeom.mjGEOM_CYLINDER,
     }:
@@ -696,10 +758,18 @@ def _geom_lowest_world_z(
         half_length = float(size[1])
         axis_vertical = float(rotation[2, 2])
         radial_vertical = math.sqrt(max(0.0, 1.0 - axis_vertical * axis_vertical))
-        vertical_half_extent = abs(axis_vertical) * half_length + radius * radial_vertical
-    else:
-        vertical_half_extent = float(np.max(size[:3]))
-    return float(data.geom_xpos[geom_id, 2] - vertical_half_extent)
+        return abs(axis_vertical) * half_length + radius * radial_vertical
+    return float(np.max(size[:3]))
+
+
+def _geom_lowest_world_z(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> float:
+    return float(data.geom_xpos[geom_id, 2]) - _geom_vertical_half_extent(
+        model, data, geom_id
+    )
 
 
 def _has_floor_penetration(
@@ -904,6 +974,7 @@ def _run_controlled_episode(
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
     initial_position = data.qpos[:3].copy()
+    initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
     control_energy = 0.0
     actuator_gear_norms = np.linalg.norm(
@@ -944,6 +1015,7 @@ def _run_controlled_episode(
         sample_count += 1
 
     final_position = data.qpos[:3].copy()
+    final_center_of_mass = _creature_center_of_mass(model, data)
     displacement = final_position - initial_position
     forward_distance = float(displacement @ target_direction)
     simulated_seconds = max(float(data.time), model.opt.timestep)
@@ -970,7 +1042,15 @@ def _run_controlled_episode(
         "total_volume": total_volume,
     }
     if root_body_id >= 0:
-        metrics["height_loss"] = max(0.0, float(initial_position[2] - final_position[2]))
+        min_center_height = (
+            initial_center_of_mass[2]
+            * getattr(config, "min_center_height_fraction", 0.0)
+        )
+        if final_center_of_mass[2] < min_center_height:
+            return WALKING_CENTER_HEIGHT_DROP_REASON
+        metrics["height_loss"] = max(
+            0.0, float(initial_center_of_mass[2] - final_center_of_mass[2])
+        )
         metrics["mean_upright_error"] = upright_error_sum / max(sample_count, 1)
     return metrics
 
