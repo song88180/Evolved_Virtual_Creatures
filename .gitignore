@@ -11,3 +11,4 @@ MUJOCO_LOG.TXT
 .envrc
 *.sh
 AGENTS.md
+ALIFE_runs/
