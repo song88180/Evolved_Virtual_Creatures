@@ -2,6 +2,7 @@ import math
 import xml.etree.ElementTree as ET
 
 import mujoco
+import numpy as np
 import pytest
 
 from evol_virtual_creature.evaluation import (
@@ -319,9 +320,64 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
 
     assert not isinstance(horizontal_metrics, str)
     assert not isinstance(spatial_metrics, str)
+    assert horizontal_metrics["origin_distance"] == pytest.approx(2.5)
+    assert horizontal_metrics["average_origin_speed"] == pytest.approx(2.5)
+    assert spatial_metrics["origin_distance"] == pytest.approx(6.5)
+
+
+def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    centers = iter([
+        np.array((1.0, 2.0, 3.0)),
+        np.array((4.0, 6.0, 15.0)),
+        np.array((1.0, 2.0, 3.0)),
+        np.array((4.0, 6.0, 15.0)),
+    ])
+    monkeypatch.setattr(
+        evaluation,
+        "_creature_center_of_mass",
+        lambda *_args: next(centers),
+    )
+
+    horizontal_metrics = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        WalkingAwayEvaluationConfig(episode_seconds=1.0),
+        horizontal_origin_distance=True,
+    )
+    spatial_metrics = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        SwimmingEvaluationConfig(episode_seconds=1.0),
+    )
+
+    assert not isinstance(horizontal_metrics, str)
+    assert not isinstance(spatial_metrics, str)
+    assert horizontal_metrics["forward_distance"] == pytest.approx(3.0)
     assert horizontal_metrics["origin_distance"] == pytest.approx(5.0)
     assert horizontal_metrics["average_origin_speed"] == pytest.approx(5.0)
     assert spatial_metrics["origin_distance"] == pytest.approx(13.0)
+    assert spatial_metrics["vertical_drift"] == pytest.approx(12.0)
 
 
 def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
@@ -344,7 +400,7 @@ def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
     class Builder:
         actuator_controllers = []
 
-    centers = iter([(0.0, 0.0, 2.0), (0.0, 0.0, 1.25)])
+    centers = iter([np.array((0.0, 0.0, 2.0)), np.array((0.0, 0.0, 1.25))])
     monkeypatch.setattr(
         evaluation,
         "_creature_center_of_mass",
@@ -386,7 +442,7 @@ def test_controlled_episode_rejects_large_center_of_mass_drop(monkeypatch):
     class Builder:
         actuator_controllers = []
 
-    centers = iter([(0.0, 0.0, 2.0), (0.0, 0.0, 0.9)])
+    centers = iter([np.array((0.0, 0.0, 2.0)), np.array((0.0, 0.0, 0.9))])
     monkeypatch.setattr(
         evaluation,
         "_creature_center_of_mass",
@@ -514,6 +570,59 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     assert metrics["average_origin_speed"] > (
         metrics["origin_distance"] / metrics["simulated_seconds"]
     )
+
+
+def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <geom name="floor" type="plane" size="5 5 0.1"/>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1" pos="0 0 1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    centers = iter([
+        np.array((0.0, 0.0, 10.0)),
+        np.array((3.0, 4.0, 8.0)),
+        np.array((100.0, 100.0, 0.0)),
+    ])
+    floor_contacts = iter([False, True])
+    monkeypatch.setattr(
+        evaluation,
+        "_creature_center_of_mass",
+        lambda *_args: next(centers),
+    )
+    monkeypatch.setattr(
+        evaluation,
+        "_has_floor_contact",
+        lambda *_args: next(floor_contacts),
+    )
+
+    metrics = _run_flying_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        FlyingAwayEvaluationConfig(episode_seconds=1.0),
+    )
+
+    assert not isinstance(metrics, str)
+    assert metrics["first_ground_contact_time"] == pytest.approx(0.5)
+    assert metrics["origin_distance"] == pytest.approx(5.0)
+    assert metrics["average_origin_speed"] == pytest.approx(10.0)
+    assert metrics["forward_distance"] == pytest.approx(3.0)
+    assert metrics["height_loss"] == pytest.approx(10.0)
 
 
 def test_flying_initialization_raises_low_creature_above_floor():

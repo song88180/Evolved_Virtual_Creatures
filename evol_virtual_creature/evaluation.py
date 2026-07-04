@@ -850,7 +850,6 @@ def _run_flying_episode(
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
     floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-    initial_root_position = data.qpos[:3].copy()
     initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
     control_energy = 0.0
@@ -864,7 +863,7 @@ def _run_flying_episode(
     distance_measurement_position = None
     if floor_id >= 0 and _has_floor_contact(model, data, floor_id):
         first_ground_contact_time = 0.0
-        distance_measurement_position = initial_root_position.copy()
+        distance_measurement_position = initial_center_of_mass.copy()
 
     max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
     for _ in range(max_steps):
@@ -887,7 +886,7 @@ def _run_flying_episode(
             and _has_floor_contact(model, data, floor_id)
         ):
             first_ground_contact_time = float(data.time)
-            distance_measurement_position = data.qpos[:3].copy()
+            distance_measurement_position = _creature_center_of_mass(model, data)
         failure = simulation_failure_reason(data, previous_time, config)
         if failure is not None:
             return failure
@@ -900,11 +899,10 @@ def _run_flying_episode(
             angular_speed_sum += float(np.linalg.norm(data.qvel[3:6]))
         sample_count += 1
 
-    final_root_position = data.qpos[:3].copy()
     final_center_of_mass = _creature_center_of_mass(model, data)
     if distance_measurement_position is None:
-        distance_measurement_position = final_root_position
-    displacement = distance_measurement_position - initial_root_position
+        distance_measurement_position = final_center_of_mass
+    displacement = distance_measurement_position - initial_center_of_mass
     horizontal_displacement = displacement.copy()
     horizontal_displacement[2] = 0.0
     forward_distance = float(horizontal_displacement @ np.asarray(target_direction))
@@ -973,7 +971,6 @@ def _run_controlled_episode(
     body_count = max(model.nbody - 1, 0)
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
-    initial_position = data.qpos[:3].copy()
     initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
     control_energy = 0.0
@@ -1014,9 +1011,8 @@ def _run_controlled_episode(
             upright_error_sum += max(0.0, 1.0 - float(data.xmat[root_body_id, 8]))
         sample_count += 1
 
-    final_position = data.qpos[:3].copy()
     final_center_of_mass = _creature_center_of_mass(model, data)
-    displacement = final_position - initial_position
+    displacement = final_center_of_mass - initial_center_of_mass
     forward_distance = float(displacement @ target_direction)
     simulated_seconds = max(float(data.time), model.opt.timestep)
     average_forward_speed = forward_distance / simulated_seconds
