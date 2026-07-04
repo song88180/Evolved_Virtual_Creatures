@@ -87,9 +87,9 @@ def main():
     print(f"Average origin speed: {result.average_origin_speed:.6f}")
     print(f"Forward distance: {result.forward_distance:.6f}")
     print(f"Average forward speed: {result.average_forward_speed:.6f}")
-    print(f"Sideways drift: {result.sideways_drift:.6f}")
+    print(f"Sideways drift speed: {result.sideways_drift_speed:.6f}")
     if args.task.startswith("swimming"):
-        print(f"Vertical drift: {result.vertical_drift:.6f}")
+        print(f"Vertical drift speed: {result.vertical_drift_speed:.6f}")
     elif args.task.startswith("flying"):
         print(f"Height loss: {result.height_loss:.6f}")
         if result.first_ground_contact_time is None:

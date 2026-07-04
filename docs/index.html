@@ -172,8 +172,8 @@
               <h3>Evaluation</h3>
               <p>
                 <code>swimming_x</code> and <code>walking_x</code> reward forward speed. <code>swimming_away</code>
-                and <code>walking_away</code> reward distance from the starting point. <code>flying_x</code>
-                and <code>flying_away</code> start above the floor, reward horizontal distance divided by 10,
+                and <code>walking_away</code> reward average speed away from the starting point. <code>flying_x</code>
+                and <code>flying_away</code> start above the floor, reward horizontal speed,
                 penalize height loss and early ground contact, and give a bonus for avoiding ground contact. All tasks
                 apply task-specific physics and penalties for inefficient or unstable movement. Optional
                 self-collision includes non-parent body pairs while MuJoCo filters

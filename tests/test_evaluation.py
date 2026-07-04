@@ -325,6 +325,44 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
     assert spatial_metrics["origin_distance"] == pytest.approx(6.5)
 
 
+def test_controlled_episode_reports_drift_speeds(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    centers = iter([np.array((0.0, 0.0, 0.0)), np.array((0.0, 8.0, 12.0))])
+    monkeypatch.setattr(
+        evaluation,
+        "_creature_center_of_mass",
+        lambda *_args: next(centers),
+    )
+    metrics = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        SwimmingEvaluationConfig(episode_seconds=2.0),
+    )
+
+    assert not isinstance(metrics, str)
+    assert metrics["sideways_drift_speed"] == pytest.approx(4.0)
+    assert metrics["vertical_drift_speed"] == pytest.approx(6.0)
+
+
 def test_controlled_episode_initializes_center_of_mass_before_scoring():
     model = mujoco.MjModel.from_xml_string(
         """
@@ -356,7 +394,7 @@ def test_controlled_episode_initializes_center_of_mass_before_scoring():
     assert not isinstance(metrics, str)
     assert metrics["origin_distance"] == pytest.approx(0.0)
     assert metrics["forward_distance"] == pytest.approx(0.0)
-    assert metrics["vertical_drift"] == pytest.approx(0.0)
+    assert metrics["vertical_drift_speed"] == pytest.approx(0.0)
 
 
 def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
@@ -411,7 +449,7 @@ def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
     assert horizontal_metrics["origin_distance"] == pytest.approx(5.0)
     assert horizontal_metrics["average_origin_speed"] == pytest.approx(5.0)
     assert spatial_metrics["origin_distance"] == pytest.approx(13.0)
-    assert spatial_metrics["vertical_drift"] == pytest.approx(12.0)
+    assert spatial_metrics["vertical_drift_speed"] == pytest.approx(12.0)
 
 
 def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
@@ -536,8 +574,8 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
         "average_origin_speed": 0.0,
         "forward_distance": 0.0,
         "average_forward_speed": 0.0,
-        "sideways_drift": 0.0,
-        "vertical_drift": 0.0,
+        "sideways_drift_speed": 0.0,
+        "vertical_drift_speed": 0.0,
         "height_loss": 0.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
@@ -583,8 +621,8 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
         "average_origin_speed": 2.0,
         "forward_distance": 0.0,
         "average_forward_speed": 0.0,
-        "sideways_drift": 0.0,
-        "vertical_drift": 0.0,
+        "sideways_drift_speed": 0.0,
+        "vertical_drift_speed": 0.0,
         "height_loss": 0.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
@@ -1067,6 +1105,15 @@ def test_control_energy_scales_with_squared_motor_gear():
     assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)
 
 
+def test_away_configs_reject_old_distance_weight_name():
+    with pytest.raises(TypeError):
+        SwimmingAwayEvaluationConfig(distance_weight=1.0)
+    with pytest.raises(TypeError):
+        WalkingAwayEvaluationConfig(distance_weight=1.0)
+    with pytest.raises(TypeError):
+        FlyingAwayEvaluationConfig(distance_weight=0.1)
+
+
 def test_swimming_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_origin_distance(
@@ -1086,7 +1133,7 @@ def test_swimming_away_fitness_maximizes_average_origin_speed():
 
 def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     config = FlyingAwayEvaluationConfig(
-        distance_weight=0.1,
+        speed_weight=0.1,
         energy_weight=0.0,
         height_loss_weight=1.0,
         angular_speed_weight=0.0,
@@ -1128,7 +1175,7 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
         "average_origin_speed": 4.0,
         "forward_distance": 2.0,
         "average_forward_speed": 2.0,
-        "sideways_drift": 0.0,
+        "sideways_drift_speed": 0.0,
         "height_loss": 0.0,
         "first_ground_contact_time": None,
         "ground_touch_penalty": 0.0,

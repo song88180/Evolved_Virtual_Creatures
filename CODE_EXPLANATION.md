@@ -454,7 +454,7 @@ The current script is intentionally minimal, but it leaves several natural place
 
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
-- Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward distance from the starting point. Flying tasks start above the floor, use horizontal distance divided by 10, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs.
+- Add or tune fitness functions. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary

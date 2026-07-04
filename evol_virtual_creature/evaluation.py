@@ -104,7 +104,7 @@ class SwimmingAwayEvaluationConfig:
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 1.0
+    speed_weight: float = 1.0
     energy_weight: float = 1e-6
     angular_speed_weight: float = 0.01
     body_count_weight: float = 0.001
@@ -129,7 +129,7 @@ class WalkingAwayEvaluationConfig:
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 1.0
+    speed_weight: float = 1.0
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
     height_loss_weight: float = 0.2
@@ -194,7 +194,7 @@ class FlyingAwayEvaluationConfig:
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 0.1
+    speed_weight: float = 0.1
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
     height_loss_weight: float = 0.5
@@ -230,8 +230,8 @@ class SwimmingEvaluationResult:
     average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
-    sideways_drift: float
-    vertical_drift: float
+    sideways_drift_speed: float
+    vertical_drift_speed: float
     control_energy: float
     mean_angular_speed: float
     simulated_seconds: float
@@ -250,7 +250,7 @@ class WalkingEvaluationResult:
     average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
-    sideways_drift: float
+    sideways_drift_speed: float
     height_loss: float
     control_energy: float
     mean_angular_speed: float
@@ -271,8 +271,8 @@ class OriginDistanceEvaluationResult:
     average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
-    sideways_drift: float
-    vertical_drift: float
+    sideways_drift_speed: float
+    vertical_drift_speed: float
     control_energy: float
     mean_angular_speed: float
     simulated_seconds: float
@@ -291,7 +291,7 @@ class FlyingEvaluationResult:
     average_origin_speed: float
     forward_distance: float
     average_forward_speed: float
-    sideways_drift: float
+    sideways_drift_speed: float
     height_loss: float
     first_ground_contact_time: float | None
     ground_touch_penalty: float
@@ -328,8 +328,8 @@ def evaluate_x_axis_swimming(
     fitness = (
         config.forward_speed_weight * metrics["average_forward_speed"]
         - config.energy_weight * metrics["control_energy"]
-        - config.sideways_drift_weight * metrics["sideways_drift"]
-        - config.vertical_drift_weight * metrics["vertical_drift"]
+        - config.sideways_drift_weight * metrics["sideways_drift_speed"]
+        - config.vertical_drift_weight * metrics["vertical_drift_speed"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
         - config.volume_weight * _excess_volume(
@@ -358,7 +358,7 @@ def evaluate_origin_distance(
         return _failed_origin_distance(config, metrics)
 
     fitness = (
-        config.distance_weight * metrics["average_origin_speed"]
+        config.speed_weight * metrics["average_origin_speed"]
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
@@ -524,10 +524,10 @@ def evaluate_walking_away(
     walking_metrics = {
         key: value
         for key, value in metrics.items()
-        if key != "vertical_drift"
+        if key != "vertical_drift_speed"
     }
     fitness = (
-        config.distance_weight * walking_metrics["average_origin_speed"]
+        config.speed_weight * walking_metrics["average_origin_speed"]
         - config.energy_weight * walking_metrics["control_energy"]
         - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
         - config.height_loss_weight * walking_metrics["height_loss"]
@@ -577,12 +577,12 @@ def evaluate_x_axis_walking(
     walking_metrics = {
         key: value
         for key, value in metrics.items()
-        if key != "vertical_drift"
+        if key != "vertical_drift_speed"
     }
     fitness = (
         config.forward_speed_weight * walking_metrics["average_forward_speed"]
         - config.energy_weight * walking_metrics["control_energy"]
-        - config.sideways_drift_weight * walking_metrics["sideways_drift"]
+        - config.sideways_drift_weight * walking_metrics["sideways_drift_speed"]
         - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
         - config.upright_weight * walking_metrics["mean_upright_error"]
         - config.height_loss_weight * walking_metrics["height_loss"]
@@ -928,7 +928,7 @@ def _run_flying_episode(
         "average_origin_speed": origin_distance / measurement_seconds,
         "forward_distance": forward_distance,
         "average_forward_speed": forward_distance / measurement_seconds,
-        "sideways_drift": abs(float(lateral[1])),
+        "sideways_drift_speed": abs(float(lateral[1])) / measurement_seconds,
         "height_loss": height_loss,
         "first_ground_contact_time": first_ground_contact_time,
         "ground_touch_penalty": ground_touch_penalty,
@@ -947,8 +947,13 @@ def _flying_fitness(
     metrics: dict,
     speed_metric: str,
 ) -> float:
+    speed_weight = (
+        config.speed_weight
+        if isinstance(config, FlyingAwayEvaluationConfig)
+        else config.distance_weight
+    )
     return (
-        config.distance_weight * metrics[speed_metric]
+        speed_weight * metrics[speed_metric]
         + metrics["no_ground_touch_bonus"]
         - config.height_loss_weight * metrics["height_loss"]
         - metrics["ground_touch_penalty"]
@@ -1031,8 +1036,8 @@ def _run_controlled_episode(
         "average_origin_speed": average_origin_speed,
         "forward_distance": forward_distance,
         "average_forward_speed": average_forward_speed,
-        "sideways_drift": abs(float(lateral[1])),
-        "vertical_drift": abs(float(displacement[2])),
+        "sideways_drift_speed": abs(float(lateral[1])) / simulated_seconds,
+        "vertical_drift_speed": abs(float(displacement[2])) / simulated_seconds,
         "control_energy": control_energy,
         "mean_angular_speed": angular_speed_sum / max(sample_count, 1),
         "simulated_seconds": simulated_seconds,
@@ -1061,8 +1066,8 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
         average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
-        sideways_drift=0.0,
-        vertical_drift=0.0,
+        sideways_drift_speed=0.0,
+        vertical_drift_speed=0.0,
         control_energy=0.0,
         mean_angular_speed=0.0,
         simulated_seconds=0.0,
@@ -1082,8 +1087,8 @@ def _failed_origin_distance(config: SwimmingAwayEvaluationConfig, reason: str):
         average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
-        sideways_drift=0.0,
-        vertical_drift=0.0,
+        sideways_drift_speed=0.0,
+        vertical_drift_speed=0.0,
         control_energy=0.0,
         mean_angular_speed=0.0,
         simulated_seconds=0.0,
@@ -1105,7 +1110,7 @@ def _failed_flying(
         average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
-        sideways_drift=0.0,
+        sideways_drift_speed=0.0,
         height_loss=0.0,
         first_ground_contact_time=None,
         ground_touch_penalty=0.0,
@@ -1132,7 +1137,7 @@ def _failed_walking(config: WalkingEvaluationConfig | WalkingAwayEvaluationConfi
         average_origin_speed=0.0,
         forward_distance=0.0,
         average_forward_speed=0.0,
-        sideways_drift=0.0,
+        sideways_drift_speed=0.0,
         height_loss=0.0,
         control_energy=0.0,
         mean_angular_speed=0.0,

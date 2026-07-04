@@ -831,13 +831,13 @@
       "SwimmingEvaluationResult": {
         "Purpose": "Frozen dataclass containing final fitness and diagnostic metrics.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift: float, vertical_drift: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
+          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift_speed: float, vertical_drift_speed: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
           "Parameters": {
             "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
             "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
             "average_forward_speed": {"Type": "float", "Default": "required", "Description": "Forward distance divided by simulated seconds."},
-            "sideways_drift": {"Type": "float", "Default": "required", "Description": "Absolute y-axis lateral drift."},
-            "vertical_drift": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement."},
+            "sideways_drift_speed": {"Type": "float", "Default": "required", "Description": "Absolute y-axis lateral drift divided by simulated seconds."},
+            "vertical_drift_speed": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement divided by simulated seconds."},
             "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared commanded joint effort, including motor gear magnitude."},
             "mean_angular_speed": {"Type": "float", "Default": "required", "Description": "Mean root angular speed."},
             "simulated_seconds": {"Type": "float", "Default": "required", "Description": "Actual simulated duration."},
@@ -853,8 +853,8 @@
           "fitness": {"Type": "float", "Description": "Final scalar fitness."},
           "forward_distance": {"Type": "float", "Description": "Forward movement distance."},
           "average_forward_speed": {"Type": "float", "Description": "Forward movement speed."},
-          "sideways_drift": {"Type": "float", "Description": "Sideways drift metric."},
-          "vertical_drift": {"Type": "float", "Description": "Vertical drift metric."},
+          "sideways_drift_speed": {"Type": "float", "Description": "Sideways drift speed metric."},
+          "vertical_drift_speed": {"Type": "float", "Description": "Vertical drift speed metric."},
           "control_energy": {"Type": "float", "Description": "Gear-aware integrated squared joint effort metric."},
           "mean_angular_speed": {"Type": "float", "Description": "Tumbling metric."},
           "simulated_seconds": {"Type": "float", "Description": "Actual simulated time."},
@@ -870,9 +870,9 @@
       "SwimmingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for swimming_away distance-from-origin fitness.",
         "Constructor": {
-          "Signature": "SwimmingAwayEvaluationConfig(..., distance_weight: float = 1.0)",
+          "Signature": "SwimmingAwayEvaluationConfig(..., speed_weight: float = 1.0)",
           "Parameters": {
-            "distance_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for final distance from the starting point."}
+            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."}
           },
           "Raises": []
         },
@@ -894,10 +894,10 @@
       "WalkingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_away distance-from-origin fitness in the land environment.",
         "Constructor": {
-          "Signature": "WalkingAwayEvaluationConfig(..., settle_seconds: float = 1.0, distance_weight: float = 1.0)",
+          "Signature": "WalkingAwayEvaluationConfig(..., settle_seconds: float = 1.0, speed_weight: float = 1.0)",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Unscored time used to let the creature settle onto the floor."},
-            "distance_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for final distance from the starting point."}
+            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."}
           },
           "Raises": []
         },
@@ -919,7 +919,7 @@
       "FlyingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_away.",
         "Constructor": {
-          "Signature": "FlyingAwayEvaluationConfig(..., distance_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
+          "Signature": "FlyingAwayEvaluationConfig(..., speed_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
           "Parameters": {},
           "Raises": []
         },
@@ -942,7 +942,7 @@
       },
       "evaluate_origin_distance": {
         "Signature": "evaluate_origin_distance(genotype: Genotype, config: SwimmingAwayEvaluationConfig | None = None) -> OriginDistanceEvaluationResult",
-        "Purpose": "Score swimming_away by measuring final root distance from the starting point.",
+        "Purpose": "Score swimming_away by measuring average speed away from the starting point.",
         "Parameters": {},
         "Returns": {"Type": "OriginDistanceEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
@@ -958,7 +958,7 @@
       },
       "evaluate_walking_away": {
         "Signature": "evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None) -> WalkingEvaluationResult",
-        "Purpose": "Score walking_away using land physics, settling, and distance from the starting point.",
+        "Purpose": "Score walking_away using land physics, settling, and average speed away from the starting point.",
         "Parameters": {},
         "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
@@ -974,7 +974,7 @@
       },
       "evaluate_flying_away": {
         "Signature": "evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None) -> FlyingEvaluationResult",
-        "Purpose": "Score flying_away using horizontal distance from origin divided by 10, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
+        "Purpose": "Score flying_away using horizontal speed away from origin, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
         "Parameters": {},
         "Returns": {"Type": "FlyingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
