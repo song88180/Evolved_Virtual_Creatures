@@ -11,6 +11,7 @@ from pathlib import Path
 import random
 
 from evol_virtual_creature.evaluation import (
+    DEFAULT_UPRIGHT_ERROR_WEIGHT,
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
     SwimmingAwayEvaluationConfig,
@@ -62,6 +63,10 @@ def main() -> None:
         "self_collision": args.self_collision,
         "disallow_collision": args.disallow_collision,
     }
+    if args.task == "walking_x":
+        config_kwargs["upright_weight"] = (
+            DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
+        )
     if args.task.startswith("flying"):
         config_kwargs.update(
             fluid_density=args.fluid_density,
@@ -464,6 +469,13 @@ def parse_args() -> argparse.Namespace:
         help=(
             "For flying evolution, linearly interpolate z gravity from "
             "start to end over generations."
+        ),
+    )
+    parser.add_argument(
+        "--upright-error",
+        action="store_true",
+        help=(
+            "Enable the root-upright fitness penalty for walking_x tasks."
         ),
     )
     parser.add_argument(

@@ -36,6 +36,7 @@ _FLYING_FLOOR_CLEARANCE = 5.0
 _DEFAULT_MIN_BODY_VOLUME = 1e-6
 _DEFAULT_MIN_TOTAL_VOLUME = 0.0
 _DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
+DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,7 @@ class WalkingEvaluationConfig:
     energy_weight: float = 1e-7
     sideways_drift_weight: float = 0.1
     angular_speed_weight: float = 0.01
-    upright_weight: float = 0.2
+    upright_weight: float = 0.0
     height_loss_weight: float = 0.2
     min_center_height_fraction: float = 0.5
     max_creature_height: float = 10.0

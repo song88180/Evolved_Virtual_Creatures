@@ -490,6 +490,53 @@ def test_walking_rejects_creature_above_maximum_height():
     assert MAXIMUM_CREATURE_HEIGHT_REASON in result.failure_reason
 
 
+def test_walking_upright_error_penalty_is_optional(monkeypatch):
+    from evol_virtual_creature import evaluation
+
+    genotype = build_genotype(
+        root="body",
+        spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
+    )
+    metrics = {
+        "origin_distance": 0.0,
+        "average_origin_speed": 0.0,
+        "forward_distance": 0.0,
+        "average_forward_speed": 0.0,
+        "sideways_drift": 0.0,
+        "vertical_drift": 0.0,
+        "height_loss": 0.0,
+        "control_energy": 0.0,
+        "mean_angular_speed": 0.0,
+        "mean_upright_error": 2.0,
+        "simulated_seconds": 1.0,
+        "actuator_count": 0,
+        "body_count": 0,
+        "total_volume": 0.0,
+    }
+
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
+    monkeypatch.setattr(evaluation, "initialize_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "settle_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
+
+    default_result = evaluation.evaluate_x_axis_walking(
+        genotype, WalkingEvaluationConfig(volume_penalty_cutoff=0.0)
+    )
+    enabled_result = evaluation.evaluate_x_axis_walking(
+        genotype,
+        WalkingEvaluationConfig(
+            upright_weight=evaluation.DEFAULT_UPRIGHT_ERROR_WEIGHT,
+            volume_penalty_cutoff=0.0,
+        ),
+    )
+
+    assert default_result.fitness == pytest.approx(0.0)
+    assert enabled_result.fitness == pytest.approx(
+        -evaluation.DEFAULT_UPRIGHT_ERROR_WEIGHT * metrics["mean_upright_error"]
+    )
+
+
 def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     from evol_virtual_creature import evaluation
 

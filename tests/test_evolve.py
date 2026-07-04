@@ -76,6 +76,25 @@ def test_evaluate_accepts_self_collision(monkeypatch):
     assert evaluate.parse_args().self_collision
 
 
+def test_evaluate_accepts_upright_error(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evaluate.py", "--task", "walking_x", "--upright-error"]
+    )
+    assert evaluate.parse_args().upright_error
+
+
+def test_evolve_accepts_upright_error(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evolve.py", "--task", "walking_x", "--upright-error"]
+    )
+    assert evolve_cli.parse_args().upright_error
+
+
+def test_evaluate_disables_upright_error_by_default(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "walking_x"])
+    assert not evaluate.parse_args().upright_error
+
+
 def test_evaluate_accepts_flying_fluid_options(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -140,6 +159,34 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
     assert args.task == "walking_x"
     assert args.threads == 3
     assert not args.self_collision
+
+
+def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
+    observed = []
+
+    def record_config(_genotype, config):
+        observed.append(config.upright_weight)
+        return type(
+            "Result",
+            (),
+            {
+                "disqualified": True,
+                "build_failed": False,
+                "failure_reason": "stop",
+                "fitness": 0.0,
+            },
+        )()
+
+    monkeypatch.setattr(evaluate, "load_genotype_from_json", lambda _path: object())
+    monkeypatch.setattr(evaluate, "evaluate_for_task", record_config)
+    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "walking_x"])
+    evaluate.main()
+    monkeypatch.setattr(
+        sys, "argv", ["evaluate.py", "--task", "walking_x", "--upright-error"]
+    )
+    evaluate.main()
+
+    assert observed == [0.0, pytest.approx(evaluate.DEFAULT_UPRIGHT_ERROR_WEIGHT)]
 
 
 def test_evaluate_and_evolve_accept_away_tasks(monkeypatch):
