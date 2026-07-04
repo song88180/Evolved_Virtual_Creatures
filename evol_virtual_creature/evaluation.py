@@ -851,6 +851,7 @@ def _run_flying_episode(
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
     floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    mujoco.mj_forward(model, data)
     initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
     control_energy = 0.0
@@ -972,6 +973,7 @@ def _run_controlled_episode(
     body_count = max(model.nbody - 1, 0)
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
+    mujoco.mj_forward(model, data)
     initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
     control_energy = 0.0

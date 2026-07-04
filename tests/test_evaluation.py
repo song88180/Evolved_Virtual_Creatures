@@ -325,6 +325,40 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
     assert spatial_metrics["origin_distance"] == pytest.approx(6.5)
 
 
+def test_controlled_episode_initializes_center_of_mass_before_scoring():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <option timestep="0.5" gravity="0 0 0"/>
+          <worldbody>
+            <body name="root">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+              <body name="offset" pos="100 0 0">
+                <geom type="sphere" size="0.1"/>
+              </body>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+
+    class Builder:
+        actuator_controllers = []
+
+    metrics = _run_controlled_episode(
+        model,
+        mujoco.MjData(model),
+        Builder(),
+        SwimmingEvaluationConfig(episode_seconds=1.0),
+    )
+
+    assert not isinstance(metrics, str)
+    assert metrics["origin_distance"] == pytest.approx(0.0)
+    assert metrics["forward_distance"] == pytest.approx(0.0)
+    assert metrics["vertical_drift"] == pytest.approx(0.0)
+
+
 def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
     from evol_virtual_creature import evaluation
 
