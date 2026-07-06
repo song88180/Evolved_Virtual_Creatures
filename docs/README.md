@@ -18,5 +18,5 @@ GitHub will serve `docs/index.html` as the project documentation page.
 
 - `index.html`: main user-facing guide and concept overview.
 - `api-reference.json`: structured API content rendered by `api.html`.
-- `api.html`: static renderer for the API JSON; usually does not need edits when APIs change.
+- `api.html`: static renderer for the API JSON. Use `api.html?module=evol_virtual_creature.genes` to link directly to one module.
 - `styles.css`: documentation site styling.

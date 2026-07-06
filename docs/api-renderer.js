@@ -2,8 +2,10 @@ const referencePath = "api-reference.json";
 const moduleNav = document.querySelector("[data-api-nav]");
 const onPageNav = document.querySelector("[data-api-on-page-nav]");
 const modulesRoot = document.querySelector("[data-api-root]");
-const apiPage = document.querySelector("[data-api-page]");
-const currentModule = apiPage?.dataset.module || "";
+const pageTitle = document.querySelector("[data-api-title]");
+const pageLede = document.querySelector("[data-api-lede]");
+const params = new URLSearchParams(window.location.search);
+const currentModule = params.get("module") || "";
 
 const slug = (value) =>
   String(value)
@@ -12,7 +14,8 @@ const slug = (value) =>
     .replace(/^-|-$/g, "");
 
 const moduleShortName = (moduleName) => moduleName.split(".").pop();
-const modulePage = (moduleName) => `api-${moduleShortName(moduleName)}.html`;
+const modulePage = (moduleName, hash = "") =>
+  `api.html?module=${encodeURIComponent(moduleName)}${hash}`;
 
 const text = (tagName, value, className) => {
   const element = document.createElement(tagName);
@@ -481,6 +484,48 @@ const renderIndex = (reference) => {
   modulesRoot.append(section);
 };
 
+const setHeaderForIndex = () => {
+  document.title = "API Reference - Evol Virtual Creature";
+  if (pageTitle) {
+    pageTitle.textContent = "Evol Virtual Creature API";
+  }
+  if (pageLede) {
+    pageLede.innerHTML =
+      'Module-oriented reference generated from <code>api-reference.json</code>. Select a module to open its reference.';
+  }
+};
+
+const setHeaderForModule = (moduleName) => {
+  document.title = `${moduleShortName(moduleName)} API - Evol Virtual Creature`;
+  if (pageTitle) {
+    pageTitle.textContent = moduleShortName(moduleName);
+  }
+  if (pageLede) {
+    pageLede.replaceChildren(code(moduleName));
+  }
+};
+
+const renderUnknownModule = (moduleName, reference) => {
+  document.title = "Unknown API Module - Evol Virtual Creature";
+  if (pageTitle) {
+    pageTitle.textContent = "Unknown API module";
+  }
+  if (pageLede) {
+    pageLede.replaceChildren(code(moduleName));
+  }
+
+  const section = document.createElement("section");
+  section.className = "api-entry";
+  section.append(text("h3", "Module not found"));
+  section.append(
+    paragraph(
+      "The requested module is not present in api-reference.json. Select an available module from the API navigation."
+    )
+  );
+  appendList(section, Object.keys(reference));
+  modulesRoot.append(section);
+};
+
 const scrollToHashTarget = (updateOnPageNav) => {
   if (!location.hash) {
     return;
@@ -503,15 +548,18 @@ const renderReference = (reference) => {
   appendNavigation(reference);
 
   if (!currentModule) {
+    setHeaderForIndex();
     renderIndex(reference);
     return;
   }
 
   const moduleDetails = reference[currentModule];
   if (!moduleDetails) {
-    throw new Error(`Unknown API module: ${currentModule}`);
+    renderUnknownModule(currentModule, reference);
+    return;
   }
 
+  setHeaderForModule(currentModule);
   appendOnPageNavigation(currentModule, moduleDetails);
   appendModule(currentModule, moduleDetails, reference);
   const updateOnPageNav = initScrollSpy("[data-api-on-page-nav] a[href^='#']");
