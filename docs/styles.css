@@ -386,6 +386,10 @@ figcaption {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.api-index-list {
+  margin-top: 1rem;
+}
+
 .reference-link {
   color: inherit;
 }
