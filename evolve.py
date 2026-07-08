@@ -134,7 +134,11 @@ def main() -> None:
                 best,
                 best_so_far,
                 generation_config,
-                save_generation_history=not args.latest_best_only,
+                save_generation_history=_should_save_generation_history(
+                    generation,
+                    args.save_genotype_every_n,
+                    latest_best_only=args.latest_best_only,
+                ),
             )
 
             print(_format_generation_progress(generation, best, summary))
@@ -234,6 +238,16 @@ def _config_for_generation(config, args: argparse.Namespace, generation: int):
         args.gradual_gravity_change, generation, args.generations
     )
     return replace(config, gravity=gravity)
+
+
+def _should_save_generation_history(
+    generation: int,
+    save_genotype_every_n: int,
+    *,
+    latest_best_only: bool,
+) -> bool:
+    """Return whether the generation-best genotype checkpoint should be written."""
+    return not latest_best_only and generation % save_genotype_every_n == 0
 
 
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
@@ -503,6 +517,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--save-genotype-every-N",
+        dest="save_genotype_every_n",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Save a generation-best genotype checkpoint every N generations. "
+            "Conflicts with --latest-best-only. (default: 1)"
+        ),
+    )
+    parser.add_argument(
         "--record-mutant-type",
         action="store_true",
         help=(
@@ -597,6 +622,14 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--gradual-gravity-change is only supported for flying tasks")
     if args.fluid_viscosity < 0.0:
         raise ValueError("--fluid-viscosity must be non-negative")
+    if args.latest_best_only and args.save_genotype_every_n is not None:
+        raise ValueError(
+            "--save-genotype-every-N conflicts with --latest-best-only"
+        )
+    if args.save_genotype_every_n is not None and args.save_genotype_every_n < 1:
+        raise ValueError("--save-genotype-every-N must be at least 1")
+    if args.save_genotype_every_n is None:
+        args.save_genotype_every_n = 1
 
 
 def _default_run_dir(task: str) -> Path:

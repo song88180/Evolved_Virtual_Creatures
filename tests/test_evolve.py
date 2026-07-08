@@ -427,6 +427,43 @@ def test_evolve_accepts_latest_best_only(monkeypatch):
     assert evolve_cli.parse_args().latest_best_only
 
 
+def test_evolve_accepts_save_genotype_every_n(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evolve.py", "--save-genotype-every-N", "5"]
+    )
+    assert evolve_cli.parse_args().save_genotype_every_n == 5
+
+
+def test_evolve_rejects_nonpositive_save_genotype_every_n(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["evolve.py", "--save-genotype-every-N", "0"]
+    )
+    with pytest.raises(
+        ValueError, match="--save-genotype-every-N must be at least 1"
+    ):
+        evolve_cli.parse_args()
+
+
+def test_evolve_rejects_save_genotype_interval_with_latest_best_only(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evolve.py", "--latest-best-only", "--save-genotype-every-N", "5"],
+    )
+    with pytest.raises(
+        ValueError,
+        match="--save-genotype-every-N conflicts with --latest-best-only",
+    ):
+        evolve_cli.parse_args()
+
+
+def test_evolve_save_genotype_interval_controls_generation_history():
+    assert evolve_cli._should_save_generation_history(0, 3, latest_best_only=False)
+    assert not evolve_cli._should_save_generation_history(1, 3, latest_best_only=False)
+    assert evolve_cli._should_save_generation_history(3, 3, latest_best_only=False)
+    assert not evolve_cli._should_save_generation_history(3, 3, latest_best_only=True)
+
+
 def test_evolve_accepts_record_mutant_type(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--record-mutant-type"])
     assert evolve_cli.parse_args().record_mutant_type
