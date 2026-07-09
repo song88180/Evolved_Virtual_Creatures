@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -23,7 +22,13 @@ from .evaluation import (
 )
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
-from .phenotype import ActuatorController, PhenotypeBuilder
+from .control import (
+    ActuatorController,
+    actuator_ids_for_controllers,
+    apply_controller,
+    apply_open_loop_controller as _apply_open_loop_controller,
+)
+from .phenotype import PhenotypeBuilder
 
 _VIDEO_SUN_LIGHT_POS = (0.0, 0.0, 5.0)
 _VIDEO_SUN_LIGHT_DIR = (0.3, 0.2, -1.0)
@@ -194,11 +199,7 @@ def save_x_axis_video(
     with mujoco.Renderer(model, height=height, width=width) as renderer:
         while data.time < config.episode_seconds:
             previous_time = float(data.time)
-            apply_open_loop_controller(
-                data=data,
-                actuator_ids=actuator_ids,
-                actuator_controllers=builder.actuator_controllers,
-            )
+            apply_controller(model, data, builder.actuator_controllers)
             mujoco.mj_step(model, data)
             if (
                 config.disallow_collision
@@ -260,26 +261,9 @@ def save_x_axis_swimming_video(
     )
 
 
-def actuator_ids_for_controllers(
-    model: mujoco.MjModel,
-    actuator_controllers: list[ActuatorController],
-) -> list[int]:
-    return [
-        mujoco.mj_name2id(
-            model,
-            mujoco.mjtObj.mjOBJ_ACTUATOR,
-            controller.motor_name,
-        )
-        for controller in actuator_controllers
-    ]
-
-
 def apply_open_loop_controller(
     data: mujoco.MjData,
     actuator_ids: list[int],
     actuator_controllers: list[ActuatorController],
 ):
-    for actuator_id, controller in zip(actuator_ids, actuator_controllers):
-        data.ctrl[actuator_id] = controller.amp * math.sin(
-            controller.freq * data.time + controller.phase
-        )
+    _apply_open_loop_controller(data, actuator_ids, actuator_controllers)

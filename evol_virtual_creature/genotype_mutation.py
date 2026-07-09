@@ -4,6 +4,7 @@ from typing import Any, ClassVar, List, Optional, Tuple
 import copy
 import random
 
+from .control import NEURAL_INPUT_DIMS, zero_neural_parameters
 from .genes import (
     CHILD_JOINT_TYPES,
     BODY_SHAPES,
@@ -31,6 +32,7 @@ class GenotypeMutationMixin:
     MIN_CONTROL_AMP_MUTATION_STD: ClassVar[float] = 0.01
     MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
+    MIN_NEURAL_WEIGHT_MUTATION_STD: ClassVar[float] = 0.05
     HARMONIC_CONTROL_FREQS: ClassVar[Tuple[float, ...]] = (
         0.5,
         1.0,
@@ -217,6 +219,7 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
+            "control_mode",
         )
 
         topology_sensitive_node_fields = {"recursive_limit"}
@@ -262,6 +265,9 @@ class GenotypeMutationMixin:
                             owner=connection,
                             base_path=base_path,
                         )
+                self._ensure_connection_neural_parameters(connection)
+                if connection.control_mode == "neural":
+                    self._add_neural_parameter_paths(mutable_parameters, connection)
 
         return mutable_parameters
 
@@ -279,6 +285,54 @@ class GenotypeMutationMixin:
             return
 
         mutable_parameters.append(base_path)
+
+
+    def _add_neural_parameter_paths(
+        self,
+        mutable_parameters: List[Tuple[Any, ...]],
+        connection: ConnectionGene,
+    ) -> None:
+        for field_name in ("neural_b1", "neural_b2"):
+            values = getattr(connection, field_name)
+            for index in range(len(values)):
+                mutable_parameters.append(("connection_neural", connection, field_name, index))
+        for field_name in ("neural_w1", "neural_w2"):
+            matrix = getattr(connection, field_name)
+            for row_index, row in enumerate(matrix):
+                for column_index in range(len(row)):
+                    mutable_parameters.append(
+                        (
+                            "connection_neural",
+                            connection,
+                            field_name,
+                            row_index,
+                            column_index,
+                        )
+                    )
+
+    def _ensure_connection_neural_parameters(
+        self,
+        connection: ConnectionGene,
+    ) -> None:
+        if connection.control_mode != "neural":
+            return
+        child_node = self.nodes.get(connection.child)
+        joint_type = child_node.joint_type if child_node is not None else "hinge"
+        if joint_type not in NEURAL_INPUT_DIMS:
+            return
+        if (
+            connection.neural_w1
+            and connection.neural_b1
+            and connection.neural_w2
+            and connection.neural_b2
+        ):
+            return
+        (
+            connection.neural_w1,
+            connection.neural_b1,
+            connection.neural_w2,
+            connection.neural_b2,
+        ) = zero_neural_parameters(joint_type)
 
     def _mutate_parameter_path(
         self,
@@ -305,6 +359,11 @@ class GenotypeMutationMixin:
                 "unchanged; connection is archived"
             )
 
+        if parameter_type == "connection_neural":
+            return self._mutate_connection_neural_parameter(
+                parameter_path,
+                random_source,
+            )
         if parameter_type == "connection_origin":
             return self._mutate_connection_origin(parameter_path[1], random_source)
         if parameter_type == "connection_destination":
@@ -362,6 +421,11 @@ class GenotypeMutationMixin:
             setattr(owner, field_name, mutated_value)
             self._repair_node_size_if_needed(owner, field_name)
             self._repair_connection_orientation_if_needed(owner, field_name)
+            self._repair_neural_parameters_after_mutation(
+                parameter_type,
+                owner,
+                field_name,
+            )
             return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
 
         original_values = getattr(owner, field_name)
@@ -385,12 +449,102 @@ class GenotypeMutationMixin:
         setattr(owner, field_name, final_values)
         self._repair_node_size_if_needed(owner, field_name)
         self._repair_connection_orientation_if_needed(owner, field_name)
+        self._repair_neural_parameters_after_mutation(
+            parameter_type,
+            owner,
+            field_name,
+        )
         final_values = getattr(owner, field_name)
 
         return (
             f"{target}.{field_name}[{index}]: {old_value!r} -> {mutated_value!r}"
             f" (final {field_name}: {final_values!r})"
         )
+
+
+    def _mutate_connection_neural_parameter(
+        self,
+        parameter_path: Tuple[Any, ...],
+        random_source: random.Random,
+    ) -> str:
+        _, connection, field_name, first_index, *maybe_second_index = parameter_path
+        self._ensure_connection_neural_parameters(connection)
+        values = getattr(connection, field_name)
+        if maybe_second_index:
+            row_index = first_index
+            column_index = maybe_second_index[0]
+            matrix = [list(row) for row in values]
+            old_value = matrix[row_index][column_index]
+            matrix[row_index][column_index] = old_value + self._normal_mutation_delta(
+                old_value,
+                self.MIN_NEURAL_WEIGHT_MUTATION_STD,
+                random_source,
+            )
+            setattr(connection, field_name, tuple(tuple(row) for row in matrix))
+            target = self._describe_parameter_target(("connection", connection, field_name))
+            return (
+                f"{target}.{field_name}[{row_index}][{column_index}]: "
+                f"{old_value!r} -> {matrix[row_index][column_index]!r}"
+            )
+
+        vector = list(values)
+        old_value = vector[first_index]
+        vector[first_index] = old_value + self._normal_mutation_delta(
+            old_value,
+            self.MIN_NEURAL_WEIGHT_MUTATION_STD,
+            random_source,
+        )
+        setattr(connection, field_name, tuple(vector))
+        target = self._describe_parameter_target(("connection", connection, field_name))
+        return f"{target}.{field_name}[{first_index}]: {old_value!r} -> {vector[first_index]!r}"
+
+
+    def _repair_neural_parameters_after_mutation(
+        self,
+        parameter_type: str,
+        owner: Any,
+        field_name: str,
+    ) -> None:
+        if (
+            parameter_type == "connection"
+            and isinstance(owner, ConnectionGene)
+            and field_name in {"child", "control_mode"}
+        ):
+            self._reset_connection_neural_parameters(owner)
+            return
+        if (
+            parameter_type == "node"
+            and isinstance(owner, NodeGene)
+            and field_name == "joint_type"
+        ):
+            self._reset_incoming_neural_parameters(owner.name)
+
+    def _reset_incoming_neural_parameters(self, child_name: str) -> None:
+        for node in self.nodes.values():
+            for connection in node.children:
+                if connection.child == child_name:
+                    self._reset_connection_neural_parameters(connection)
+
+    def _reset_connection_neural_parameters(
+        self,
+        connection: ConnectionGene,
+    ) -> None:
+        if connection.control_mode != "neural":
+            return
+        child_node = self.nodes.get(connection.child)
+        joint_type = child_node.joint_type if child_node is not None else "hinge"
+        if joint_type not in NEURAL_INPUT_DIMS:
+            connection.neural_w1 = ()
+            connection.neural_b1 = ()
+            connection.neural_w2 = ()
+            connection.neural_b2 = ()
+            return
+        (
+            connection.neural_w1,
+            connection.neural_b1,
+            connection.neural_w2,
+            connection.neural_b2,
+        ) = zero_neural_parameters(joint_type)
 
     def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
         parameter_type = parameter_path[0]
@@ -507,6 +661,7 @@ class GenotypeMutationMixin:
                 self.MIN_PHASE_MUTATION_STD,
                 False,
             ),
+            "control_mode": ("control_mode", 0.0, False),
         }
         return field_specs[field_name]
 
@@ -564,6 +719,9 @@ class GenotypeMutationMixin:
         min_mutation_std: float,
     ) -> Any:
         mutation_kind = mutation_kind.lower()
+
+        if mutation_kind == "control_mode":
+            return "sine" if value == "neural" else "neural"
 
         if mutation_kind == "child_joint_type":
             return random_source.choice(
@@ -738,6 +896,7 @@ class GenotypeMutationMixin:
 
         new_destination = random_source.choice(possible_destinations)
         connection.child = new_destination
+        self._reset_connection_neural_parameters(connection)
 
         return (
             f"connection destination for '{origin}' -> '{old_destination}'"
@@ -782,6 +941,7 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
+            "control_mode",
         )
         old_values = {
             field_name: getattr(connection, field_name)
@@ -793,6 +953,7 @@ class GenotypeMutationMixin:
         connection.child = destination
         self._disable_terminal_only_for_self_link(connection, origin)
         self._repair_connection_orientation_if_needed(connection, "orientation")
+        self._reset_connection_neural_parameters(connection)
 
         changed_fields = [
             field_name
@@ -974,6 +1135,7 @@ class GenotypeMutationMixin:
             control_phase=random_source.uniform(-3.141592653589793, 3.141592653589793),
             control_phase_depth_scale=random_source.uniform(-2.0, 2.0),
             control_phase_order_scale=random_source.uniform(-2.0, 2.0),
+            control_mode="neural",
         )
 
     def _random_axis(self, random_source: random.Random) -> Tuple[float, float, float]:
@@ -1147,6 +1309,7 @@ class GenotypeMutationMixin:
         self.archived_nodes.append(copy.deepcopy(old_node))
         self.nodes[new_node.name] = new_node
         connection.child = new_node.name
+        self._reset_connection_neural_parameters(connection)
 
         return (
             f"connection destination node replacement for '{origin}' -> "
@@ -1259,6 +1422,7 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
+            "control_mode",
         )
         field_name = random_source.choice(mutable_fields)
         base_path = ("connection", connection, field_name)

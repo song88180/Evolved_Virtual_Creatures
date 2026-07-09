@@ -20,6 +20,7 @@ CHILD_JOINT_TYPES = ("fixed", *ARTICULATED_JOINT_TYPES)
 JOINT_TYPES = ("free", *CHILD_JOINT_TYPES)
 BODY_SHAPES = ("box", "ellipsoid", "capsule", "cylinder")
 ROUND_BODY_SHAPES = ("capsule", "cylinder")
+CONTROL_MODES = ("neural", "sine")
 IDENTITY_ORIENTATION = (0.0, 0.0, 0.0)
 FACE_ALIGNED_ORIENTATIONS = {
     "+x": (0.0, 0.0, 0.0),
@@ -70,6 +71,26 @@ def normalize_size(
         radius = min(normalized[1], normalized[2])
         normalized = (normalized[0], radius, radius)
     return normalized
+
+
+def normalize_numeric_vector(
+    values: Tuple[float, ...],
+    field_name: str,
+) -> Tuple[float, ...]:
+    normalized = tuple(float(value) for value in values)
+    if any(not math.isfinite(value) for value in normalized):
+        raise ValueError(f"{field_name} values must be finite")
+    return normalized
+
+
+def normalize_numeric_matrix(
+    values: Tuple[Tuple[float, ...], ...],
+    field_name: str,
+) -> Tuple[Tuple[float, ...], ...]:
+    return tuple(
+        normalize_numeric_vector(tuple(row), f"{field_name} row")
+        for row in values
+    )
 
 
 def wrap_degrees(angle: float) -> float:
@@ -129,9 +150,20 @@ class ConnectionGene:
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
+    control_mode: str = "neural"
+    neural_w1: Tuple[Tuple[float, ...], ...] = ()
+    neural_b1: Tuple[float, ...] = ()
+    neural_w2: Tuple[Tuple[float, ...], ...] = ()
+    neural_b2: Tuple[float, ...] = ()
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
 
     def __post_init__(self):
+        if self.control_mode not in CONTROL_MODES:
+            valid_modes = ", ".join(CONTROL_MODES)
+            raise ValueError(
+                f"Unknown control mode {self.control_mode!r}; expected one of "
+                f"{valid_modes}"
+            )
         if self.parent_face not in ATTACHMENT_FACES:
             valid_faces = ", ".join(ATTACHMENT_FACES)
             raise ValueError(
@@ -149,6 +181,10 @@ class ConnectionGene:
             self.child_surface_uv,
             "child_surface_uv",
         )
+        self.neural_w1 = normalize_numeric_matrix(self.neural_w1, "neural_w1")
+        self.neural_b1 = normalize_numeric_vector(self.neural_b1, "neural_b1")
+        self.neural_w2 = normalize_numeric_matrix(self.neural_w2, "neural_w2")
+        self.neural_b2 = normalize_numeric_vector(self.neural_b2, "neural_b2")
 
         unknown_planes = set(self.symmetry) - set(SYMMETRY_PLANES)
         if unknown_planes:

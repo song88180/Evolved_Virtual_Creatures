@@ -5,6 +5,7 @@ from typing import Any, Dict, Mapping, Sequence
 from dataclasses import asdict
 import json
 
+from .control import zero_neural_parameters
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .genes import orientation_for_parent_face
 
@@ -66,7 +67,14 @@ def build_genotype(
                 connection_spec,
                 nodes[node_name].size,
             )
-            nodes[node_name].children.append(ConnectionGene(**connection_data))
+            nodes[node_name].children.append(
+                ConnectionGene(
+                    **_with_neural_defaults(
+                        connection_data,
+                        nodes[child_name].joint_type,
+                    )
+                )
+            )
 
     return Genotype(
         root=root,
@@ -86,7 +94,14 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         global_control_freq=genotype_data.get("global_control_freq", 1.0),
     )
     genotype.archived_connections = [
-        ConnectionGene(**_normalize_connection_data(connection))
+        ConnectionGene(
+            **_with_neural_defaults(
+                _normalize_connection_data(connection),
+                genotype.nodes[connection["child"]].joint_type
+                if connection.get("child") in genotype.nodes
+                else "hinge",
+            )
+        )
         for connection in genotype_data.get("archived_connections", [])
     ]
     genotype.archived_nodes = [
@@ -124,6 +139,27 @@ def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
             for node in genotype.archived_nodes
         ],
     }
+
+
+def _with_neural_defaults(
+    connection_data: Mapping[str, Any],
+    joint_type: str,
+) -> Dict[str, Any]:
+    normalized = dict(connection_data)
+    normalized.setdefault("control_mode", "neural")
+    if normalized["control_mode"] != "neural" or joint_type == "fixed":
+        return normalized
+    if all(
+        field_name in normalized
+        for field_name in ("neural_w1", "neural_b1", "neural_w2", "neural_b2")
+    ):
+        return normalized
+    neural_w1, neural_b1, neural_w2, neural_b2 = zero_neural_parameters(joint_type)
+    normalized.setdefault("neural_w1", neural_w1)
+    normalized.setdefault("neural_b1", neural_b1)
+    normalized.setdefault("neural_w2", neural_w2)
+    normalized.setdefault("neural_b2", neural_b2)
+    return normalized
 
 
 def _node_to_dict(node: NodeGene, include_name: bool = False) -> Dict[str, Any]:

@@ -455,6 +455,7 @@ MUTABLE_CONNECTION_FIELDS = {
     "control_phase",
     "control_phase_depth_scale",
     "control_phase_order_scale",
+    "control_mode",
 }
 
 

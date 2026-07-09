@@ -223,6 +223,60 @@ def test_orientation_round_trips_through_json(tmp_path):
     assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
+def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
+    genotype_path = tmp_path / "legacy_neural.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+            },
+            "limb": {
+                "size": [0.1, 0.1, 0.1],
+                "joint_type": "hinge",
+            },
+        },
+    }))
+
+    genotype = load_genotype_from_json(genotype_path)
+    connection = genotype.nodes["body"].children[0]
+
+    assert connection.control_mode == "neural"
+    assert len(connection.neural_w1) == 16
+    assert len(connection.neural_w1[0]) == 12
+    assert len(connection.neural_w2) == 1
+    assert len(connection.neural_w2[0]) == 16
+    assert all(value == 0.0 for row in connection.neural_w1 for value in row)
+    assert all(value == 0.0 for value in connection.neural_b1)
+
+
+def test_neural_hinge_joint_uses_wide_symmetric_range():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[ConnectionGene(child="limb", axis=(0, 1, 0))],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=10).build())
+    joint = xml_root.find("./worldbody/body/body/joint")
+
+    assert joint is not None
+    assert _vector(joint, "range") == pytest.approx((-90.0, 90.0))
+
+
 def test_global_control_frequency_round_trips_through_json(tmp_path):
     genotype = Genotype(
         root="body",
@@ -673,12 +727,18 @@ def test_slide_and_ball_joints_compile_with_expected_actuators():
     assert joints[1].get("axis") is None
     assert _vector(joints[1], "range") == pytest.approx((0.0, 45.0))
     assert tuple(float(value) for value in motors[1].get("gear").split()) == pytest.approx(
+        (50.0, 0.0, 0.0)
+    )
+    assert tuple(float(value) for value in motors[2].get("gear").split()) == pytest.approx(
         (0.0, 50.0, 0.0)
+    )
+    assert tuple(float(value) for value in motors[3].get("gear").split()) == pytest.approx(
+        (0.0, 0.0, 50.0)
     )
 
     model = mujoco.MjModel.from_xml_string(mjcf)
     assert model.nv == 10
-    assert model.nu == 2
+    assert model.nu == 4
 
 
 def test_slide_axis_uses_vector_reflection_for_symmetry():

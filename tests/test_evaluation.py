@@ -5,6 +5,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from evol_virtual_creature.control import apply_controller
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
@@ -1084,6 +1085,7 @@ def _single_motor_genotype(motor_gear):
                     "control_amp": 0.1,
                     "control_freq": 0.0,
                     "control_phase": math.pi / 2.0,
+                    "control_mode": "sine",
                 }],
             },
             "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
@@ -1103,6 +1105,50 @@ def test_control_energy_scales_with_squared_motor_gear():
 
     assert low_gear.control_energy > 0.0
     assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)
+
+
+def _neural_single_motor_model(neural_b2):
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.1, 0.1),
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": (0, 1, 0),
+                    "ctrlrange": (-2.0, 2.0),
+                    "neural_b2": neural_b2,
+                }],
+            },
+            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
+        },
+    )
+    builder = PhenotypeBuilder(genotype, max_node=10)
+    model = mujoco.MjModel.from_xml_string(builder.build())
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    return model, data, builder
+
+
+def test_zero_neural_weights_produce_zero_control():
+    model, data, builder = _neural_single_motor_model((0.0,))
+
+    apply_controller(model, data, builder.actuator_controllers)
+
+    assert data.ctrl[0] == pytest.approx(0.0)
+
+
+def test_neural_output_sign_maps_to_control_direction():
+    positive_model, positive_data, positive_builder = _neural_single_motor_model((1.0,))
+    negative_model, negative_data, negative_builder = _neural_single_motor_model((-1.0,))
+
+    apply_controller(positive_model, positive_data, positive_builder.actuator_controllers)
+    apply_controller(negative_model, negative_data, negative_builder.actuator_controllers)
+
+    assert positive_data.ctrl[0] > 0.0
+    assert negative_data.ctrl[0] < 0.0
+    assert positive_data.ctrl[0] == pytest.approx(-negative_data.ctrl[0])
 
 
 def test_away_configs_reject_old_distance_weight_name():

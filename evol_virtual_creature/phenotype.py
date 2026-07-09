@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from .control import (
+    BALL_NEURAL_AXES,
+    ActuatorController,
+    normalized_neural_parameters,
+)
 from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES, euler_degrees_to_matrix
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .graph_analysis import (
@@ -35,13 +39,6 @@ DEFAULT_FLYING_FLUID_SHAPE = "ellipsoid"
 DEFAULT_FLYING_FLUID_COEF = (0.5, 0.25, 1.5, 1.0, 1.0)
 DEFAULT_FLYING_GRAVITY = -9.81
 
-
-@dataclass
-class ActuatorController:
-    motor_name: str
-    amp: float
-    freq: float
-    phase: float
 
 
 # -----------------------------
@@ -355,8 +352,11 @@ class PhenotypeBuilder:
         )
         if node.joint_type != "ball":
             joint.set("axis", vec_to_str(joint_axis))
+        control_mode = incoming_conn.control_mode if incoming_conn else "neural"
         if node.joint_type == "slide":
             joint.set("range", "-0.5 0.5")
+        elif node.joint_type == "hinge" and control_mode == "neural":
+            joint.set("range", "-90 90")
         else:
             joint.set("range", "0 45")
 
@@ -384,6 +384,7 @@ class PhenotypeBuilder:
 
         motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
+        control_mode = incoming_conn.control_mode if incoming_conn else "neural"
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
         control_freq = (
             self.genotype.global_control_freq
@@ -399,23 +400,53 @@ class PhenotypeBuilder:
             else 0.0
         )
 
-        motor_name = self.new_motor_name(joint_name)
-        motor = ET.SubElement(self.actuator_xml, "motor")
-        motor.set("name", motor_name)
-        motor.set("joint", joint_name)
-        if joint_type == "ball":
-            normalized_axis = _normalized_vector(joint_axis)
-            motor.set(
-                "gear",
-                vec_to_str(component * motor_gear for component in normalized_axis),
-            )
-        else:
-            motor.set("gear", str(motor_gear))
-        motor.set("ctrlrange", vec_to_str(ctrlrange))
+        motor_names = []
+        motor_axes = (BALL_NEURAL_AXES if joint_type == "ball" and control_mode == "neural" else (joint_axis,))
+        for motor_axis in motor_axes:
+            motor_name = self.new_motor_name(joint_name)
+            motor = ET.SubElement(self.actuator_xml, "motor")
+            motor.set("name", motor_name)
+            motor.set("joint", joint_name)
+            if joint_type == "ball":
+                normalized_axis = _normalized_vector(motor_axis)
+                motor.set(
+                    "gear",
+                    vec_to_str(component * motor_gear for component in normalized_axis),
+                )
+            else:
+                motor.set("gear", str(motor_gear))
+            motor.set("ctrlrange", vec_to_str(ctrlrange))
+            motor_names.append(motor_name)
+
+        neural_w1: tuple[tuple[float, ...], ...] = ()
+        neural_b1: tuple[float, ...] = ()
+        neural_w2: tuple[tuple[float, ...], ...] = ()
+        neural_b2: tuple[float, ...] = ()
+        if control_mode == "neural":
+            if incoming_conn is None:
+                neural_w1, neural_b1, neural_w2, neural_b2 = normalized_neural_parameters(
+                    joint_type, (), (), (), ()
+                )
+            else:
+                neural_w1, neural_b1, neural_w2, neural_b2 = normalized_neural_parameters(
+                    joint_type,
+                    incoming_conn.neural_w1,
+                    incoming_conn.neural_b1,
+                    incoming_conn.neural_w2,
+                    incoming_conn.neural_b2,
+                )
 
         self.actuator_controllers.append(
             ActuatorController(
-                motor_name=motor_name,
+                motor_names=tuple(motor_names),
+                joint_name=joint_name,
+                joint_type=joint_type,
+                control_mode=control_mode,
+                ctrlranges=tuple(ctrlrange for _ in motor_names),
+                neural_w1=neural_w1,
+                neural_b1=neural_b1,
+                neural_w2=neural_w2,
+                neural_b2=neural_b2,
                 amp=control_amp,
                 freq=control_freq,
                 phase=control_phase,

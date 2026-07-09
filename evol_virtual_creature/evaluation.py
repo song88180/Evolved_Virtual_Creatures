@@ -9,13 +9,18 @@ import numpy as np
 
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
+from .control import (
+    ActuatorController,
+    actuator_ids_for_controllers,
+    apply_controller,
+    apply_open_loop_controller,
+)
 from .phenotype import (
     DEFAULT_FLYING_FLUID_COEF,
     DEFAULT_FLYING_FLUID_DENSITY,
     DEFAULT_FLYING_FLUID_SHAPE,
     DEFAULT_FLYING_FLUID_VISCOSITY,
     DEFAULT_FLYING_GRAVITY,
-    ActuatorController,
     PhenotypeBuilder,
 )
 
@@ -872,7 +877,7 @@ def _run_flying_episode(
         if data.time >= config.episode_seconds:
             break
         if apply_controls:
-            _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
+            apply_controller(model, data, builder.actuator_controllers)
         else:
             data.ctrl[actuator_ids] = 0.0
         ctrl = data.ctrl.copy()
@@ -997,7 +1002,7 @@ def _run_controlled_episode(
     for _ in range(max_steps):
         if data.time >= config.episode_seconds:
             break
-        _apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)
+        apply_controller(model, data, builder.actuator_controllers)
         ctrl = data.ctrl.copy()
         mujoco.mj_step(model, data)
         if (
@@ -1254,10 +1259,7 @@ def _creature_volume_failure_reason(
 
 
 def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):
-    return [
-        mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, controller.motor_name)
-        for controller in controllers
-    ]
+    return actuator_ids_for_controllers(model, controllers)
 
 
 def _has_nonparent_self_collision(
@@ -1305,7 +1307,4 @@ def _apply_open_loop_controller(
     actuator_ids: list[int],
     actuator_controllers: list[ActuatorController],
 ):
-    for actuator_id, controller in zip(actuator_ids, actuator_controllers):
-        data.ctrl[actuator_id] = controller.amp * math.sin(
-            controller.freq * data.time + controller.phase
-        )
+    apply_open_loop_controller(data, actuator_ids, actuator_controllers)
