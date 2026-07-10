@@ -1,4 +1,5 @@
 import json
+import warnings
 import xml.etree.ElementTree as ET
 
 import mujoco
@@ -961,3 +962,41 @@ def test_symmetric_rotated_children_attach_at_child_surface():
             f"limb_{index}_geom",
             (0.25, -0.5),
         )
+
+
+def test_out_of_bounds_json_sizes_warn_and_load_unchanged(tmp_path):
+    genotype_path = tmp_path / "out_of_bounds.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.0005, 0.5, 1.5],
+                "joint_type": "free",
+            },
+        },
+    }))
+
+    with pytest.warns(UserWarning, match=r"Body part 'body'.*\[0.001, 1.0\]"):
+        genotype = load_genotype_from_json(genotype_path)
+
+    assert genotype.nodes["body"].size == (0.0005, 0.5, 1.5)
+
+
+def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
+    genotype_path = tmp_path / "boundary_sizes.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.001, 0.5, 1.0],
+                "joint_type": "free",
+            },
+        },
+    }))
+
+    with warnings.catch_warnings(record=True) as warnings_record:
+        warnings.simplefilter("always")
+        genotype = load_genotype_from_json(genotype_path)
+
+    assert not warnings_record
+    assert genotype.nodes["body"].size == (0.001, 0.5, 1.0)

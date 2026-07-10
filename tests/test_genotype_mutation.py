@@ -42,7 +42,6 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     connection = genotype.nodes["body"].children[0]
     child_name = connection.child
     assert child_name in genotype.nodes
-
     child = genotype.nodes[child_name]
     assert child.joint_type in {"fixed", "hinge", "ball"}
     assert child.shape in BODY_SHAPES
@@ -1029,3 +1028,59 @@ def test_disallow_root_mutation_excludes_root_node_fields():
     assert not any(path[:2] == ("node", "body") for path in paths)
     assert ("node", "limb", "joint_type") in paths
     assert any(path[0] == "connection" for path in paths)
+
+
+@pytest.mark.parametrize(
+    ("delta", "expected"),
+    [(10.0, 1.0), (-10.0, 0.001)],
+)
+def test_size_mutation_clamps_result_not_delta(monkeypatch, delta, expected):
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+    )
+    monkeypatch.setattr(
+        genotype,
+        "_normal_mutation_delta",
+        lambda *_args, **_kwargs: delta,
+    )
+
+    genotype._mutate_parameter_path(
+        ("node", "body", "size", 0),
+        random.Random(1),
+    )
+
+    assert genotype.nodes["body"].size[0] == expected
+
+
+@pytest.mark.parametrize(
+    ("parent_size", "expected"),
+    [((0.0001, 0.0001, 0.0001), 0.001), ((10.0, 10.0, 10.0), 1.0)],
+)
+def test_fresh_child_size_clamps_after_parent_relative_generation(
+    parent_size,
+    expected,
+):
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=parent_size,
+                joint_type="free",
+            )
+        },
+    )
+
+    child_size = genotype._random_child_size_from_parent(
+        genotype.nodes["body"],
+        random.Random(1),
+    )
+
+    assert child_size == (expected, expected, expected)

@@ -15,6 +15,8 @@ from .control import (
 from .genes import (
     CHILD_JOINT_TYPES,
     BODY_SHAPES,
+    MAX_BODY_SIZE,
+    MIN_BODY_SIZE,
     ROUND_BODY_SHAPES,
     ATTACHMENT_FACES,
     SYMMETRY_PLANES,
@@ -884,7 +886,11 @@ class GenotypeMutationMixin:
             return
         if field_name not in {"shape", "size"}:
             return
-        owner.size = normalize_size(owner.size, owner.shape)
+        normalized = normalize_size(owner.size, owner.shape)
+        owner.size = tuple(
+            max(MIN_BODY_SIZE, min(value, MAX_BODY_SIZE))
+            for value in normalized
+        )
 
     def _repair_connection_orientation_if_needed(
         self,
@@ -1355,10 +1361,16 @@ class GenotypeMutationMixin:
         random_source: random.Random,
     ) -> Tuple[float, float, float]:
         return tuple(
-            dimension
-            * random_source.uniform(
-                self.NEW_CHILD_SIZE_MIN_SCALE,
-                self.NEW_CHILD_SIZE_MAX_SCALE,
+            max(
+                MIN_BODY_SIZE,
+                min(
+                    dimension
+                    * random_source.uniform(
+                        self.NEW_CHILD_SIZE_MIN_SCALE,
+                        self.NEW_CHILD_SIZE_MAX_SCALE,
+                    ),
+                    MAX_BODY_SIZE,
+                ),
             )
             for dimension in parent_node.size
         )
@@ -1391,13 +1403,11 @@ class GenotypeMutationMixin:
         child_dimension: float,
         parent_dimension: float,
     ) -> float:
-        return max(
+        parent_relative = max(
             parent_dimension * self.NEW_CHILD_SIZE_MIN_SCALE,
-            min(
-                child_dimension,
-                parent_dimension * self.NEW_CHILD_SIZE_MAX_SCALE,
-            ),
+            min(child_dimension, parent_dimension * self.NEW_CHILD_SIZE_MAX_SCALE),
         )
+        return max(MIN_BODY_SIZE, min(parent_relative, MAX_BODY_SIZE))
 
     def _add_new_connection(
         self,

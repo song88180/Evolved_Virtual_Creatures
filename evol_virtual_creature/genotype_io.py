@@ -4,10 +4,16 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence
 from dataclasses import asdict
 import json
+import warnings
 
 from .control import BALL_NEURAL_AXES, zero_neural_parameters
 from .genotype import ConnectionGene, Genotype, NodeGene
-from .genes import CONTROL_MODES, orientation_for_parent_face
+from .genes import (
+    CONTROL_MODES,
+    MAX_BODY_SIZE,
+    MIN_BODY_SIZE,
+    orientation_for_parent_face,
+)
 
 
 GenotypeSpec = Mapping[str, Mapping[str, Any]]
@@ -92,6 +98,13 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
     with Path(path).open() as f:
         genotype_data = json.load(f)
 
+    _warn_for_out_of_bounds_sizes(genotype_data.get("nodes", {}).items())
+    _warn_for_out_of_bounds_sizes(
+        (
+            (node.get("name", f"archived node #{index}"), node)
+            for index, node in enumerate(genotype_data.get("archived_nodes", []))
+        )
+    )
     control_mode = _control_mode_from_json(genotype_data)
     genotype = build_genotype(
         root=genotype_data["root"],
@@ -116,6 +129,27 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         for node in genotype_data.get("archived_nodes", [])
     ]
     return genotype
+
+
+def _warn_for_out_of_bounds_sizes(
+    named_node_specs: Iterable[tuple[str, Mapping[str, Any]]],
+) -> None:
+    for node_name, node_spec in named_node_specs:
+        size = node_spec.get("size", ())
+        out_of_bounds = [
+            float(value)
+            for value in size
+            if float(value) < MIN_BODY_SIZE or float(value) > MAX_BODY_SIZE
+        ]
+        if not out_of_bounds:
+            continue
+        warnings.warn(
+            f"Body part {node_name!r} has size component(s) {out_of_bounds} "
+            f"outside the recommended range [{MIN_BODY_SIZE}, {MAX_BODY_SIZE}]; "
+            "values are being loaded unchanged.",
+            UserWarning,
+            stacklevel=2,
+        )
 
 
 def save_genotype_to_json(genotype: Genotype, path: str | Path):
