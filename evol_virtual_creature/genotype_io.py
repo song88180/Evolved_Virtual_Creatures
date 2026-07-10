@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Dict, Iterable, Mapping, Sequence
 from dataclasses import asdict
 import json
 
 from .control import zero_neural_parameters
 from .genotype import ConnectionGene, Genotype, NodeGene
-from .genes import orientation_for_parent_face
+from .genes import CONTROL_MODES, orientation_for_parent_face
 
 
 GenotypeSpec = Mapping[str, Mapping[str, Any]]
 
 # NodeGene.joint_axis was removed; accept and discard it when migrating old JSON.
 LEGACY_NODE_FIELDS = {"joint_axis"}
+LEGACY_CONNECTION_FIELDS = {"control_mode"}
 
 
 def _referenced_child_node_names(spec: GenotypeSpec) -> set[str]:
@@ -28,6 +29,7 @@ def build_genotype(
     root: str,
     spec: GenotypeSpec,
     global_control_freq: float = 1.0,
+    control_mode: str = "neural",
 ) -> Genotype:
     """
     Build a concrete genotype from a compact declarative recipe.
@@ -72,6 +74,7 @@ def build_genotype(
                     **_with_neural_defaults(
                         connection_data,
                         nodes[child_name].joint_type,
+                        control_mode,
                     )
                 )
             )
@@ -80,6 +83,7 @@ def build_genotype(
         root=root,
         nodes=nodes,
         global_control_freq=global_control_freq,
+        control_mode=control_mode,
     )
 
 
@@ -88,10 +92,12 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
     with Path(path).open() as f:
         genotype_data = json.load(f)
 
+    control_mode = _control_mode_from_json(genotype_data)
     genotype = build_genotype(
         root=genotype_data["root"],
         spec=genotype_data["nodes"],
         global_control_freq=genotype_data.get("global_control_freq", 1.0),
+        control_mode=control_mode,
     )
     genotype.archived_connections = [
         ConnectionGene(
@@ -100,12 +106,13 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
                 genotype.nodes[connection["child"]].joint_type
                 if connection.get("child") in genotype.nodes
                 else "hinge",
+                control_mode,
             )
         )
         for connection in genotype_data.get("archived_connections", [])
     ]
     genotype.archived_nodes = [
-        _node_from_dict(node)
+        _node_from_dict(node, control_mode)
         for node in genotype_data.get("archived_nodes", [])
     ]
     return genotype
@@ -126,6 +133,7 @@ def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
     return {
         "root": genotype.root,
         "global_control_freq": genotype.global_control_freq,
+        "control_mode": genotype.control_mode,
         "nodes": {
             node_name: _node_to_dict(node)
             for node_name, node in genotype.nodes.items()
@@ -141,13 +149,60 @@ def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
     }
 
 
+def _control_mode_from_json(genotype_data: Mapping[str, Any]) -> str:
+    if "control_mode" in genotype_data:
+        return _validated_control_mode(genotype_data["control_mode"])
+
+    legacy_modes = set(_legacy_connection_control_modes(genotype_data))
+    if not legacy_modes:
+        return "neural"
+    if len(legacy_modes) > 1:
+        modes = ", ".join(sorted(legacy_modes))
+        raise ValueError(
+            "legacy genotype has mixed per-connection control modes "
+            f"({modes}); add a top-level control_mode"
+        )
+    return _validated_control_mode(next(iter(legacy_modes)))
+
+
+def _validated_control_mode(control_mode: Any) -> str:
+    if control_mode not in CONTROL_MODES:
+        valid_modes = ", ".join(CONTROL_MODES)
+        raise ValueError(
+            f"Unknown control mode {control_mode!r}; expected one of {valid_modes}"
+        )
+    return str(control_mode)
+
+
+def _legacy_connection_control_modes(genotype_data: Mapping[str, Any]) -> Iterable[str]:
+    for connection in _connection_specs(genotype_data.get("nodes", {}).values()):
+        if "control_mode" in connection:
+            yield connection["control_mode"]
+    for connection in genotype_data.get("archived_connections", []):
+        if "control_mode" in connection:
+            yield connection["control_mode"]
+    for node in genotype_data.get("archived_nodes", []):
+        for connection in node.get("children", []):
+            if "control_mode" in connection:
+                yield connection["control_mode"]
+
+
+def _connection_specs(node_specs: Iterable[Mapping[str, Any]]) -> Iterable[Mapping[str, Any]]:
+    for node_spec in node_specs:
+        yield from node_spec.get("children", [])
+
+
 def _with_neural_defaults(
     connection_data: Mapping[str, Any],
     joint_type: str,
+    control_mode: str,
 ) -> Dict[str, Any]:
-    normalized = dict(connection_data)
-    normalized.setdefault("control_mode", "neural")
-    if normalized["control_mode"] != "neural" or joint_type == "fixed":
+    normalized = {
+        key: value
+        for key, value in connection_data.items()
+        if key not in LEGACY_CONNECTION_FIELDS
+    }
+    if control_mode != "neural" or joint_type == "fixed":
         return normalized
     if all(
         field_name in normalized
@@ -169,7 +224,7 @@ def _node_to_dict(node: NodeGene, include_name: bool = False) -> Dict[str, Any]:
     return node_data
 
 
-def _node_from_dict(node_data: Mapping[str, Any]) -> NodeGene:
+def _node_from_dict(node_data: Mapping[str, Any], control_mode: str) -> NodeGene:
     node_kwargs = {
         key: value
         for key, value in node_data.items()
@@ -177,7 +232,13 @@ def _node_from_dict(node_data: Mapping[str, Any]) -> NodeGene:
     }
     node = NodeGene(**node_kwargs)
     node.children = [
-        ConnectionGene(**_normalize_connection_data(connection, node.size))
+        ConnectionGene(
+            **_with_neural_defaults(
+                _normalize_connection_data(connection, node.size),
+                "hinge",
+                control_mode,
+            )
+        )
         for connection in node_data.get("children", [])
     ]
     return node

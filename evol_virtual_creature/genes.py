@@ -150,7 +150,6 @@ class ConnectionGene:
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
-    control_mode: str = "neural"
     neural_w1: Tuple[Tuple[float, ...], ...] = ()
     neural_b1: Tuple[float, ...] = ()
     neural_w2: Tuple[Tuple[float, ...], ...] = ()
@@ -158,12 +157,6 @@ class ConnectionGene:
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
 
     def __post_init__(self):
-        if self.control_mode not in CONTROL_MODES:
-            valid_modes = ", ".join(CONTROL_MODES)
-            raise ValueError(
-                f"Unknown control mode {self.control_mode!r}; expected one of "
-                f"{valid_modes}"
-            )
         if self.parent_face not in ATTACHMENT_FACES:
             valid_faces = ", ".join(ATTACHMENT_FACES)
             raise ValueError(

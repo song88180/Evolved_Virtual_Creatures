@@ -100,14 +100,16 @@
           <h2>Genotype JSON</h2>
           <p>
             Genotypes are compact graph recipes. A root node names the starting
-            body part, and each node can declare reusable child connections.
-            Recursive connections are bounded by each node's
+            body part, <code>control_mode</code> selects the global simulation
+            controller family, and each node can declare reusable child
+            connections. Recursive connections are bounded by each node's
             <code>recursive_limit</code>.
           </p>
           <figure>
             <figcaption>Example genotype JSON</figcaption>
             <pre><code>{
   "root": "body",
+  "control_mode": "neural",
   "nodes": {
     "body": {
       "size": [0.15, 0.08, 0.06],
@@ -155,8 +157,9 @@
               <h3>Genotype</h3>
               <p>
                 The recipe layer. It stores reusable node genes, connection
-                genes, Euler body orientations, controller parameters, and
-                archived genetic material used by topology mutations.
+                genes, Euler body orientations, a global controller mode,
+                controller parameters, and archived genetic material used by
+                topology mutations.
               </p>
             </section>
             <section>

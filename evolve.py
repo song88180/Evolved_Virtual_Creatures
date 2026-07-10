@@ -51,7 +51,7 @@ def main() -> None:
     write_json(run_dir / "config.json", vars(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
-    _set_genotype_control_mode(seed_genotype, args.control_mode)
+    _validate_genotype_control_mode(seed_genotype, args.control_mode)
     config_type = _config_type_for_task(args.task)
     config_kwargs = {
         "episode_seconds": args.duration,
@@ -89,7 +89,6 @@ def main() -> None:
         allow_root_mutation=not args.disallow_root_mutation,
         topology_mutation_rate_min=args.topology_mutation_rate_min,
     )
-    _set_population_control_mode(population, args.control_mode)
 
     best_so_far: EvaluatedCreature | None = None
     mutant_records = [None] * len(population) if args.record_mutant_type else None
@@ -163,7 +162,6 @@ def main() -> None:
                 topology_mutation_rate_min=args.topology_mutation_rate_min,
                 previous_best_fitness=best.fitness if args.record_mutant_type else None,
             )
-            _set_population_control_mode(population, args.control_mode)
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
     print(f"Metrics: {metrics_path}")
@@ -244,25 +242,14 @@ def _config_for_generation(config, args: argparse.Namespace, generation: int):
     return replace(config, gravity=gravity)
 
 
-def _set_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:
-    """Force all encoded connection controllers to the selected mode."""
-    for node in genotype.nodes.values():
-        for connection in node.children:
-            connection.control_mode = control_mode
-    for connection in genotype.archived_connections:
-        connection.control_mode = control_mode
-    for node in genotype.archived_nodes:
-        for connection in node.children:
-            connection.control_mode = control_mode
-
-
-def _set_population_control_mode(
-    population: list[Genotype],
-    control_mode: str,
-) -> None:
-    """Force every genotype in a population to the selected controller mode."""
-    for genotype in population:
-        _set_genotype_control_mode(genotype, control_mode)
+def _validate_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:
+    """Reject evolution runs that mix genotype and CLI controller modes."""
+    if genotype.control_mode != control_mode:
+        raise ValueError(
+            "genotype control_mode "
+            f"{genotype.control_mode!r} does not match --control-mode "
+            f"{control_mode!r}"
+        )
 
 
 def _should_save_generation_history(

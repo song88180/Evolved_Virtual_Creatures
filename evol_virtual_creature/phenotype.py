@@ -352,7 +352,7 @@ class PhenotypeBuilder:
         )
         if node.joint_type != "ball":
             joint.set("axis", vec_to_str(joint_axis))
-        control_mode = incoming_conn.control_mode if incoming_conn else "neural"
+        control_mode = self.genotype.control_mode
         if node.joint_type == "slide":
             joint.set("range", "-0.5 0.5")
         elif node.joint_type == "hinge" and control_mode == "neural":
@@ -384,7 +384,7 @@ class PhenotypeBuilder:
 
         motor_gear = incoming_conn.motor_gear if incoming_conn else 10.0
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
-        control_mode = incoming_conn.control_mode if incoming_conn else "neural"
+        control_mode = self.genotype.control_mode
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
         control_freq = (
             self.genotype.global_control_freq

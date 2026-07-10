@@ -220,7 +220,6 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
-            "control_mode",
         )
 
         topology_sensitive_node_fields = {"recursive_limit"}
@@ -339,7 +338,7 @@ class GenotypeMutationMixin:
         connection: ConnectionGene,
     ) -> bool:
         return (
-            connection.control_mode == "neural"
+            self.control_mode == "neural"
             and self._connection_child_joint_type(connection) in NEURAL_INPUT_DIMS
         )
 
@@ -555,7 +554,7 @@ class GenotypeMutationMixin:
         if (
             parameter_type == "connection"
             and isinstance(owner, ConnectionGene)
-            and field_name in {"child", "control_mode"}
+            and field_name == "child"
         ):
             self._reset_connection_neural_parameters(owner)
             return
@@ -576,7 +575,7 @@ class GenotypeMutationMixin:
         self,
         connection: ConnectionGene,
     ) -> None:
-        if connection.control_mode != "neural":
+        if self.control_mode != "neural":
             return
         joint_type = self._connection_child_joint_type(connection)
         if joint_type not in NEURAL_INPUT_DIMS:
@@ -698,7 +697,6 @@ class GenotypeMutationMixin:
                 self.MIN_PHASE_MUTATION_STD,
                 False,
             ),
-            "control_mode": ("control_mode", 0.0, False),
         }
         return field_specs[field_name]
 
@@ -756,9 +754,6 @@ class GenotypeMutationMixin:
         min_mutation_std: float,
     ) -> Any:
         mutation_kind = mutation_kind.lower()
-
-        if mutation_kind == "control_mode":
-            return "sine" if value == "neural" else "neural"
 
         if mutation_kind == "child_joint_type":
             return random_source.choice(
@@ -978,7 +973,6 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
-            "control_mode",
         )
         old_values = {
             field_name: getattr(connection, field_name)
@@ -1172,7 +1166,6 @@ class GenotypeMutationMixin:
             control_phase=random_source.uniform(-3.141592653589793, 3.141592653589793),
             control_phase_depth_scale=random_source.uniform(-2.0, 2.0),
             control_phase_order_scale=random_source.uniform(-2.0, 2.0),
-            control_mode="neural",
         )
 
     def _random_axis(self, random_source: random.Random) -> Tuple[float, float, float]:
@@ -1459,7 +1452,6 @@ class GenotypeMutationMixin:
             "control_phase",
             "control_phase_depth_scale",
             "control_phase_order_scale",
-            "control_mode",
         )
         field_name = random_source.choice(mutable_fields)
         base_path = ("connection", connection, field_name)

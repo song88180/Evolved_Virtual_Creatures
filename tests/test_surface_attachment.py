@@ -223,6 +223,67 @@ def test_orientation_round_trips_through_json(tmp_path):
     assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
+def test_legacy_connection_control_mode_migrates_to_genotype(tmp_path):
+    genotype_path = tmp_path / "legacy_sine.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": [0, 1, 0],
+                    "control_mode": "sine",
+                }],
+            },
+            "limb": {
+                "size": [0.1, 0.1, 0.1],
+                "joint_type": "hinge",
+            },
+        },
+    }))
+
+    genotype = load_genotype_from_json(genotype_path)
+    output_path = tmp_path / "round_trip.json"
+    save_genotype_to_json(genotype, output_path)
+    data = json.loads(output_path.read_text())
+
+    assert genotype.control_mode == "sine"
+    assert data["control_mode"] == "sine"
+    assert "control_mode" not in data["nodes"]["body"]["children"][0]
+
+
+def test_mixed_legacy_connection_control_modes_are_rejected(tmp_path):
+    genotype_path = tmp_path / "mixed_legacy_control.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "children": [
+                    {
+                        "child": "limb",
+                        "axis": [0, 1, 0],
+                        "control_mode": "neural",
+                    },
+                    {
+                        "child": "tail",
+                        "axis": [0, 1, 0],
+                        "control_mode": "sine",
+                    },
+                ],
+            },
+            "limb": {"size": [0.1, 0.1, 0.1], "joint_type": "hinge"},
+            "tail": {"size": [0.1, 0.1, 0.1], "joint_type": "hinge"},
+        },
+    }))
+
+    with pytest.raises(ValueError, match="mixed per-connection control modes"):
+        load_genotype_from_json(genotype_path)
+
+
 def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
     genotype_path = tmp_path / "legacy_neural.json"
     genotype_path.write_text(json.dumps({
@@ -243,7 +304,7 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
     genotype = load_genotype_from_json(genotype_path)
     connection = genotype.nodes["body"].children[0]
 
-    assert connection.control_mode == "neural"
+    assert genotype.control_mode == "neural"
     assert len(connection.neural_w1) == 16
     assert len(connection.neural_w1[0]) == 12
     assert len(connection.neural_w2) == 1

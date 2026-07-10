@@ -95,48 +95,25 @@ def test_evolve_accepts_sine_control_mode(monkeypatch):
     assert evolve_cli.parse_args().control_mode == "sine"
 
 
-def test_set_genotype_control_mode_updates_active_and_archived_connections():
-    active_connection = ConnectionGene(
-        child="limb",
-        axis=(0, 1, 0),
-        control_mode="neural",
-    )
-    archived_connection = ConnectionGene(
-        child="limb",
-        axis=(0, 1, 0),
-        control_mode="neural",
-    )
-    archived_node_connection = ConnectionGene(
-        child="limb",
-        axis=(0, 1, 0),
-        control_mode="neural",
-    )
+def test_validate_genotype_control_mode_accepts_match():
     genotype = Genotype(
         root="body",
-        nodes={
-            "body": NodeGene(
-                name="body",
-                size=(0.2, 0.2, 0.2),
-                joint_type="free",
-                children=[active_connection],
-            ),
-            "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
-        },
-        archived_connections=[archived_connection],
-        archived_nodes=[
-            NodeGene(
-                name="template",
-                size=(0.1, 0.1, 0.1),
-                children=[archived_node_connection],
-            )
-        ],
+        nodes={"body": NodeGene(name="body", size=(0.2, 0.2, 0.2))},
+        control_mode="sine",
     )
 
-    evolve_cli._set_genotype_control_mode(genotype, "sine")
+    evolve_cli._validate_genotype_control_mode(genotype, "sine")
 
-    assert active_connection.control_mode == "sine"
-    assert archived_connection.control_mode == "sine"
-    assert archived_node_connection.control_mode == "sine"
+
+def test_validate_genotype_control_mode_rejects_mismatch():
+    genotype = Genotype(
+        root="body",
+        nodes={"body": NodeGene(name="body", size=(0.2, 0.2, 0.2))},
+        control_mode="sine",
+    )
+
+    with pytest.raises(ValueError, match="does not match --control-mode"):
+        evolve_cli._validate_genotype_control_mode(genotype, "neural")
 
 
 def test_evolve_accepts_upright_error(monkeypatch):

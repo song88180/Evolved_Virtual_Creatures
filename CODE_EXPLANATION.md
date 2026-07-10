@@ -112,9 +112,11 @@ The `field(default_factory=list)` call is important. It gives each `NodeGene` it
 class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
+    global_control_freq: float = 1.0
+    control_mode: str = "neural"
 ```
 
-`Genotype` wraps the full creature recipe. `root` names the starting node, and `nodes` maps node names to their `NodeGene` definitions.
+`Genotype` wraps the full creature recipe. `root` names the starting node, `nodes` maps node names to their `NodeGene` definitions, and `control_mode` selects the global controller family for the whole simulation: `"neural"` or `"sine"`. Connection genes keep sine parameters and neural tensors, but the genotype-level mode decides which family the phenotype builder uses.
 
 ### Genotype Mutation
 
@@ -123,7 +125,7 @@ class Genotype:
 - `num_mutations`: choose a fixed number of distinct mutable parameters uniformly at random.
 - `mutation_rate`: independently mutate each mutable parameter with the given probability.
 
-Mutable parameters include node fields such as `size`, `shape`, `joint_type`, `recursive_limit`, and `orientation`, plus connection fields such as `parent_face`, `surface_uv`, `orientation`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. Orientation components mutate with normal angular noise and are wrapped into `[-180, 180]` degrees. If a connection `parent_face` or `orientation` mutation violates the child-normal constraint, the connection is repaired to a face-aligned orientation. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
+Mutable parameters include node fields such as `size`, `shape`, `joint_type`, `recursive_limit`, and `orientation`, plus connection fields such as `parent_face`, `surface_uv`, `orientation`, `symmetry`, `axis`, `motor_enabled`, `motor_gear`, `ctrlrange`, and the controller values. The genotype-level `control_mode` is not mutable during evolution. Orientation components mutate with normal angular noise and are wrapped into `[-180, 180]` degrees. If a connection `parent_face` or `orientation` mutation violates the child-normal constraint, the connection is repaired to a face-aligned orientation. Slide joints are disabled for random mutation by default; use `--allow-slide-joint` on mutation entrypoints to let mutations create them.
 
 The method prints the mutation details as it applies them:
 

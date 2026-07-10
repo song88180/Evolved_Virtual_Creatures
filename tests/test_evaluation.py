@@ -1085,11 +1085,11 @@ def _single_motor_genotype(motor_gear):
                     "control_amp": 0.1,
                     "control_freq": 0.0,
                     "control_phase": math.pi / 2.0,
-                    "control_mode": "sine",
                 }],
             },
             "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
         },
+        control_mode="sine",
     )
 
 

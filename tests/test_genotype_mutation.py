@@ -443,7 +443,6 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
     connection = ConnectionGene(
         child="limb",
         axis=(0, 1, 0),
-        control_mode="neural",
     )
     genotype = Genotype(
         root="body",
@@ -480,7 +479,6 @@ def _neural_hinge_genotype():
     connection = ConnectionGene(
         child="limb",
         axis=(0, 1, 0),
-        control_mode="neural",
     )
     genotype = Genotype(
         root="body",
@@ -575,7 +573,6 @@ MUTABLE_CONNECTION_FIELDS = {
     "control_phase",
     "control_phase_depth_scale",
     "control_phase_order_scale",
-    "control_mode",
 }
 
 

@@ -6,7 +6,7 @@
         "Represent symbolic body-part nodes before MuJoCo XML generation",
         "Represent directed connections between node genes",
         "Store genetic Euler orientations for root and child bodies",
-        "Store open-loop motor control parameters on each connection"
+        "Store motor control parameters on each connection"
       ],
       "Related_Modules": [
         "evol_virtual_creature.genotype",
@@ -17,7 +17,7 @@
     },
     "Classes": {
       "ConnectionGene": {
-        "Purpose": "Describes how a parent genotype node attaches and orients a child node and how the generated actuator should be controlled.",
+        "Purpose": "Describes how a parent genotype node attaches and orients a child node plus the generated actuator parameters.",
         "Constructor": {
           "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
           "Parameters": {
@@ -210,11 +210,12 @@
       "Genotype": {
         "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
         "Constructor": {
-          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], global_control_freq: float = 1.0, archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], global_control_freq: float = 1.0, control_mode: str = \"neural\", archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
           "Parameters": {
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
             "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base angular frequency multiplied by each connection control_freq harmonic."},
+            "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural or sine."},
             "archived_connections": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Inactive connection genes retained as mutation templates."},
             "archived_nodes": {"Type": "List[NodeGene]", "Default": "field(default_factory=list)", "Description": "Inactive node genes retained as mutation templates."}
           },
@@ -224,6 +225,7 @@
           "root": {"Type": "str", "Description": "Root node name."},
           "nodes": {"Type": "Dict[str, NodeGene]", "Description": "Active node genes."},
           "global_control_freq": {"Type": "float", "Description": "Continuous base actuator frequency shared by all generated controllers."},
+          "control_mode": {"Type": "str", "Description": "Global controller family used when building controllers."},
           "archived_connections": {"Type": "List[ConnectionGene]", "Description": "Archived connection templates."},
           "archived_nodes": {"Type": "List[NodeGene]", "Description": "Archived node templates."}
         },
@@ -264,12 +266,13 @@
     "Classes": {},
     "Functions": {
       "build_genotype": {
-        "Signature": "build_genotype(root: str, spec: GenotypeSpec, global_control_freq: float = 1.0) -> Genotype",
+        "Signature": "build_genotype(root: str, spec: GenotypeSpec, global_control_freq: float = 1.0, control_mode: str = \"neural\") -> Genotype",
         "Purpose": "Build a concrete Genotype from a compact declarative mapping.",
         "Parameters": {
           "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
           "spec": {"Type": "GenotypeSpec", "Default": "required", "Description": "Mapping from node names to node keyword data and optional children connection lists."},
-          "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."}
+          "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."},
+          "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the returned genotype."}
         },
         "Returns": {"Type": "Genotype", "Description": "A genotype with NodeGene and ConnectionGene objects linked according to spec."},
         "Raises": ["KeyError"],
@@ -277,7 +280,7 @@
       },
       "load_genotype_from_json": {
         "Signature": "load_genotype_from_json(path: str | Path) -> Genotype",
-        "Purpose": "Load a genotype JSON file, including optional archived connections and nodes.",
+        "Purpose": "Load a genotype JSON file, including optional archived connections and nodes, and migrate legacy per-connection control_mode fields.",
         "Parameters": {
           "path": {"Type": "str | Path", "Default": "required", "Description": "Path to a genotype JSON file."}
         },
