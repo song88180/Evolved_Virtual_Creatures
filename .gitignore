@@ -12,3 +12,4 @@ MUJOCO_LOG.TXT
 *.sh
 AGENTS.md
 ALIFE_runs/
+ALIFE/
