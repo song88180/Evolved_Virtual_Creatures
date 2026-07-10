@@ -136,6 +136,26 @@ def test_topology_mutation_rate_floor_applies_to_topology_operators():
     ) == pytest.approx(0.01)
 
 
+def test_neural_weights_do_not_use_topology_mutation_rate_floor():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+    )
+
+    assert genotype._mutation_rate_for_parameter(
+        ("connection_neural", object(), "neural_w1", 0, 0),
+        mutation_rate=0.01,
+        topology_mutation_rate_min=0.05,
+        allow_topology_mutations=True,
+    ) == pytest.approx(0.01)
+
+
 def test_count_based_mutation_adds_topology_floor_mutations():
     genotype = Genotype(
         root="body",
