@@ -439,6 +439,43 @@ def test_destination_replacement_child_node_size_scales_from_connection_parent(
         )
     )
 
+def test_preselected_neural_mutation_skips_archived_replaced_connection():
+    connection = ConnectionGene(
+        child="limb",
+        axis=(0, 1, 0),
+        control_mode="neural",
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[connection],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+    genotype._ensure_connection_neural_parameters(connection)
+
+    genotype._mutate_parameter_path(
+        ("connection_replacement", connection),
+        random.Random(1),
+    )
+    description = genotype._mutate_parameter_path(
+        ("connection_neural", connection, "neural_b1", 0),
+        random.Random(2),
+    )
+
+    assert connection in genotype.archived_connections
+    assert "unchanged; connection is archived" in description
+
+
 MUTABLE_NODE_FIELDS = {"size", "joint_type", "shape", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",

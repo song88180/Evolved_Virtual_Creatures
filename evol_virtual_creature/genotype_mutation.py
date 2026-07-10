@@ -55,6 +55,7 @@ class GenotypeMutationMixin:
             "connection_origin_node_replacement",
             "connection_destination_node_replacement",
             "connection_removal",
+                "connection_neural",
         }
     )
     NEW_CHILD_SIZE_MIN_SCALE: ClassVar[float] = 0.1
@@ -351,6 +352,7 @@ class GenotypeMutationMixin:
                 "connection_origin_node_replacement",
                 "connection_destination_node_replacement",
                 "connection_removal",
+                "connection_neural",
             }
             and not self._is_active_connection(parameter_path[1])
         ):
