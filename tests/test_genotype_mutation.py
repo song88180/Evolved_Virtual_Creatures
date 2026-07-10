@@ -557,6 +557,127 @@ def test_preselected_stale_neural_index_is_skipped():
     assert "unchanged; stale neural parameter path" in description
 
 
+def test_new_connection_randomly_initializes_neural_tensors():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    genotype._add_new_connection(
+        genotype.nodes["body"],
+        genotype.nodes["limb"],
+        random.Random(7),
+    )
+    connection = genotype.nodes["body"].children[0]
+
+    assert len(connection.neural_w1) == 16
+    assert len(connection.neural_w1[0]) == 12
+    assert len(connection.neural_w2) == 1
+    assert any(value != 0.0 for row in connection.neural_w1 for value in row)
+    assert any(value != 0.0 for value in connection.neural_b1)
+    assert connection.neural_output_axes == ((0.0, 1.0, 0.0),)
+
+
+def test_fixed_joint_inherits_compatible_tensor_or_randomly_initializes():
+    genotype, connection = _neural_hinge_genotype()
+    original = (
+        connection.neural_w1,
+        connection.neural_b1,
+        connection.neural_w2,
+        connection.neural_b2,
+    )
+
+    genotype.nodes["limb"].joint_type = "fixed"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(1))
+    genotype.nodes["limb"].joint_type = "hinge"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(2))
+    assert original == (
+        connection.neural_w1,
+        connection.neural_b1,
+        connection.neural_w2,
+        connection.neural_b2,
+    )
+
+    connection.neural_w1 = ()
+    connection.neural_b1 = ()
+    connection.neural_w2 = ()
+    connection.neural_b2 = ()
+    genotype.nodes["limb"].joint_type = "fixed"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(3))
+    assert connection.neural_w1 == ()
+    genotype.nodes["limb"].joint_type = "hinge"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(4))
+    assert len(connection.neural_w1) == 16
+    assert any(value != 0.0 for row in connection.neural_w1 for value in row)
+
+
+def test_hinge_to_ball_expands_tensor_and_preserves_axis_output():
+    genotype, connection = _neural_hinge_genotype()
+    connection.axis = (0.0, 0.0, -2.0)
+    row = (1.0, 2.0, 3.0, *tuple(float(i) for i in range(4, 13)))
+    connection.neural_w1 = tuple(row for _ in range(16))
+    connection.neural_w2 = (tuple(float(i) for i in range(16)),)
+    connection.neural_b2 = (2.5,)
+    old_b1 = connection.neural_b1
+    old_output = connection.neural_w2[0]
+
+    genotype.nodes["limb"].joint_type = "ball"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(5))
+
+    assert connection.neural_b1 == old_b1
+    assert connection.neural_w2[0] == old_output
+    assert connection.neural_b2[0] == 2.5
+    assert connection.neural_output_axes[0] == (0.0, 0.0, -1.0)
+    assert connection.neural_w1[0][0] == 1.0
+    assert connection.neural_w1[0][2:5] == (0.0, 0.0, -2.0)
+    assert connection.neural_w1[0][5:8] == (0.0, 0.0, -3.0)
+    assert connection.neural_w1[0][8:17] == row[3:12]
+    assert len(connection.neural_w2) == 3
+
+
+def test_ball_to_hinge_keeps_seeded_output_and_its_direction():
+    genotype, connection = _neural_hinge_genotype()
+    genotype.nodes["limb"].joint_type = "ball"
+    genotype._initialize_connection_neural_parameters(
+        connection,
+        "ball",
+        random.Random(8),
+    )
+    connection.neural_output_axes = (
+        (1.0, 0.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+    )
+    connection.neural_w2 = tuple(
+        tuple(float(row * 100 + column) for column in range(16))
+        for row in range(3)
+    )
+    connection.neural_b2 = (10.0, 20.0, 30.0)
+    old_w1 = connection.neural_w1
+    selected = random.Random(9).randrange(3)
+
+    genotype.nodes["limb"].joint_type = "hinge"
+    genotype._reset_incoming_neural_parameters("limb", random.Random(9))
+
+    selected_axis = ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 0.0, 1.0))[selected]
+    assert connection.axis == selected_axis
+    assert connection.neural_output_axes == (selected_axis,)
+    assert connection.neural_w2[0][0] == selected * 100
+    assert connection.neural_b2 == ((10.0, 20.0, 30.0)[selected],)
+    assert connection.neural_w1[0][3:12] == old_w1[0][8:17]
+
+
 MUTABLE_NODE_FIELDS = {"size", "joint_type", "shape", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
@@ -888,4 +1009,3 @@ def test_disallow_root_mutation_excludes_root_node_fields():
     assert not any(path[:2] == ("node", "body") for path in paths)
     assert ("node", "limb", "joint_type") in paths
     assert any(path[0] == "connection" for path in paths)
-

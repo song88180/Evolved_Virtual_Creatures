@@ -19,7 +19,7 @@
       "ConnectionGene": {
         "Purpose": "Describes how a parent genotype node attaches and orients a child node plus the generated actuator parameters.",
         "Constructor": {
-          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
+          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), child_surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, neural_w1: Tuple[Tuple[float, ...], ...] = (), neural_b1: Tuple[float, ...] = (), neural_w2: Tuple[Tuple[float, ...], ...] = (), neural_b2: Tuple[float, ...] = (), neural_output_axes: Tuple[Tuple[float, float, float], ...] = (), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
           "Parameters": {
             "child": {
               "Type": "str",
@@ -100,6 +100,11 @@
               "Type": "float",
               "Default": "0.0",
               "Description": "Additional phase offset multiplied by actuator order."
+            },
+            "neural_output_axes": {
+              "Type": "Tuple[Tuple[float, float, float], ...]",
+              "Default": "()",
+              "Description": "Signed physical axis associated with each neural output row."
             }
           },
           "Raises": ["ValueError"]
@@ -120,7 +125,8 @@
           "control_freq": {"Type": "float", "Description": "Actuator-specific harmonic frequency multiplier."},
           "control_phase": {"Type": "float", "Description": "Open-loop base phase."},
           "control_phase_depth_scale": {"Type": "float", "Description": "Depth-based phase scale."},
-          "control_phase_order_scale": {"Type": "float", "Description": "Actuator-order-based phase scale."}
+          "control_phase_order_scale": {"Type": "float", "Description": "Actuator-order-based phase scale."},
+          "neural_output_axes": {"Type": "Tuple[Tuple[float, float, float], ...]", "Description": "Signed physical axes associated with neural output rows."}
         },
         "Methods": {
           "phase_for": {

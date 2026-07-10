@@ -311,6 +311,7 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
     assert len(connection.neural_w2[0]) == 16
     assert all(value == 0.0 for row in connection.neural_w1 for value in row)
     assert all(value == 0.0 for value in connection.neural_b1)
+    assert connection.neural_output_axes == ((0.0, 1.0, 0.0),)
 
 
 def test_neural_hinge_joint_uses_wide_symmetric_range():
@@ -800,6 +801,47 @@ def test_slide_and_ball_joints_compile_with_expected_actuators():
     model = mujoco.MjModel.from_xml_string(mjcf)
     assert model.nv == 10
     assert model.nu == 4
+
+
+def test_ball_neural_motors_use_persisted_output_axes():
+    connection = ConnectionGene(
+        child="ball",
+        axis=(0.0, 1.0, 0.0),
+        motor_gear=50.0,
+        neural_output_axes=(
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (1.0, 0.0, 0.0),
+        ),
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(1.0, 1.0, 1.0),
+                joint_type="free",
+                children=[connection],
+            ),
+            "ball": NodeGene(
+                name="ball",
+                size=(0.2, 0.1, 0.1),
+                joint_type="ball",
+            ),
+        },
+    )
+
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=2).build())
+    gears = [
+        tuple(float(value) for value in motor.get("gear").split())
+        for motor in xml_root.findall("./actuator/motor")
+    ]
+
+    assert gears == [
+        (0.0, 50.0, 0.0),
+        (0.0, 0.0, 50.0),
+        (50.0, 0.0, 0.0),
+    ]
 
 
 def test_slide_axis_uses_vector_reflection_for_symmetry():

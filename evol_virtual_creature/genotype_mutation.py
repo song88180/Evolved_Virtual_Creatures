@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, List, Optional, Tuple
 import copy
+import math
 import random
 
-from .control import NEURAL_INPUT_DIMS, zero_neural_parameters
+from .control import (
+    BALL_NEURAL_AXES,
+    NEURAL_HIDDEN_SIZE,
+    NEURAL_INPUT_DIMS,
+    NEURAL_OUTPUT_DIMS,
+    zero_neural_parameters,
+)
 from .genes import (
     CHILD_JOINT_TYPES,
     BODY_SHAPES,
@@ -33,6 +40,7 @@ class GenotypeMutationMixin:
     MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD: ClassVar[float] = 0.01
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
     MIN_NEURAL_WEIGHT_MUTATION_STD: ClassVar[float] = 0.05
+    NEURAL_INITIALIZATION_STD: ClassVar[float] = 0.05
     HARMONIC_CONTROL_FREQS: ClassVar[Tuple[float, ...]] = (
         0.5,
         1.0,
@@ -328,6 +336,10 @@ class GenotypeMutationMixin:
             connection.neural_w2,
             connection.neural_b2,
         ) = zero_neural_parameters(joint_type)
+        connection.neural_output_axes = self._default_neural_output_axes(
+            connection,
+            joint_type,
+        )
 
     def _connection_child_joint_type(self, connection: ConnectionGene) -> str:
         child_node = self.nodes.get(connection.child)
@@ -363,6 +375,89 @@ class GenotypeMutationMixin:
                 for row, expected_row in zip(connection.neural_w2, expected_w2)
             )
             and len(connection.neural_b2) == len(expected_b2)
+        )
+
+    def _default_neural_output_axes(
+        self,
+        connection: ConnectionGene,
+        joint_type: str,
+    ) -> Tuple[Tuple[float, float, float], ...]:
+        if joint_type == "ball":
+            return tuple(BALL_NEURAL_AXES)
+        return (self._normalized_axis(connection.axis),)
+
+    def _random_neural_parameters(
+        self,
+        joint_type: str,
+        random_source: random.Random,
+    ) -> Tuple[Any, Any, Any, Any]:
+        input_dim = NEURAL_INPUT_DIMS[joint_type]
+        output_dim = NEURAL_OUTPUT_DIMS[joint_type]
+
+        def sample() -> float:
+            return random_source.gauss(0.0, self.NEURAL_INITIALIZATION_STD)
+
+        return (
+            tuple(
+                tuple(sample() for _ in range(input_dim))
+                for _ in range(NEURAL_HIDDEN_SIZE)
+            ),
+            tuple(sample() for _ in range(NEURAL_HIDDEN_SIZE)),
+            tuple(
+                tuple(sample() for _ in range(NEURAL_HIDDEN_SIZE))
+                for _ in range(output_dim)
+            ),
+            tuple(sample() for _ in range(output_dim)),
+        )
+
+    def _initialize_connection_neural_parameters(
+        self,
+        connection: ConnectionGene,
+        joint_type: str,
+        random_source: random.Random,
+    ) -> None:
+        (
+            connection.neural_w1,
+            connection.neural_b1,
+            connection.neural_w2,
+            connection.neural_b2,
+        ) = self._random_neural_parameters(joint_type, random_source)
+        if joint_type == "ball":
+            connection.neural_output_axes = self._orthonormal_axes(connection.axis)
+        else:
+            connection.neural_output_axes = (self._normalized_axis(connection.axis),)
+
+    def _normalized_axis(
+        self,
+        axis: Tuple[float, float, float],
+    ) -> Tuple[float, float, float]:
+        magnitude = math.sqrt(sum(component * component for component in axis))
+        if magnitude <= 1e-12:
+            return (0.0, 1.0, 0.0)
+        return tuple(component / magnitude for component in axis)
+
+    def _orthonormal_axes(
+        self,
+        primary_axis: Tuple[float, float, float],
+    ) -> Tuple[Tuple[float, float, float], ...]:
+        primary = self._normalized_axis(primary_axis)
+        seed = min(
+            ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+            key=lambda candidate: abs(sum(a * b for a, b in zip(primary, candidate))),
+        )
+        second = self._normalized_axis(self._cross(primary, seed))
+        third = self._normalized_axis(self._cross(primary, second))
+        return primary, second, third
+
+    @staticmethod
+    def _cross(
+        left: Tuple[float, float, float],
+        right: Tuple[float, float, float],
+    ) -> Tuple[float, float, float]:
+        return (
+            left[1] * right[2] - left[2] * right[1],
+            left[2] * right[0] - left[0] * right[2],
+            left[0] * right[1] - left[1] * right[0],
         )
 
     def _mutate_parameter_path(
@@ -457,6 +552,7 @@ class GenotypeMutationMixin:
                 parameter_type,
                 owner,
                 field_name,
+                random_source,
             )
             return f"{target}.{field_name}: {value!r} -> {mutated_value!r}"
 
@@ -485,6 +581,7 @@ class GenotypeMutationMixin:
             parameter_type,
             owner,
             field_name,
+            random_source,
         )
         final_values = getattr(owner, field_name)
 
@@ -550,37 +647,116 @@ class GenotypeMutationMixin:
         parameter_type: str,
         owner: Any,
         field_name: str,
+        random_source: random.Random,
     ) -> None:
         if (
             parameter_type == "connection"
             and isinstance(owner, ConnectionGene)
             and field_name == "child"
         ):
-            self._reset_connection_neural_parameters(owner)
+            self._reset_connection_neural_parameters(owner, random_source)
             return
         if (
             parameter_type == "node"
             and isinstance(owner, NodeGene)
             and field_name == "joint_type"
         ):
-            self._reset_incoming_neural_parameters(owner.name)
+            self._reset_incoming_neural_parameters(owner.name, random_source)
 
-    def _reset_incoming_neural_parameters(self, child_name: str) -> None:
+    def _reset_incoming_neural_parameters(
+        self,
+        child_name: str,
+        random_source: Optional[random.Random] = None,
+    ) -> None:
         for node in self.nodes.values():
             for connection in node.children:
                 if connection.child == child_name:
-                    self._reset_connection_neural_parameters(connection)
+                    self._reset_connection_neural_parameters(connection, random_source)
 
     def _reset_connection_neural_parameters(
         self,
         connection: ConnectionGene,
+        random_source: Optional[random.Random] = None,
     ) -> None:
         if self.control_mode != "neural":
             return
         joint_type = self._connection_child_joint_type(connection)
         if joint_type not in NEURAL_INPUT_DIMS:
             return
-        self._ensure_connection_neural_parameters(connection)
+        rng = random_source if random_source is not None else random
+        if self._connection_neural_parameters_match_joint_type(connection, joint_type):
+            if joint_type == "ball" and len(connection.neural_output_axes) != 3:
+                connection.neural_output_axes = self._orthonormal_axes(connection.axis)
+            elif joint_type != "ball":
+                connection.neural_output_axes = (self._normalized_axis(connection.axis),)
+            return
+        if self._connection_neural_parameters_match_joint_type(connection, "hinge"):
+            self._expand_single_axis_neural_parameters(connection, rng)
+            return
+        if self._connection_neural_parameters_match_joint_type(connection, "ball"):
+            self._contract_ball_neural_parameters(connection, rng)
+            return
+        self._initialize_connection_neural_parameters(connection, joint_type, rng)
+
+    def _expand_single_axis_neural_parameters(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> None:
+        old_w1 = connection.neural_w1
+        old_w2 = connection.neural_w2[0]
+        old_b2 = connection.neural_b2[0]
+        retained_axis = self._normalized_axis(connection.axis)
+        new_w1, _, new_w2, new_b2 = self._random_neural_parameters(
+            "ball",
+            random_source,
+        )
+        migrated_w1 = [list(row) for row in new_w1]
+        for hidden_index, old_row in enumerate(old_w1):
+            migrated_w1[hidden_index][0] = old_row[0]
+            for component, axis_component in enumerate(retained_axis):
+                migrated_w1[hidden_index][2 + component] = old_row[1] * axis_component
+                migrated_w1[hidden_index][5 + component] = old_row[2] * axis_component
+            migrated_w1[hidden_index][8:17] = old_row[3:12]
+        output_rows = [list(row) for row in new_w2]
+        output_rows[0] = list(old_w2)
+        output_biases = list(new_b2)
+        output_biases[0] = old_b2
+        connection.neural_w1 = tuple(tuple(row) for row in migrated_w1)
+        connection.neural_w2 = tuple(tuple(row) for row in output_rows)
+        connection.neural_b2 = tuple(output_biases)
+        connection.neural_output_axes = self._orthonormal_axes(retained_axis)
+
+    def _contract_ball_neural_parameters(
+        self,
+        connection: ConnectionGene,
+        random_source: random.Random,
+    ) -> None:
+        selected_index = random_source.randrange(3)
+        axes = (
+            connection.neural_output_axes
+            if len(connection.neural_output_axes) == 3
+            else BALL_NEURAL_AXES
+        )
+        selected_axis = self._normalized_axis(tuple(axes[selected_index]))
+        migrated_w1 = []
+        for old_row in connection.neural_w1:
+            position_weight = sum(
+                old_row[2 + component] * selected_axis[component]
+                for component in range(3)
+            )
+            velocity_weight = sum(
+                old_row[5 + component] * selected_axis[component]
+                for component in range(3)
+            )
+            migrated_w1.append(
+                (old_row[0], position_weight, velocity_weight, *old_row[8:17])
+            )
+        connection.neural_w1 = tuple(migrated_w1)
+        connection.neural_w2 = (connection.neural_w2[selected_index],)
+        connection.neural_b2 = (connection.neural_b2[selected_index],)
+        connection.neural_output_axes = (selected_axis,)
+        connection.axis = selected_axis
 
     def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
         parameter_type = parameter_path[0]
@@ -928,7 +1104,7 @@ class GenotypeMutationMixin:
 
         new_destination = random_source.choice(possible_destinations)
         connection.child = new_destination
-        self._reset_connection_neural_parameters(connection)
+        self._reset_connection_neural_parameters(connection, random_source)
 
         return (
             f"connection destination for '{origin}' -> '{old_destination}'"
@@ -984,7 +1160,7 @@ class GenotypeMutationMixin:
         connection.child = destination
         self._disable_terminal_only_for_self_link(connection, origin)
         self._repair_connection_orientation_if_needed(connection, "orientation")
-        self._reset_connection_neural_parameters(connection)
+        self._reset_connection_neural_parameters(connection, random_source)
 
         changed_fields = [
             field_name
@@ -1273,6 +1449,19 @@ class GenotypeMutationMixin:
 
         self._disable_terminal_only_for_self_link(new_connection, origin_node.name)
         self._repair_connection_orientation_if_needed(new_connection, "orientation")
+        destination_joint_type = destination_node.joint_type
+        if self.control_mode == "neural" and destination_joint_type in NEURAL_INPUT_DIMS:
+            self._initialize_connection_neural_parameters(
+                new_connection,
+                destination_joint_type,
+                random_source,
+            )
+        elif destination_joint_type == "fixed":
+            new_connection.neural_w1 = ()
+            new_connection.neural_b1 = ()
+            new_connection.neural_w2 = ()
+            new_connection.neural_b2 = ()
+            new_connection.neural_output_axes = ()
 
         return new_index, source_label, connection_description
 
@@ -1339,7 +1528,7 @@ class GenotypeMutationMixin:
         self.archived_nodes.append(copy.deepcopy(old_node))
         self.nodes[new_node.name] = new_node
         connection.child = new_node.name
-        self._reset_connection_neural_parameters(connection)
+        self._reset_connection_neural_parameters(connection, random_source)
 
         return (
             f"connection destination node replacement for '{origin}' -> "
@@ -1599,4 +1788,3 @@ class GenotypeMutationMixin:
                     return node_name, child_index
 
         raise ValueError("Connection is not attached to any genotype node")
-

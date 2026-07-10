@@ -139,6 +139,7 @@ class PhenotypeBuilder:
             node=root_node,
             incoming_conn=None,
             incoming_axis=None,
+            incoming_neural_axes=None,
             current_depths={},
             connection_orders={},
             effective_size=root_node.size,
@@ -271,6 +272,7 @@ class PhenotypeBuilder:
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
         incoming_axis: Optional[Tuple[float, float, float]],
+        incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]],
         current_depths: Dict[str, int],
         connection_orders: Dict[int, int],
         effective_size: Tuple[float, float, float],
@@ -289,6 +291,7 @@ class PhenotypeBuilder:
             node,
             incoming_conn,
             incoming_axis,
+            incoming_neural_axes,
             node_depth,
             logical_path,
         )
@@ -312,6 +315,7 @@ class PhenotypeBuilder:
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
         incoming_axis: Optional[Tuple[float, float, float]],
+        incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]],
         node_depth: int,
         logical_path: Tuple[int, ...],
     ):
@@ -327,6 +331,7 @@ class PhenotypeBuilder:
                 node,
                 incoming_conn,
                 incoming_axis,
+                incoming_neural_axes,
                 node_depth,
                 logical_path,
             )
@@ -337,6 +342,7 @@ class PhenotypeBuilder:
         node: NodeGene,
         incoming_conn: Optional[ConnectionGene],
         incoming_axis: Optional[Tuple[float, float, float]],
+        incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]],
         node_depth: int,
         logical_path: Tuple[int, ...],
     ):
@@ -366,6 +372,7 @@ class PhenotypeBuilder:
                 joint_type=node.joint_type,
                 joint_axis=joint_axis,
                 incoming_conn=incoming_conn,
+                neural_output_axes=incoming_neural_axes,
                 node_depth=node_depth,
                 logical_path=logical_path,
             )
@@ -376,6 +383,7 @@ class PhenotypeBuilder:
         joint_type: str,
         joint_axis: Sequence[float],
         incoming_conn: Optional[ConnectionGene],
+        neural_output_axes: Optional[Tuple[Tuple[float, float, float], ...]],
         node_depth: int,
         logical_path: Tuple[int, ...],
     ):
@@ -401,7 +409,11 @@ class PhenotypeBuilder:
         )
 
         motor_names = []
-        motor_axes = (BALL_NEURAL_AXES if joint_type == "ball" and control_mode == "neural" else (joint_axis,))
+        motor_axes = (
+            neural_output_axes or BALL_NEURAL_AXES
+            if joint_type == "ball" and control_mode == "neural"
+            else (joint_axis,)
+        )
         for motor_axis in motor_axes:
             motor_name = self.new_motor_name(joint_name)
             motor = ET.SubElement(self.actuator_xml, "motor")
@@ -550,6 +562,14 @@ class PhenotypeBuilder:
                     if child_node.joint_type == "slide"
                     else _reflect_axial_vector(conn.axis, local_reflection)
                 )
+                child_neural_axes = tuple(
+                    (
+                        _reflect_vector(axis, local_reflection)
+                        if child_node.joint_type == "slide"
+                        else _reflect_axial_vector(axis, local_reflection)
+                    )
+                    for axis in conn.neural_output_axes
+                )
                 child_body = self.create_body(
                     parent_xml,
                     child_node,
@@ -562,6 +582,7 @@ class PhenotypeBuilder:
                     node=child_node,
                     incoming_conn=conn,
                     incoming_axis=child_axis,
+                    incoming_neural_axes=child_neural_axes,
                     current_depths=current_depths,
                     connection_orders=child_connection_orders,
                     effective_size=child_size,

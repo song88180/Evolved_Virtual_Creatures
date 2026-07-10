@@ -154,6 +154,7 @@ class ConnectionGene:
     neural_b1: Tuple[float, ...] = ()
     neural_w2: Tuple[Tuple[float, ...], ...] = ()
     neural_b2: Tuple[float, ...] = ()
+    neural_output_axes: Tuple[Tuple[float, float, float], ...] = ()
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
 
     def __post_init__(self):
@@ -178,6 +179,12 @@ class ConnectionGene:
         self.neural_b1 = normalize_numeric_vector(self.neural_b1, "neural_b1")
         self.neural_w2 = normalize_numeric_matrix(self.neural_w2, "neural_w2")
         self.neural_b2 = normalize_numeric_vector(self.neural_b2, "neural_b2")
+        self.neural_output_axes = normalize_numeric_matrix(
+            self.neural_output_axes,
+            "neural_output_axes",
+        )
+        if any(len(axis) != 3 for axis in self.neural_output_axes):
+            raise ValueError("neural_output_axes rows must contain exactly 3 values")
 
         unknown_planes = set(self.symmetry) - set(SYMMETRY_PLANES)
         if unknown_planes:
@@ -228,5 +235,3 @@ class NodeGene:
                 f"Unknown joint type {self.joint_type!r}; expected one of "
                 f"{valid_types}"
             )
-
-

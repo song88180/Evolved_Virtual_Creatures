@@ -58,6 +58,11 @@ class ConnectionGene:
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0
     control_phase_order_scale: float = 0.0
+    neural_w1: Tuple[Tuple[float, ...], ...] = ()
+    neural_b1: Tuple[float, ...] = ()
+    neural_w2: Tuple[Tuple[float, ...], ...] = ()
+    neural_b2: Tuple[float, ...] = ()
+    neural_output_axes: Tuple[Tuple[float, float, float], ...] = ()
     orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 ```
 
@@ -74,6 +79,10 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `motor_enabled`: whether the articulated joint on this connection gets a motor.
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
 - `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters. `control_freq` is an actuator-specific harmonic multiplier applied to the genotype's global base frequency.
+- `neural_w1`, `neural_b1`, `neural_w2`, and `neural_b2`: the two-layer neural controller tensors for this connection.
+- `neural_output_axes`: signed physical axes associated with the neural output rows, allowing joint-type mutations to preserve an output's direction.
+
+New neural connections receive Gaussian-random tensors. Joint-type mutation preserves compatible tensors, expands one-output hinge/slide networks when they become three-output ball networks, and keeps one randomly selected directional output when a ball network becomes hinge or slide. Fixed joints retain their tensors unchanged but exclude them from mutation until they become articulated again.
 
 The connection orientation is constrained: after applying the Euler rotation, the child body's local `+X` axis must point within 90 degrees of the selected parent face normal. This prevents children from being genetically oriented back into or sideways across the parent attachment surface. The `phase_for()` helper combines the base phase with depth-based and actuator-order-based offsets. This lets repeated segments move with a wave-like timing pattern while still using one compact connection recipe. Mirrored copies reuse the same logical actuator order, amplitude, harmonic frequency multiplier, and phase. Their hinge axes and body orientations are reflected so equal controls produce mirror-symmetric motion.
 

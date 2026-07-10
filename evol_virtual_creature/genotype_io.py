@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, Mapping, Sequence
 from dataclasses import asdict
 import json
 
-from .control import zero_neural_parameters
+from .control import BALL_NEURAL_AXES, zero_neural_parameters
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .genes import CONTROL_MODES, orientation_for_parent_face
 
@@ -202,7 +202,10 @@ def _with_neural_defaults(
         for key, value in connection_data.items()
         if key not in LEGACY_CONNECTION_FIELDS
     }
-    if control_mode != "neural" or joint_type == "fixed":
+    if control_mode != "neural":
+        return normalized
+    _with_neural_axis_defaults(normalized, joint_type)
+    if joint_type == "fixed":
         return normalized
     if all(
         field_name in normalized
@@ -215,6 +218,21 @@ def _with_neural_defaults(
     normalized.setdefault("neural_w2", neural_w2)
     normalized.setdefault("neural_b2", neural_b2)
     return normalized
+
+
+def _with_neural_axis_defaults(
+    connection_data: Dict[str, Any],
+    joint_type: str,
+) -> None:
+    if "neural_output_axes" in connection_data:
+        return
+    output_count = len(connection_data.get("neural_b2", ()))
+    if output_count == 3 or joint_type == "ball":
+        connection_data["neural_output_axes"] = BALL_NEURAL_AXES
+    elif output_count == 1 or joint_type in {"hinge", "slide"}:
+        connection_data["neural_output_axes"] = (
+            tuple(connection_data.get("axis", (0.0, 1.0, 0.0))),
+        )
 
 
 def _node_to_dict(node: NodeGene, include_name: bool = False) -> Dict[str, Any]:
