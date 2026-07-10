@@ -173,6 +173,13 @@ def save_x_axis_video(
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
 
+    # Match the scored rollout's initialization before the controller observes
+    # derived state such as body transforms and joint-related quantities.  A
+    # fresh MjData does not have all of that state populated until mj_forward
+    # (or a step) runs; applying neural controls first can therefore put the
+    # video on a different, potentially unstable trajectory from evaluation.
+    mujoco.mj_forward(model, data)
+
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []
     next_frame_time = 0.0
