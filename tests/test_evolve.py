@@ -9,6 +9,8 @@ import pytest
 import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
+from evol_virtual_creature.genes import ConnectionGene, NodeGene
+from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evaluation import (
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
@@ -81,6 +83,60 @@ def test_evaluate_accepts_upright_error(monkeypatch):
         sys, "argv", ["evaluate.py", "--task", "walking_x", "--upright-error"]
     )
     assert evaluate.parse_args().upright_error
+
+
+def test_evolve_defaults_to_neural_control_mode(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert evolve_cli.parse_args().control_mode == "neural"
+
+
+def test_evolve_accepts_sine_control_mode(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--control-mode", "sine"])
+    assert evolve_cli.parse_args().control_mode == "sine"
+
+
+def test_set_genotype_control_mode_updates_active_and_archived_connections():
+    active_connection = ConnectionGene(
+        child="limb",
+        axis=(0, 1, 0),
+        control_mode="neural",
+    )
+    archived_connection = ConnectionGene(
+        child="limb",
+        axis=(0, 1, 0),
+        control_mode="neural",
+    )
+    archived_node_connection = ConnectionGene(
+        child="limb",
+        axis=(0, 1, 0),
+        control_mode="neural",
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[active_connection],
+            ),
+            "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
+        },
+        archived_connections=[archived_connection],
+        archived_nodes=[
+            NodeGene(
+                name="template",
+                size=(0.1, 0.1, 0.1),
+                children=[archived_node_connection],
+            )
+        ],
+    )
+
+    evolve_cli._set_genotype_control_mode(genotype, "sine")
+
+    assert active_connection.control_mode == "sine"
+    assert archived_connection.control_mode == "sine"
+    assert archived_node_connection.control_mode == "sine"
 
 
 def test_evolve_accepts_upright_error(monkeypatch):
