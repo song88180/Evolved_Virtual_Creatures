@@ -476,6 +476,89 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
     assert "unchanged; connection is archived" in description
 
 
+def _neural_hinge_genotype():
+    connection = ConnectionGene(
+        child="limb",
+        axis=(0, 1, 0),
+        control_mode="neural",
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[connection],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+    genotype._ensure_connection_neural_parameters(connection)
+    connection.neural_b1 = (1.25, *connection.neural_b1[1:])
+    return genotype, connection
+
+
+def test_neural_tensors_are_preserved_when_child_joint_becomes_fixed():
+    genotype, connection = _neural_hinge_genotype()
+    original_b1 = connection.neural_b1
+
+    genotype.nodes["limb"].joint_type = "fixed"
+    genotype._reset_incoming_neural_parameters("limb")
+
+    assert connection.neural_b1 == original_b1
+
+    genotype.nodes["limb"].joint_type = "hinge"
+    genotype._reset_incoming_neural_parameters("limb")
+
+    assert connection.neural_b1 == original_b1
+
+
+def test_fixed_child_neural_tensors_are_excluded_from_mutation_pool():
+    genotype, connection = _neural_hinge_genotype()
+    genotype.nodes["limb"].joint_type = "fixed"
+
+    paths = genotype._collect_mutable_parameters(allow_topology_mutations=False)
+
+    assert connection.neural_b1
+    assert not any(path[0] == "connection_neural" for path in paths)
+
+
+def test_preselected_neural_mutation_skips_connection_now_targeting_fixed_child():
+    genotype, connection = _neural_hinge_genotype()
+    genotype.nodes["rigid"] = NodeGene(
+        name="rigid",
+        size=(0.1, 0.1, 0.1),
+        joint_type="fixed",
+    )
+    original_b1 = connection.neural_b1
+
+    genotype._mutate_connection_destination(connection, random.Random(1))
+    description = genotype._mutate_parameter_path(
+        ("connection_neural", connection, "neural_b1", 0),
+        random.Random(2),
+    )
+
+    assert connection.child == "rigid"
+    assert connection.neural_b1 == original_b1
+    assert "does not currently support neural control" in description
+
+
+def test_preselected_stale_neural_index_is_skipped():
+    genotype, connection = _neural_hinge_genotype()
+
+    description = genotype._mutate_parameter_path(
+        ("connection_neural", connection, "neural_b2", 2),
+        random.Random(2),
+    )
+
+    assert "unchanged; stale neural parameter path" in description
+
+
 MUTABLE_NODE_FIELDS = {"size", "joint_type", "shape", "orientation"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",

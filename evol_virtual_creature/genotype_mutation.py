@@ -266,8 +266,8 @@ class GenotypeMutationMixin:
                             owner=connection,
                             base_path=base_path,
                         )
-                self._ensure_connection_neural_parameters(connection)
-                if connection.control_mode == "neural":
+                if self._connection_supports_neural_mutation(connection):
+                    self._ensure_connection_neural_parameters(connection)
                     self._add_neural_parameter_paths(mutable_parameters, connection)
 
         return mutable_parameters
@@ -315,17 +315,12 @@ class GenotypeMutationMixin:
         self,
         connection: ConnectionGene,
     ) -> None:
-        if connection.control_mode != "neural":
-            return
-        child_node = self.nodes.get(connection.child)
-        joint_type = child_node.joint_type if child_node is not None else "hinge"
+        joint_type = self._connection_child_joint_type(connection)
         if joint_type not in NEURAL_INPUT_DIMS:
             return
-        if (
-            connection.neural_w1
-            and connection.neural_b1
-            and connection.neural_w2
-            and connection.neural_b2
+        if self._connection_neural_parameters_match_joint_type(
+            connection,
+            joint_type,
         ):
             return
         (
@@ -334,6 +329,42 @@ class GenotypeMutationMixin:
             connection.neural_w2,
             connection.neural_b2,
         ) = zero_neural_parameters(joint_type)
+
+    def _connection_child_joint_type(self, connection: ConnectionGene) -> str:
+        child_node = self.nodes.get(connection.child)
+        return child_node.joint_type if child_node is not None else "hinge"
+
+    def _connection_supports_neural_mutation(
+        self,
+        connection: ConnectionGene,
+    ) -> bool:
+        return (
+            connection.control_mode == "neural"
+            and self._connection_child_joint_type(connection) in NEURAL_INPUT_DIMS
+        )
+
+    def _connection_neural_parameters_match_joint_type(
+        self,
+        connection: ConnectionGene,
+        joint_type: str,
+    ) -> bool:
+        expected_w1, expected_b1, expected_w2, expected_b2 = zero_neural_parameters(
+            joint_type,
+        )
+        return (
+            len(connection.neural_w1) == len(expected_w1)
+            and all(
+                len(row) == len(expected_row)
+                for row, expected_row in zip(connection.neural_w1, expected_w1)
+            )
+            and len(connection.neural_b1) == len(expected_b1)
+            and len(connection.neural_w2) == len(expected_w2)
+            and all(
+                len(row) == len(expected_row)
+                for row, expected_row in zip(connection.neural_w2, expected_w2)
+            )
+            and len(connection.neural_b2) == len(expected_b2)
+        )
 
     def _mutate_parameter_path(
         self,
@@ -470,12 +501,23 @@ class GenotypeMutationMixin:
         random_source: random.Random,
     ) -> str:
         _, connection, field_name, first_index, *maybe_second_index = parameter_path
+        target = self._describe_parameter_target(("connection", connection, field_name))
+        if not self._connection_supports_neural_mutation(connection):
+            return (
+                f"{target}.{field_name}: unchanged; connection does not currently "
+                "support neural control"
+            )
         self._ensure_connection_neural_parameters(connection)
         values = getattr(connection, field_name)
         if maybe_second_index:
             row_index = first_index
             column_index = maybe_second_index[0]
             matrix = [list(row) for row in values]
+            if row_index >= len(matrix) or column_index >= len(matrix[row_index]):
+                return (
+                    f"{target}.{field_name}[{row_index}][{column_index}]: "
+                    "unchanged; stale neural parameter path"
+                )
             old_value = matrix[row_index][column_index]
             matrix[row_index][column_index] = old_value + self._normal_mutation_delta(
                 old_value,
@@ -483,13 +525,17 @@ class GenotypeMutationMixin:
                 random_source,
             )
             setattr(connection, field_name, tuple(tuple(row) for row in matrix))
-            target = self._describe_parameter_target(("connection", connection, field_name))
             return (
                 f"{target}.{field_name}[{row_index}][{column_index}]: "
                 f"{old_value!r} -> {matrix[row_index][column_index]!r}"
             )
 
         vector = list(values)
+        if first_index >= len(vector):
+            return (
+                f"{target}.{field_name}[{first_index}]: unchanged; "
+                "stale neural parameter path"
+            )
         old_value = vector[first_index]
         vector[first_index] = old_value + self._normal_mutation_delta(
             old_value,
@@ -497,7 +543,6 @@ class GenotypeMutationMixin:
             random_source,
         )
         setattr(connection, field_name, tuple(vector))
-        target = self._describe_parameter_target(("connection", connection, field_name))
         return f"{target}.{field_name}[{first_index}]: {old_value!r} -> {vector[first_index]!r}"
 
 
@@ -533,20 +578,10 @@ class GenotypeMutationMixin:
     ) -> None:
         if connection.control_mode != "neural":
             return
-        child_node = self.nodes.get(connection.child)
-        joint_type = child_node.joint_type if child_node is not None else "hinge"
+        joint_type = self._connection_child_joint_type(connection)
         if joint_type not in NEURAL_INPUT_DIMS:
-            connection.neural_w1 = ()
-            connection.neural_b1 = ()
-            connection.neural_w2 = ()
-            connection.neural_b2 = ()
             return
-        (
-            connection.neural_w1,
-            connection.neural_b1,
-            connection.neural_w2,
-            connection.neural_b2,
-        ) = zero_neural_parameters(joint_type)
+        self._ensure_connection_neural_parameters(connection)
 
     def _describe_parameter_target(self, parameter_path: Tuple[Any, ...]) -> str:
         parameter_type = parameter_path[0]
