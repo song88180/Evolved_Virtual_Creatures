@@ -1032,7 +1032,7 @@ def test_disallow_root_mutation_excludes_root_node_fields():
 
 @pytest.mark.parametrize(
     ("delta", "expected"),
-    [(10.0, 1.0), (-10.0, 0.001)],
+    [(10.0, 1.0), (-10.0, 0.01)],
 )
 def test_size_mutation_clamps_result_not_delta(monkeypatch, delta, expected):
     genotype = Genotype(
@@ -1061,7 +1061,7 @@ def test_size_mutation_clamps_result_not_delta(monkeypatch, delta, expected):
 
 @pytest.mark.parametrize(
     ("parent_size", "expected"),
-    [((0.0001, 0.0001, 0.0001), 0.001), ((10.0, 10.0, 10.0), 1.0)],
+    [((0.0001, 0.0001, 0.0001), 0.01), ((10.0, 10.0, 10.0), 1.0)],
 )
 def test_fresh_child_size_clamps_after_parent_relative_generation(
     parent_size,

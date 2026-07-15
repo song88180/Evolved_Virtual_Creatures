@@ -976,7 +976,7 @@ def test_out_of_bounds_json_sizes_warn_and_load_unchanged(tmp_path):
         },
     }))
 
-    with pytest.warns(UserWarning, match=r"Body part 'body'.*\[0.001, 1.0\]"):
+    with pytest.warns(UserWarning, match=r"Body part 'body'.*\[0.01, 1.0\]"):
         genotype = load_genotype_from_json(genotype_path)
 
     assert genotype.nodes["body"].size == (0.0005, 0.5, 1.5)
@@ -988,7 +988,7 @@ def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
         "root": "body",
         "nodes": {
             "body": {
-                "size": [0.001, 0.5, 1.0],
+                "size": [0.01, 0.5, 1.0],
                 "joint_type": "free",
             },
         },
@@ -999,4 +999,4 @@ def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
         genotype = load_genotype_from_json(genotype_path)
 
     assert not warnings_record
-    assert genotype.nodes["body"].size == (0.001, 0.5, 1.0)
+    assert genotype.nodes["body"].size == (0.01, 0.5, 1.0)
