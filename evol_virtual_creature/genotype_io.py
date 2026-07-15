@@ -128,6 +128,8 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         _node_from_dict(node, control_mode)
         for node in genotype_data.get("archived_nodes", [])
     ]
+    genotype.validate_node_names()
+    genotype.rebuild_node_name_allocator()
     return genotype
 
 
@@ -164,6 +166,7 @@ def save_genotype_to_json(genotype: Genotype, path: str | Path):
 
 def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
     """Convert a genotype into the JSON recipe shape used by this project."""
+    genotype.validate_node_names()
     return {
         "root": genotype.root,
         "global_control_freq": genotype.global_control_freq,

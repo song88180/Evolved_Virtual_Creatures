@@ -25,6 +25,27 @@ def _vector(element, attribute):
     return tuple(float(value) for value in element.get(attribute).split())
 
 
+def test_loading_duplicate_active_and_archived_node_names_fails(tmp_path):
+    genotype_path = tmp_path / "duplicate_names.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.1, 0.1, 0.1],
+                "joint_type": "free",
+            },
+        },
+        "archived_nodes": [{
+            "name": "body",
+            "size": [0.2, 0.2, 0.2],
+            "joint_type": "free",
+        }],
+    }))
+
+    with pytest.raises(ValueError, match="Duplicate node gene name 'body'"):
+        load_genotype_from_json(genotype_path)
+
+
 def _joint_position_in_body_frame(model, data, joint_name, body_name):
     joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
     body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)

@@ -17,6 +17,107 @@ from evol_virtual_creature.graph_analysis import (
 )
 
 
+def test_new_node_names_do_not_reuse_archived_gene_names():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+        archived_nodes=[
+            NodeGene(name="node_mut1", size=(0.1, 0.1, 0.1)),
+        ],
+    )
+
+    assert genotype._new_node_name("node") == "node_mut2"
+
+
+def test_archived_node_snapshots_use_normal_names_and_preserve_self_links():
+    recursive_node = NodeGene(
+        name="segment",
+        size=(0.1, 0.1, 0.1),
+        children=[ConnectionGene(child="segment", axis=(0.0, 1.0, 0.0))],
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            ),
+            "segment": recursive_node,
+        },
+    )
+
+    genotype._archive_node_snapshots([recursive_node])
+
+    archived = genotype.archived_nodes[0]
+    assert archived.name == "segment_mut1"
+    assert archived.children[0].child == archived.name
+    genotype.validate_node_names()
+
+
+def test_reactivating_archived_node_moves_it_without_renaming():
+    archived = NodeGene(
+        name="segment_mut3",
+        size=(0.1, 0.1, 0.1),
+        children=[
+            ConnectionGene(
+                child="segment_mut3",
+                axis=(0.0, 1.0, 0.0),
+            )
+        ],
+    )
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            )
+        },
+        archived_nodes=[archived],
+    )
+
+    activated = genotype._activate_node_gene(archived)
+
+    assert activated is archived
+    assert activated.name == "segment_mut3"
+    assert activated.children[0].child == "segment_mut3"
+    assert "segment_mut3" in genotype.nodes
+    assert archived not in genotype.archived_nodes
+    genotype.validate_node_names()
+
+
+def test_name_allocator_starts_after_highest_suffix_without_reusing_gaps():
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.25, 0.15, 0.1),
+                joint_type="free",
+            ),
+            "segment_mut1": NodeGene(
+                name="segment_mut1",
+                size=(0.1, 0.1, 0.1),
+            ),
+        },
+        archived_nodes=[
+            NodeGene(name="segment_mut4", size=(0.1, 0.1, 0.1)),
+            NodeGene(name="segment_mut1_mut2", size=(0.1, 0.1, 0.1)),
+        ],
+    )
+
+    assert genotype._new_node_name("segment") == "segment_mut5"
+    assert genotype._new_node_name("segment_mut1") == "segment_mut1_mut3"
+
+
 def test_fresh_node_connection_addition_can_grow_single_free_root():
     genotype = Genotype(
         root="body",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Sequence, Tuple
 import copy
 import math
 import random
@@ -1499,7 +1499,7 @@ class GenotypeMutationMixin:
         new_node = self._new_node_from_existing(old_node, random_source)
         mutated_field = self._mutate_new_node(new_node, random_source)
 
-        self.archived_nodes.append(copy.deepcopy(old_node))
+        archived_node = self._archive_node_snapshots([old_node])[0]
         self.nodes[old_origin].children.pop(old_index)
         new_node.children = [connection]
         self.nodes[new_node.name] = new_node
@@ -1507,7 +1507,7 @@ class GenotypeMutationMixin:
         return (
             f"connection origin node replacement for '{old_origin}' -> "
             f"'{connection.child}' #{old_index}: {old_origin!r} -> "
-            f"{new_node.name!r}; archived node '{old_origin}'"
+            f"{new_node.name!r}; archived node '{archived_node.name}'"
             f" #{len(self.archived_nodes) - 1}; mutated new node {mutated_field}"
         )
 
@@ -1534,7 +1534,7 @@ class GenotypeMutationMixin:
         mutated_field = self._mutate_new_node(new_node, random_source)
         self._clamp_child_size_to_parent(new_node, self.nodes[origin])
 
-        self.archived_nodes.append(copy.deepcopy(old_node))
+        archived_node = self._archive_node_snapshots([old_node])[0]
         self.nodes[new_node.name] = new_node
         connection.child = new_node.name
         self._reset_connection_neural_parameters(connection, random_source)
@@ -1542,7 +1542,7 @@ class GenotypeMutationMixin:
         return (
             f"connection destination node replacement for '{origin}' -> "
             f"'{old_destination}' #{child_index}: {old_destination!r} -> "
-            f"{new_node.name!r}; archived node '{old_destination}'"
+            f"{new_node.name!r}; archived node '{archived_node.name}'"
             f" #{len(self.archived_nodes) - 1}; mutated new node {mutated_field}"
         )
 
@@ -1556,12 +1556,32 @@ class GenotypeMutationMixin:
         return new_node
 
     def _new_node_name(self, base_name: str) -> str:
-        index = 1
+        index = self._next_mutation_index.get(base_name, 1)
         while True:
             candidate = f"{base_name}_mut{index}"
-            if candidate not in self.nodes:
+            if candidate not in self._used_node_names:
+                self._used_node_names.add(candidate)
+                self._next_mutation_index[base_name] = index + 1
                 return candidate
             index += 1
+
+    def _archive_node_snapshots(
+        self,
+        nodes: Sequence[NodeGene],
+    ) -> List[NodeGene]:
+        """Archive distinct snapshots using the normal nested naming rule."""
+        archived_copies = [copy.deepcopy(node) for node in nodes]
+        renamed = {
+            node.name: self._new_node_name(node.name)
+            for node in archived_copies
+        }
+        for node in archived_copies:
+            old_name = node.name
+            node.name = renamed[old_name]
+            for connection in node.children:
+                connection.child = renamed.get(connection.child, connection.child)
+            self.archived_nodes.append(node)
+        return archived_copies
 
     def _mutate_new_node(
         self,
@@ -1704,9 +1724,18 @@ class GenotypeMutationMixin:
         if active_node is not None:
             return active_node
 
-        new_node = copy.deepcopy(node)
-        if new_node.name in self.nodes:
-            new_node.name = self._new_node_name(new_node.name)
+        archived_index = next(
+            (
+                index
+                for index, archived_node in enumerate(self.archived_nodes)
+                if archived_node is node
+            ),
+            None,
+        )
+        if archived_index is None:
+            raise ValueError(f"Node gene {node.name!r} is neither active nor archived")
+
+        new_node = self.archived_nodes.pop(archived_index)
         self.nodes[new_node.name] = new_node
         activating_node_names.add(new_node.name)
 
@@ -1737,11 +1766,12 @@ class GenotypeMutationMixin:
         if not disconnected_node_names:
             return None
 
-        for node_name in disconnected_node_names:
-            self.archived_nodes.append(copy.deepcopy(self.nodes[node_name]))
-
+        disconnected_nodes = [
+            self.nodes[node_name] for node_name in disconnected_node_names
+        ]
         for node_name in disconnected_node_names:
             del self.nodes[node_name]
+        self.archived_nodes.extend(disconnected_nodes)
 
         removed_nodes = ", ".join(repr(node_name) for node_name in disconnected_node_names)
         return (
