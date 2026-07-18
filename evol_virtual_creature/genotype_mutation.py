@@ -250,33 +250,37 @@ class GenotypeMutationMixin:
                         base_path=("node", node_name, field_name),
                     )
 
-            for child_index, connection in enumerate(node.children):
+            for connection_name in node.child_connections:
+                connection = self.connections[connection_name]
                 if allow_topology_mutations:
-                    mutable_parameters.append(("connection_origin", connection))
-                    mutable_parameters.append(("connection_destination", connection))
-                    mutable_parameters.append(("connection_type", connection))
-                    mutable_parameters.append(("connection_replacement", connection))
-                    mutable_parameters.append(("connection_origin_node_replacement", connection))
-                    mutable_parameters.append(("connection_destination_node_replacement", connection))
-                    mutable_parameters.append(("connection_removal", connection))
-                for field_name in connection_mutation_specs:
-                    if (
-                        not allow_topology_mutations
-                        and field_name in topology_sensitive_connection_fields
-                    ):
-                        continue
-                    base_path = ("connection", connection, field_name)
-                    if field_name == "symmetry":
-                        mutable_parameters.append(base_path)
-                    else:
-                        self._add_mutable_parameter_paths(
-                            mutable_parameters,
-                            owner=connection,
-                            base_path=base_path,
-                        )
-                if self._connection_supports_neural_mutation(connection):
-                    self._ensure_connection_neural_parameters(connection)
-                    self._add_neural_parameter_paths(mutable_parameters, connection)
+                    mutable_parameters.append(("connection_origin", connection, node_name))
+                    mutable_parameters.append(("connection_replacement", connection, node_name))
+                    mutable_parameters.append(("connection_origin_node_replacement", connection, node_name))
+                    mutable_parameters.append(("connection_removal", connection, node_name))
+
+        for connection in self.connections.values():
+            if allow_topology_mutations:
+                mutable_parameters.append(("connection_destination", connection))
+                mutable_parameters.append(("connection_type", connection))
+                mutable_parameters.append(("connection_destination_node_replacement", connection))
+            for field_name in connection_mutation_specs:
+                if (
+                    not allow_topology_mutations
+                    and field_name in topology_sensitive_connection_fields
+                ):
+                    continue
+                base_path = ("connection", connection, field_name)
+                if field_name == "symmetry":
+                    mutable_parameters.append(base_path)
+                else:
+                    self._add_mutable_parameter_paths(
+                        mutable_parameters,
+                        owner=connection,
+                        base_path=base_path,
+                    )
+            if self._connection_supports_neural_mutation(connection):
+                self._ensure_connection_neural_parameters(connection)
+                self._add_neural_parameter_paths(mutable_parameters, connection)
 
         return mutable_parameters
 
@@ -493,7 +497,11 @@ class GenotypeMutationMixin:
                 random_source,
             )
         if parameter_type == "connection_origin":
-            return self._mutate_connection_origin(parameter_path[1], random_source)
+            return self._mutate_connection_origin(
+                parameter_path[1],
+                random_source,
+                parameter_path[2] if len(parameter_path) > 2 else None,
+            )
         if parameter_type == "connection_destination":
             return self._mutate_connection_destination(parameter_path[1], random_source)
         if parameter_type == "connection_type":
@@ -502,11 +510,13 @@ class GenotypeMutationMixin:
             return self._mutate_connection_replacement(
                 parameter_path[1],
                 random_source,
+                parameter_path[2] if len(parameter_path) > 2 else None,
             )
         if parameter_type == "connection_origin_node_replacement":
             return self._mutate_connection_origin_node_replacement(
                 parameter_path[1],
                 random_source,
+                parameter_path[2] if len(parameter_path) > 2 else None,
             )
         if parameter_type == "connection_destination_node_replacement":
             return self._mutate_connection_destination_node_replacement(
@@ -520,7 +530,10 @@ class GenotypeMutationMixin:
         if parameter_type == "fresh_node_connection_addition":
             return self._mutate_fresh_node_connection_addition(random_source)
         if parameter_type == "connection_removal":
-            return self._mutate_connection_removal(parameter_path[1])
+            return self._mutate_connection_removal(
+                parameter_path[1],
+                parameter_path[2] if len(parameter_path) > 2 else None,
+            )
 
         owner, field_name, index = self._resolve_parameter_path(parameter_path)
         if (
@@ -669,10 +682,9 @@ class GenotypeMutationMixin:
         child_name: str,
         random_source: Optional[random.Random] = None,
     ) -> None:
-        for node in self.nodes.values():
-            for connection in node.children:
-                if connection.child == child_name:
-                    self._reset_connection_neural_parameters(connection, random_source)
+        for connection in self.connections.values():
+            if connection.child == child_name:
+                self._reset_connection_neural_parameters(connection, random_source)
 
     def _reset_connection_neural_parameters(
         self,
@@ -786,8 +798,10 @@ class GenotypeMutationMixin:
             "connection_destination_node_replacement",
             "connection_removal",
         }:
-            _, connection = parameter_path
-            node_name, child_index = self._find_connection_owner(connection)
+            _, connection, *maybe_origin = parameter_path
+            node_name, child_index = self._find_connection_owner(
+                connection, maybe_origin[0] if maybe_origin else None
+            )
             return (
                 f"connection '{node_name}' -> '{connection.child}'"
                 f" #{child_index}"
@@ -1062,13 +1076,15 @@ class GenotypeMutationMixin:
         self,
         connection: ConnectionGene,
         random_source: random.Random,
+        origin_name: Optional[str] = None,
     ) -> str:
-        old_origin, old_index = self._find_connection_owner(connection)
+        old_origin, old_index = self._find_connection_owner(connection, origin_name)
         possible_origins = [
             node_name
             for node_name in self.nodes
             if node_name != old_origin
             and (not connection.terminal_only or node_name != connection.child)
+            and connection.name not in self.nodes[node_name].child_connections
         ]
         if not possible_origins:
             return (
@@ -1077,9 +1093,9 @@ class GenotypeMutationMixin:
             )
 
         new_origin = random_source.choice(possible_origins)
-        self.nodes[old_origin].children.pop(old_index)
-        self.nodes[new_origin].children.append(connection)
-        new_index = len(self.nodes[new_origin].children) - 1
+        self.nodes[old_origin].child_connections.pop(old_index)
+        self.nodes[new_origin].child_connections.append(connection.name)
+        new_index = len(self.nodes[new_origin].child_connections) - 1
 
         return (
             f"connection origin for '{old_origin}' -> '{connection.child}'"
@@ -1099,7 +1115,14 @@ class GenotypeMutationMixin:
             for node_name, node in self.nodes.items()
             if node_name != old_destination
             and node.joint_type != "free"
-            and (not connection.terminal_only or node_name != origin)
+            and (
+                not connection.terminal_only
+                or not any(
+                    connection.name in candidate.child_connections
+                    and candidate.name == node_name
+                    for candidate in self.nodes.values()
+                )
+            )
         ]
         if not possible_destinations:
             return (
@@ -1163,7 +1186,8 @@ class GenotypeMutationMixin:
         for field_name in connection_fields:
             setattr(connection, field_name, getattr(source_connection, field_name))
         connection.child = destination
-        self._disable_terminal_only_for_self_link(connection, origin)
+        if self._connection_is_self_pointing(connection):
+            connection.terminal_only = False
         self._repair_connection_orientation_if_needed(connection, "orientation")
         self._reset_connection_neural_parameters(connection, random_source)
 
@@ -1184,49 +1208,49 @@ class GenotypeMutationMixin:
         self,
         connection: ConnectionGene,
         random_source: random.Random,
+        origin_name: Optional[str] = None,
     ) -> str:
-        origin, child_index = self._find_connection_owner(connection)
+        origin, child_index = self._find_connection_owner(connection, origin_name)
         old_connection = connection
         new_connection = copy.deepcopy(old_connection)
-
-        self.archived_connections.append(old_connection)
-        self.nodes[origin].children[child_index] = new_connection
+        new_connection.name = self._new_connection_name(old_connection.name)
+        self.connections[new_connection.name] = new_connection
+        self.nodes[origin].child_connections[child_index] = new_connection.name
+        self._archive_connection_if_unused(old_connection.name)
 
         mutation_description = self._mutate_new_connection(new_connection, random_source)
 
         return (
             f"connection replacement for '{origin}' -> '{new_connection.child}'"
             f" #{child_index}: created new connection and archived old connection"
-            f" #{len(self.archived_connections) - 1}; {mutation_description}"
+            f" {old_connection.name!r} if unused; {mutation_description}"
         )
 
     def _mutate_connection_addition(
         self,
         random_source: random.Random,
     ) -> str:
-        possible_origins = self._node_coding_pool()
-        possible_destinations = [
-            node
-            for node in self._node_coding_pool()
-            if node.joint_type != "free"
-        ]
-        if not possible_origins or not possible_destinations:
-            return "connection addition: unchanged; no valid node pair"
-
-        origin_source = random_source.choice(possible_origins)
-        destination_source = random_source.choice(possible_destinations)
-        origin_node = self._activate_node_gene(origin_source)
-        destination_node = self._activate_node_gene(destination_source)
-        new_index, source_label, mutation_description = self._add_new_connection(
-            origin_node,
-            destination_node,
-            random_source,
-        )
-
+        candidates = []
+        for connection in self._connection_coding_pool():
+            for origin in self.nodes.values():
+                if connection.name in origin.child_connections:
+                    continue
+                if connection.terminal_only and connection.child == origin.name:
+                    continue
+                candidates.append((origin, connection))
+        if not candidates:
+            return "connection addition: unchanged; no reusable connection and origin"
+        origin, connection = random_source.choice(candidates)
+        if connection.child not in self.nodes:
+            child = self._find_archived_node(connection.child)
+            if child is None:
+                return "connection addition: unchanged; destination is unavailable"
+            self._activate_node_gene(child)
+        self._activate_connection_gene(connection)
+        origin.child_connections.append(connection.name)
         return (
-            f"connection addition: created connection '{origin_node.name}' -> "
-            f"'{destination_node.name}' #{new_index} from {source_label}; "
-            f"{mutation_description}"
+            f"connection addition: attached shared connection {connection.name!r} "
+            f"to node {origin.name!r}"
         )
 
     def _mutate_connection_new_node_addition(
@@ -1249,7 +1273,7 @@ class GenotypeMutationMixin:
             origin_node,
             random_source,
         )
-        new_node.children = []
+        new_node.child_connections = []
         mutated_node_field = self._mutate_new_node(new_node, random_source)
         self._clamp_child_size_to_parent(new_node, origin_node)
         self.nodes[new_node.name] = new_node
@@ -1317,6 +1341,7 @@ class GenotypeMutationMixin:
         ctrlrange_limit = random_source.uniform(0.5, 2.0)
         parent_face = random_source.choice(ATTACHMENT_FACES)
         return ConnectionGene(
+            name=self._new_connection_name("connection"),
             child=destination_node.name,
             axis=self._random_axis(random_source),
             parent_face=parent_face,
@@ -1425,6 +1450,7 @@ class GenotypeMutationMixin:
         if source_connection is None:
             if use_template:
                 new_connection = ConnectionGene(
+                    name=self._new_connection_name("connection"),
                     child=destination_node.name,
                     axis=(0.0, 1.0, 0.0),
                     parent_face="+x",
@@ -1441,13 +1467,15 @@ class GenotypeMutationMixin:
                 should_mutate_connection = False
         else:
             new_connection = copy.deepcopy(source_connection)
+            new_connection.name = self._new_connection_name(source_connection.name)
             new_connection.child = destination_node.name
             source_label = self._describe_connection_source(source_connection)
             should_mutate_connection = True
 
-        origin_node.children.append(new_connection)
+        self.connections[new_connection.name] = new_connection
+        origin_node.child_connections.append(new_connection.name)
         self._disable_terminal_only_for_self_link(new_connection, origin_node.name)
-        new_index = len(origin_node.children) - 1
+        new_index = len(origin_node.child_connections) - 1
         if should_mutate_connection:
             connection_description = self._mutate_new_connection(
                 new_connection,
@@ -1477,31 +1505,33 @@ class GenotypeMutationMixin:
     def _mutate_connection_removal(
         self,
         connection: ConnectionGene,
+        origin_name: Optional[str] = None,
     ) -> str:
-        origin, child_index = self._find_connection_owner(connection)
+        origin, child_index = self._find_connection_owner(connection, origin_name)
         destination = connection.child
 
-        self.archived_connections.append(connection)
-        self.nodes[origin].children.pop(child_index)
+        self.nodes[origin].child_connections.pop(child_index)
+        self._archive_connection_if_unused(connection.name)
 
         return (
             f"connection removal for '{origin}' -> '{destination}' #{child_index}: "
-            f"archived connection #{len(self.archived_connections) - 1}"
+            f"archived connection {connection.name!r} if it became unused"
         )
 
     def _mutate_connection_origin_node_replacement(
         self,
         connection: ConnectionGene,
         random_source: random.Random,
+        origin_name: Optional[str] = None,
     ) -> str:
-        old_origin, old_index = self._find_connection_owner(connection)
+        old_origin, old_index = self._find_connection_owner(connection, origin_name)
         old_node = self.nodes[old_origin]
         new_node = self._new_node_from_existing(old_node, random_source)
         mutated_field = self._mutate_new_node(new_node, random_source)
 
         archived_node = self._archive_node_snapshots([old_node])[0]
-        self.nodes[old_origin].children.pop(old_index)
-        new_node.children = [connection]
+        self.nodes[old_origin].child_connections.pop(old_index)
+        new_node.child_connections = [connection.name]
         self.nodes[new_node.name] = new_node
 
         return (
@@ -1565,6 +1595,16 @@ class GenotypeMutationMixin:
                 return candidate
             index += 1
 
+    def _new_connection_name(self, base_name: str) -> str:
+        index = self._next_connection_mutation_index.get(base_name, 1)
+        while True:
+            candidate = f"{base_name}_mut{index}"
+            if candidate not in self._used_connection_names:
+                self._used_connection_names.add(candidate)
+                self._next_connection_mutation_index[base_name] = index + 1
+                return candidate
+            index += 1
+
     def _archive_node_snapshots(
         self,
         nodes: Sequence[NodeGene],
@@ -1578,9 +1618,20 @@ class GenotypeMutationMixin:
         for node in archived_copies:
             old_name = node.name
             node.name = renamed[old_name]
-            for connection in node.children:
+            cloned_connection_names = []
+            for connection_name in node.child_connections:
+                source = self.connections.get(connection_name) or self.archived_connections[connection_name]
+                connection = copy.deepcopy(source)
+                connection.name = self._new_connection_name(source.name)
                 connection.child = renamed.get(connection.child, connection.child)
-            self.archived_nodes.append(node)
+                self.archived_connections[connection.name] = connection
+                cloned_connection_names.append(connection.name)
+            node.child_connections = cloned_connection_names
+            node._connection_lookup = {
+                **self.connections,
+                **self.archived_connections,
+            }
+            self.archived_nodes[node.name] = node
         return archived_copies
 
     def _mutate_new_node(
@@ -1681,16 +1732,13 @@ class GenotypeMutationMixin:
         return self._mutate_parameter_path(base_path, random_source)
 
     def _connection_coding_pool(self) -> List[ConnectionGene]:
-        active_connections = [
-            connection
-            for node in self.nodes.values()
-            for connection in node.children
-        ]
-        return active_connections + self.archived_connections
+        return list(self.connections.values()) + list(self.archived_connections.values())
 
     def _connection_is_self_pointing(self, connection: ConnectionGene) -> bool:
-        origin, _ = self._find_connection_owner(connection)
-        return connection.child == origin
+        return any(
+            connection.name in node.child_connections and connection.child == node.name
+            for node in self.nodes.values()
+        )
 
     def _disable_terminal_only_for_self_link(
         self,
@@ -1710,7 +1758,7 @@ class GenotypeMutationMixin:
         return random_source.choice(connection_pool)
 
     def _node_coding_pool(self) -> List[NodeGene]:
-        return list(self.nodes.values()) + self.archived_nodes
+        return list(self.nodes.values()) + list(self.archived_nodes.values())
 
     def _activate_node_gene(
         self,
@@ -1724,22 +1772,15 @@ class GenotypeMutationMixin:
         if active_node is not None:
             return active_node
 
-        archived_index = next(
-            (
-                index
-                for index, archived_node in enumerate(self.archived_nodes)
-                if archived_node is node
-            ),
-            None,
-        )
-        if archived_index is None:
+        if self.archived_nodes.get(node.name) is not node:
             raise ValueError(f"Node gene {node.name!r} is neither active nor archived")
-
-        new_node = self.archived_nodes.pop(archived_index)
+        new_node = self.archived_nodes.pop(node.name)
         self.nodes[new_node.name] = new_node
         activating_node_names.add(new_node.name)
 
-        for connection in new_node.children:
+        for connection_name in new_node.child_connections:
+            connection = self.connections.get(connection_name) or self.archived_connections[connection_name]
+            self._activate_connection_gene(connection)
             if connection.child in self.nodes or connection.child in activating_node_names:
                 continue
 
@@ -1749,12 +1790,29 @@ class GenotypeMutationMixin:
 
         return new_node
 
-    def _find_archived_node(self, node_name: str) -> Optional[NodeGene]:
-        for node in reversed(self.archived_nodes):
-            if node.name == node_name:
-                return node
+    def _activate_connection_gene(self, connection: ConnectionGene) -> None:
+        active = self.connections.get(connection.name)
+        if active is connection:
+            return
+        if self.archived_connections.get(connection.name) is not connection:
+            raise ValueError(
+                f"Connection gene {connection.name!r} is neither active nor archived"
+            )
+        self.archived_connections.pop(connection.name)
+        self.connections[connection.name] = connection
 
-        return None
+    def _archive_connection_if_unused(self, connection_name: str) -> None:
+        if any(
+            connection_name in node.child_connections
+            for node in self.nodes.values()
+        ):
+            return
+        connection = self.connections.pop(connection_name, None)
+        if connection is not None:
+            self.archived_connections[connection_name] = connection
+
+    def _find_archived_node(self, node_name: str) -> Optional[NodeGene]:
+        return self.archived_nodes.get(node_name)
 
     def _prune_disconnected_nodes(self) -> Optional[str]:
         reachable_node_names = self._reachable_node_names()
@@ -1771,7 +1829,9 @@ class GenotypeMutationMixin:
         ]
         for node_name in disconnected_node_names:
             del self.nodes[node_name]
-        self.archived_nodes.extend(disconnected_nodes)
+        self.archived_nodes.update({node.name: node for node in disconnected_nodes})
+        for connection_name in list(self.connections):
+            self._archive_connection_if_unused(connection_name)
 
         removed_nodes = ", ".join(repr(node_name) for node_name in disconnected_node_names)
         return (
@@ -1791,7 +1851,8 @@ class GenotypeMutationMixin:
                 continue
 
             reachable_node_names.add(node_name)
-            for connection in self.nodes[node_name].children:
+            for connection_name in self.nodes[node_name].child_connections:
+                connection = self.connections[connection_name]
                 if connection.child in self.nodes:
                     pending_node_names.append(connection.child)
 
@@ -1806,24 +1867,24 @@ class GenotypeMutationMixin:
             return f"archived connection '{connection.child}' #{archive_index}"
 
     def _is_active_connection(self, connection: ConnectionGene) -> bool:
-        for node in self.nodes.values():
-            for candidate in node.children:
-                if candidate is connection:
-                    return True
+        return self.connections.get(connection.name) is connection
 
-        return False
-
-    def _archived_connection_index(self, connection: ConnectionGene) -> int:
-        for archive_index, archived_connection in enumerate(self.archived_connections):
-            if archived_connection is connection:
-                return archive_index
-
+    def _archived_connection_index(self, connection: ConnectionGene) -> str:
+        if self.archived_connections.get(connection.name) is connection:
+            return connection.name
         raise ValueError("Connection is not archived")
 
-    def _find_connection_owner(self, connection: ConnectionGene) -> Tuple[str, int]:
-        for node_name, node in self.nodes.items():
-            for child_index, candidate in enumerate(node.children):
-                if candidate is connection:
+    def _find_connection_owner(
+        self, connection: ConnectionGene, origin_name: Optional[str] = None
+    ) -> Tuple[str, int]:
+        nodes = (
+            [(origin_name, self.nodes[origin_name])]
+            if origin_name is not None
+            else self.nodes.items()
+        )
+        for node_name, node in nodes:
+            for child_index, candidate_name in enumerate(node.child_connections):
+                if candidate_name == connection.name:
                     return node_name, child_index
 
         raise ValueError("Connection is not attached to any genotype node")

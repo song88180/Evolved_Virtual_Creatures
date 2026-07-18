@@ -5,43 +5,33 @@
       "size": [0.25, 0.15, 0.1],
       "joint_type": "free",
       "recursive_limit": 1,
-      "children": [
-        {
-          "child": "segment",
-          "axis": [0, 1, 0],
-          "parent_face": "-x",
-          "surface_uv": [0.0, 0.0],
-          "control_phase": 0.3
-        }
-      ]
+      "child_connections": ["body_to_segment"]
     },
     "segment": {
       "size": [0.18, 0.08, 0.08],
       "joint_type": "hinge",
       "recursive_limit": 7,
-      "children": [
-        {
-          "child": "segment",
-          "axis": [0, 1, 0],
-          "parent_face": "-x",
-          "surface_uv": [0.0, 0.0],
-          "control_phase_depth_scale": -0.8
-        },
-        {
-          "child": "limb",
-          "axis": [1, 0, 0],
-          "parent_face": "+y",
-          "surface_uv": [0.0, 0.0],
-          "symmetry": ["xz"],
-          "control_phase": 1.4,
-          "motor_enabled": true
-        }
-      ]
+      "child_connections": ["segment_recursive", "segment_to_limb"]
     },
     "limb": {
       "size": [0.06, 0.08, 0.01],
       "joint_type": "hinge",
       "recursive_limit": 1
+    }
+  },
+  "connections": {
+    "body_to_segment": {
+      "child": "segment", "axis": [0, 1, 0], "parent_face": "-x",
+      "surface_uv": [0.0, 0.0], "control_phase": 0.3
+    },
+    "segment_recursive": {
+      "child": "segment", "axis": [0, 1, 0], "parent_face": "-x",
+      "surface_uv": [0.0, 0.0], "control_phase_depth_scale": -0.8
+    },
+    "segment_to_limb": {
+      "child": "limb", "axis": [1, 0, 0], "parent_face": "+y",
+      "surface_uv": [0.0, 0.0], "symmetry": ["xz"],
+      "control_phase": 1.4, "motor_enabled": true
     }
   }
 }

@@ -57,7 +57,8 @@ class GenotypeGraphAnalyzer:
 
     def _validate_terminal_connections(self):
         for node in self.genotype.nodes.values():
-            for connection in node.children:
+            for connection_name in node.child_connections:
+                connection = self.genotype.connections[connection_name]
                 if connection.terminal_only and connection.child == node.name:
                     raise GenotypeGraphError(
                         "Terminal-only connection cannot point to its own node: "
@@ -87,7 +88,8 @@ class GenotypeGraphAnalyzer:
 
         self.active_states.add(state)
         total_nodes = 1
-        for connection in node.children:
+        for connection_name in node.child_connections:
+            connection = self.genotype.connections[connection_name]
             if connection.terminal_only and node_depth < node.recursive_limit:
                 continue
 
@@ -117,5 +119,4 @@ class GenotypeGraphAnalyzer:
         self.active_states.remove(state)
         self.memoized_counts[state] = total_nodes
         return total_nodes
-
 

@@ -2,10 +2,9 @@
   "root": "body",
   "nodes": {
     "body": {
-      "size": [0.2, 0.2, 0.2],
-      "joint_type": "free",
-      "recursive_limit": 1,
-      "children": []
+      "size": [0.2, 0.2, 0.2], "joint_type": "free",
+      "recursive_limit": 1, "child_connections": []
     }
-  }
+  },
+  "connections": {}
 }

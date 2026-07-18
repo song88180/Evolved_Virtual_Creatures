@@ -2,20 +2,15 @@
   "root": "body",
   "nodes": {
     "body": {
-      "size": [1, 1, 0.00001],
-      "joint_type": "free",
-      "recursive_limit": 1,
-      "children": [
-		{
-          "child": "segment",
-          "axis": [0, 1, 0],
-          "parent_face": "-x",
-          "surface_uv": [0.0, 0.0]
-		}
-	  ]
+      "size": [1, 1, 0.00001], "joint_type": "free", "recursive_limit": 1,
+      "child_connections": ["body_to_segment"]
     },
-	"segment": {
-      "size": [0.08, 0.08, 0.0001]
-	}
+    "segment": {"size": [0.08, 0.08, 0.0001]}
+  },
+  "connections": {
+    "body_to_segment": {
+      "child": "segment", "axis": [0, 1, 0], "parent_face": "-x",
+      "surface_uv": [0.0, 0.0]
+    }
   }
 }

@@ -101,8 +101,8 @@
           <p>
             Genotypes are compact graph recipes. A root node names the starting
             body part, <code>control_mode</code> selects the global simulation
-            controller family, and each node can declare reusable child
-            connections. Recursive connections are bounded by each node's
+            controller family, and nodes reference reusable, top-level named
+            connection genes. Recursive connections are bounded by each node's
             <code>recursive_limit</code>.
           </p>
           <figure>
@@ -115,22 +115,22 @@
       "size": [0.15, 0.08, 0.06],
       "shape": "box",
       "joint_type": "free",
-      "children": [
-        {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]}
-      ]
+      "child_connections": ["body_to_segment"]
     },
     "segment": {
       "size": [0.12, 0.05, 0.04],
       "recursive_limit": 10,
-      "children": [
-        {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]},
-        {"child": "limb", "axis": [1, 0, 0], "parent_face": "+y", "surface_uv": [0, 0], "orientation": [0, 0, 90], "symmetry": ["xz"]}
-      ]
+      "child_connections": ["segment_recursive", "segment_to_limb"]
     },
     "limb": {
       "size": [0.04, 0.12, 0.03],
       "recursive_limit": 1
     }
+  },
+  "connections": {
+    "body_to_segment": {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]},
+    "segment_recursive": {"child": "segment", "axis": [0, 1, 0], "parent_face": "+x", "surface_uv": [0, 0]},
+    "segment_to_limb": {"child": "limb", "axis": [1, 0, 0], "parent_face": "+y", "surface_uv": [0, 0], "orientation": [0, 0, 90], "symmetry": ["xz"]}
   }
 }</code></pre>
           </figure>
@@ -145,8 +145,8 @@
             body relative to world axes. A connection orientation rotates the
             child body relative to its parent; the child local <code>+X</code>
             axis must point within 90 degrees of the selected parent face
-            normal. Older JSON files without <code>orientation</code> load with
-            compatible identity or face-aligned defaults.
+            normal. Multiple nodes may reference the same connection name; a
+            mutation to that connection gene then affects every use.
           </p>
         </section>
 

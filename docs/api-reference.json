@@ -19,7 +19,7 @@
       "ConnectionGene": {
         "Purpose": "Describes how a parent genotype node attaches and orients a child node plus the generated actuator parameters.",
         "Constructor": {
-          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], parent_face: str = \"+x\", surface_uv: Tuple[float, float] = (0.0, 0.0), child_surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, neural_w1: Tuple[Tuple[float, ...], ...] = (), neural_b1: Tuple[float, ...] = (), neural_w2: Tuple[Tuple[float, ...], ...] = (), neural_b2: Tuple[float, ...] = (), neural_output_axes: Tuple[Tuple[float, float, float], ...] = (), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0))",
+          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], name: str = \"\", parent_face: str = \"+x\", ...)",
           "Parameters": {
             "child": {
               "Type": "str",
@@ -144,19 +144,19 @@
             "Example": "phase = connection.phase_for(depth=2, order=0)"
           }
         },
-        "Example": "connection = ConnectionGene(child=\"tail\", axis=(0.0, 1.0, 0.0), parent_face=\"-x\", surface_uv=(0.0, 0.0), orientation=(0.0, 0.0, 180.0), symmetry=(\"xz\",))"
+        "Example": "connection = ConnectionGene(name=\"body_to_tail\", child=\"tail\", axis=(0.0, 1.0, 0.0))"
       },
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph, including the optional root-body orientation.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, children: List[ConnectionGene] = field(default_factory=list), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = \"box\")",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, child_connections: List[str] | None = None, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = \"box\")",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Local bounding half extents for generated geometry. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius."},
             "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
             "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
-            "children": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Connections expanded beneath generated bodies of this type."},
+            "child_connections": {"Type": "List[str]", "Default": "[]", "Description": "Ordered connection-gene names expanded beneath generated bodies of this type."},
             "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."}
           },
           "Raises": []
@@ -167,7 +167,7 @@
           "shape": {"Type": "str", "Description": "Generated body geometry shape."},
           "joint_type": {"Type": "str", "Description": "Generated joint type."},
           "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
-          "children": {"Type": "List[ConnectionGene]", "Description": "Outgoing genotype connections."},
+          "child_connections": {"Type": "List[str]", "Description": "Outgoing connection-gene names."},
           "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees; used for the generated root body when this node is the genotype root."}
         },
         "Methods": {},
@@ -216,24 +216,26 @@
       "Genotype": {
         "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
         "Constructor": {
-          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], global_control_freq: float = 1.0, control_mode: str = \"neural\", archived_connections: List[ConnectionGene] = field(default_factory=list), archived_nodes: List[NodeGene] = field(default_factory=list))",
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], connections: Dict[str, ConnectionGene], global_control_freq: float = 1.0, control_mode: str = \"neural\", archived_connections: Dict[str, ConnectionGene] = field(default_factory=dict), archived_nodes: Dict[str, NodeGene] = field(default_factory=dict))",
           "Parameters": {
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
+            "connections": {"Type": "Dict[str, ConnectionGene]", "Default": "required", "Description": "Active connection genes keyed by connection name."},
             "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base angular frequency multiplied by each connection control_freq harmonic."},
             "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural or sine."},
-            "archived_connections": {"Type": "List[ConnectionGene]", "Default": "field(default_factory=list)", "Description": "Inactive connection genes retained as mutation templates."},
-            "archived_nodes": {"Type": "List[NodeGene]", "Default": "field(default_factory=list)", "Description": "Inactive node genes retained as mutation templates."}
+            "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named connection genes retained as mutation templates."},
+            "archived_nodes": {"Type": "Dict[str, NodeGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named node genes retained as mutation templates."}
           },
           "Raises": []
         },
         "Attributes": {
           "root": {"Type": "str", "Description": "Root node name."},
           "nodes": {"Type": "Dict[str, NodeGene]", "Description": "Active node genes."},
+          "connections": {"Type": "Dict[str, ConnectionGene]", "Description": "Active connection genes."},
           "global_control_freq": {"Type": "float", "Description": "Continuous base actuator frequency shared by all generated controllers."},
           "control_mode": {"Type": "str", "Description": "Global controller family used when building controllers."},
-          "archived_connections": {"Type": "List[ConnectionGene]", "Description": "Archived connection templates."},
-          "archived_nodes": {"Type": "List[NodeGene]", "Description": "Archived node templates."}
+          "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Description": "Archived connection templates."},
+          "archived_nodes": {"Type": "Dict[str, NodeGene]", "Description": "Archived node templates."}
         },
         "Methods": {
           "mutation": {
@@ -272,11 +274,12 @@
     "Classes": {},
     "Functions": {
       "build_genotype": {
-        "Signature": "build_genotype(root: str, spec: GenotypeSpec, global_control_freq: float = 1.0, control_mode: str = \"neural\") -> Genotype",
-        "Purpose": "Build a concrete Genotype from a compact declarative mapping.",
+        "Signature": "build_genotype(root: str, nodes: GeneSpec, connections: GeneSpec, global_control_freq: float = 1.0, control_mode: str = \"neural\") -> Genotype",
+        "Purpose": "Build a concrete Genotype from normalized node and connection mappings.",
         "Parameters": {
           "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
-          "spec": {"Type": "GenotypeSpec", "Default": "required", "Description": "Mapping from node names to node keyword data and optional children connection lists."},
+          "nodes": {"Type": "GeneSpec", "Default": "required", "Description": "Mapping from node names to node fields and child_connections lists."},
+          "connections": {"Type": "GeneSpec", "Default": "required", "Description": "Mapping from connection names to connection fields."},
           "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."},
           "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the returned genotype."}
         },
@@ -286,7 +289,7 @@
       },
       "load_genotype_from_json": {
         "Signature": "load_genotype_from_json(path: str | Path) -> Genotype",
-        "Purpose": "Load a genotype JSON file, including optional archived connections and nodes, and migrate legacy per-connection control_mode fields.",
+        "Purpose": "Load the normalized genotype JSON schema with named active and archived gene maps.",
         "Parameters": {
           "path": {"Type": "str | Path", "Default": "required", "Description": "Path to a genotype JSON file."}
         },
@@ -316,18 +319,9 @@
         "Example": "data = genotype_to_dict(genotype)"
       }
     },
-    "Internal_Functions": {
-      "_node_to_dict": {
-        "Signature": "_node_to_dict(node: NodeGene, include_name: bool = False) -> Dict[str, Any]",
-        "Purpose": "Serialize a NodeGene and optionally retain its name field."
-      },
-      "_node_from_dict": {
-        "Signature": "_node_from_dict(node_data: Mapping[str, Any]) -> NodeGene",
-        "Purpose": "Rebuild a NodeGene and its children from serialized dictionary data."
-      }
-    },
+    "Internal_Functions": {},
     "Type_Aliases": {
-      "GenotypeSpec": "Mapping[str, Mapping[str, Any]]"
+      "GeneSpec": "Mapping[str, Mapping[str, Any]]"
     },
     "Exceptions": {}
   },

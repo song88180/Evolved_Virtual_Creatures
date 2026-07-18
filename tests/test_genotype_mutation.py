@@ -55,7 +55,7 @@ def test_archived_node_snapshots_use_normal_names_and_preserve_self_links():
 
     genotype._archive_node_snapshots([recursive_node])
 
-    archived = genotype.archived_nodes[0]
+    archived = next(iter(genotype.archived_nodes.values()))
     assert archived.name == "segment_mut1"
     assert archived.children[0].child == archived.name
     genotype.validate_node_names()
@@ -90,7 +90,7 @@ def test_reactivating_archived_node_moves_it_without_renaming():
     assert activated.name == "segment_mut3"
     assert activated.children[0].child == "segment_mut3"
     assert "segment_mut3" in genotype.nodes
-    assert archived not in genotype.archived_nodes
+    assert archived.name not in genotype.archived_nodes
     genotype.validate_node_names()
 
 
@@ -591,7 +591,7 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
         random.Random(2),
     )
 
-    assert connection in genotype.archived_connections
+    assert genotype.archived_connections[connection.name] is connection
     assert "unchanged; connection is archived" in description
 
 

@@ -43,6 +43,7 @@ The genotype section defines three dataclasses: `ConnectionGene`, `NodeGene`, an
 ```python
 @dataclass
 class ConnectionGene:
+    name: str
     child: str
     axis: Tuple[float, float, float]
     parent_face: str = "+x"
@@ -68,6 +69,7 @@ class ConnectionGene:
 
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
 
+- `name`: the globally unique connection-gene identifier.
 - `child`: the name of the child node to attach.
 - `parent_face`: the parent box face where the child joint is attached.
 - `surface_uv`: normalized coordinates from `-1` to `1` along the two remaining axes in X/Y/Z order.
@@ -97,7 +99,7 @@ class NodeGene:
     size: Tuple[float, float, float]
     joint_type: str = "hinge"
     recursive_limit: int = 1
-    children: List[ConnectionGene] = field(default_factory=list)
+    child_connections: List[str] = field(default_factory=list)
     orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     shape: str = "box"
 ```
@@ -109,10 +111,10 @@ A `NodeGene` describes one reusable body-part type. It includes:
 - `shape`: body geometry shape: `"box"`, `"ellipsoid"`, `"capsule"`, or `"cylinder"`. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius.
 - `joint_type`: `"free"` for the root body, or `"hinge"`, `"slide"`, or `"ball"` for articulated parts.
 - `recursive_limit`: how many times this node type can appear along one recursive path.
-- `children`: connections from this node to other nodes.
+- `child_connections`: ordered names resolved through `Genotype.connections`.
 - `orientation`: Euler orientation in degrees. Only the root node's orientation is used as the generated root body's world-relative initial orientation.
 
-The `field(default_factory=list)` call is important. It gives each `NodeGene` its own independent child list instead of accidentally sharing one list between all instances.
+Different nodes may reference the same connection name, intentionally sharing one mutable connection gene. A node may not repeat a name in its own list.
 
 ### `Genotype`
 
@@ -121,11 +123,12 @@ The `field(default_factory=list)` call is important. It gives each `NodeGene` it
 class Genotype:
     root: str
     nodes: Dict[str, NodeGene]
+    connections: Dict[str, ConnectionGene]
     global_control_freq: float = 1.0
     control_mode: str = "neural"
 ```
 
-`Genotype` wraps the full creature recipe. `root` names the starting node, `nodes` maps node names to their `NodeGene` definitions, and `control_mode` selects the global controller family for the whole simulation: `"neural"` or `"sine"`. Connection genes keep sine parameters and neural tensors, but the genotype-level mode decides which family the phenotype builder uses.
+`Genotype` wraps the full creature recipe. `root` names the starting node, while `nodes` and `connections` are name-keyed active gene maps. Archived genes use the same map shape. `control_mode` selects the global controller family for the whole simulation: `"neural"` or `"sine"`.
 
 ### Genotype Mutation
 
@@ -187,13 +190,11 @@ Because `segment` connects to another `segment`, the genotype can expand into a 
 Each segment creates a limb at positive Y and mirrors its full subtree across the XZ plane to create the negative-Y limb:
 
 ```python
-segment.children.append(ConnectionGene(
-    child="limb",
-    axis=(1, 0, 0),
-    parent_face="+y",
-    orientation=(0.0, 0.0, 90.0),
-    symmetry=("xz",),
-))
+genotype.connections["segment_to_limb"] = ConnectionGene(
+    name="segment_to_limb", child="limb", axis=(1, 0, 0),
+    parent_face="+y", orientation=(0.0, 0.0, 90.0), symmetry=("xz",),
+)
+segment.child_connections.append("segment_to_limb")
 ```
 
 ## `PhenotypeBuilder`

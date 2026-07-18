@@ -323,10 +323,7 @@ def generation_summary(
 
 def _active_gene_count(genotype: Genotype) -> int:
     """Count active node and connection genes in a genotype."""
-    return len(genotype.nodes) + sum(
-        len(node.children)
-        for node in genotype.nodes.values()
-    )
+    return len(genotype.nodes) + len(genotype.connections)
 
 
 def _mutant_type_counts(

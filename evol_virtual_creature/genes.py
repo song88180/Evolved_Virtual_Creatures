@@ -138,6 +138,7 @@ def orientation_for_parent_face(parent_face: str) -> Tuple[float, float, float]:
 class ConnectionGene:
     child: str
     axis: Tuple[float, float, float]
+    name: str = ""
     parent_face: str = "+x"
     surface_uv: Tuple[float, float] = (0.0, 0.0)
     child_surface_uv: Tuple[float, float] = (0.0, 0.0)
@@ -212,15 +213,69 @@ class ConnectionGene:
         )
 
 
-@dataclass
+@dataclass(init=False)
 class NodeGene:
     name: str
     size: Tuple[float, float, float]
     joint_type: str = "hinge"
     recursive_limit: int = 1
-    children: List[ConnectionGene] = field(default_factory=list)
+    child_connections: List[str] = field(default_factory=list)
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
     shape: str = "box"
+    _connection_lookup: dict[str, ConnectionGene] | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _pending_children: List[ConnectionGene] = field(
+        default_factory=list, init=False, repr=False, compare=False
+    )
+
+    def __init__(
+        self,
+        name: str,
+        size: Tuple[float, float, float],
+        joint_type: str = "hinge",
+        recursive_limit: int = 1,
+        children: List[ConnectionGene] | None = None,
+        orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION,
+        shape: str = "box",
+        child_connections: List[str] | None = None,
+    ):
+        if children is not None and child_connections is not None:
+            raise ValueError("Use either children or child_connections, not both")
+        self.name = name
+        self.size = size
+        self.joint_type = joint_type
+        self.recursive_limit = recursive_limit
+        self.child_connections = list(child_connections or [])
+        self.orientation = orientation
+        self.shape = shape
+        self._connection_lookup = None
+        self._pending_children = list(children or [])
+        self.__post_init__()
+
+    @property
+    def children(self) -> List[ConnectionGene]:
+        if self._connection_lookup is None:
+            return self._pending_children
+        return [self._connection_lookup[name] for name in self.child_connections]
+
+    @children.setter
+    def children(self, values: List[ConnectionGene]) -> None:
+        if self._connection_lookup is None:
+            self._pending_children = list(values)
+            self.child_connections = []
+            return
+        names = []
+        for connection in values:
+            name = connection.name or "connection"
+            suffix = 1
+            while name in self._connection_lookup and self._connection_lookup[name] is not connection:
+                suffix += 1
+                name = f"connection_{suffix}"
+            connection.name = name
+            self._connection_lookup[name] = connection
+            names.append(name)
+        self.child_connections = names
 
     def __post_init__(self):
         if self.shape not in BODY_SHAPES:

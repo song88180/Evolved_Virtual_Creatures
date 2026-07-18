@@ -274,7 +274,7 @@ class PhenotypeBuilder:
         incoming_axis: Optional[Tuple[float, float, float]],
         incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]],
         current_depths: Dict[str, int],
-        connection_orders: Dict[int, int],
+        connection_orders: Dict[str, int],
         effective_size: Tuple[float, float, float],
         geom_center: tuple[float, float, float],
         reflection: Tuple[float, float, float],
@@ -509,13 +509,14 @@ class PhenotypeBuilder:
         parent_xml: ET.Element,
         node: NodeGene,
         current_depths: Dict[str, int],
-        connection_orders: Dict[int, int],
+        connection_orders: Dict[str, int],
         effective_size: Tuple[float, float, float],
         geom_center: tuple[float, float, float],
         reflection: Tuple[float, float, float],
         logical_path: Tuple[int, ...],
     ):
-        for connection_index, conn in enumerate(node.children):
+        for connection_index, connection_name in enumerate(node.child_connections):
+            conn = self.genotype.connections[connection_name]
             if conn.terminal_only and not self.is_terminal_node(node, current_depths):
                 continue
 
@@ -523,7 +524,7 @@ class PhenotypeBuilder:
             if not self.can_add_child(child_node, current_depths):
                 continue
 
-            connection_key = id(conn)
+            connection_key = connection_name
             connection_order = connection_orders.get(connection_key, 0) + 1
             child_size = tuple(
                 dimension * conn.scale ** (connection_order - 1)

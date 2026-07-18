@@ -35,11 +35,12 @@ def test_loading_duplicate_active_and_archived_node_names_fails(tmp_path):
                 "joint_type": "free",
             },
         },
-        "archived_nodes": [{
-            "name": "body",
+        "connections": {},
+        "archived_connections": {},
+        "archived_nodes": {"body": {
             "size": [0.2, 0.2, 0.2],
             "joint_type": "free",
-        }],
+        }},
     }))
 
     with pytest.raises(ValueError, match="Duplicate node gene name 'body'"):
@@ -129,7 +130,7 @@ def test_connection_rejects_invalid_child_orientation():
         )
 
 
-def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
+def test_legacy_embedded_connections_are_rejected(tmp_path):
     genotype_path = tmp_path / "legacy.json"
     genotype_path.write_text(json.dumps({
         "root": "body",
@@ -160,35 +161,8 @@ def test_legacy_position_loads_as_nearest_surface_attachment(tmp_path):
         },
     }))
 
-    genotype = load_genotype_from_json(genotype_path)
-    connection = genotype.nodes["body"].children[0]
-    assert not hasattr(genotype.nodes["limb"], "joint_axis")
-    assert not hasattr(genotype.archived_nodes[0], "joint_axis")
-
-    assert connection.parent_face == "-y"
-    assert connection.surface_uv == pytest.approx((0.0, 0.5))
-    assert connection.child_surface_uv == (0.0, 0.0)
-    assert genotype.archived_connections[0].parent_face == "-z"
-    assert genotype.archived_connections[0].surface_uv == (0.0, 0.0)
-    assert genotype.archived_connections[0].child_surface_uv == (0.0, 0.0)
-    assert child_orientation_is_valid(connection.parent_face, connection.orientation)
-    assert child_orientation_is_valid(
-        genotype.archived_connections[0].parent_face,
-        genotype.archived_connections[0].orientation,
-    )
-
-    migrated_path = tmp_path / "migrated.json"
-    save_genotype_to_json(genotype, migrated_path)
-    saved_connection = json.loads(migrated_path.read_text())["nodes"]["body"][
-        "children"
-    ][0]
-    assert "pos" not in saved_connection
-    assert saved_connection["parent_face"] == "-y"
-    assert saved_connection["child_surface_uv"] == [0.0, 0.0]
-    assert "orientation" in saved_connection
-    saved_data = json.loads(migrated_path.read_text())
-    assert "joint_axis" not in saved_data["nodes"]["limb"]
-    assert "joint_axis" not in saved_data["archived_nodes"][0]
+    with pytest.raises(ValueError, match="Embedded 'children' is unsupported"):
+        load_genotype_from_json(genotype_path)
 
 
 def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
@@ -199,10 +173,11 @@ def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
             "body": {
                 "size": [0.2, 0.2, 0.2],
                 "joint_type": "free",
-                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+                "child_connections": ["body_to_limb"],
             },
             "limb": {"size": [0.1, 0.1, 0.1]},
         },
+        "connections": {"body_to_limb": {"child": "limb", "axis": [0, 1, 0]}},
     }))
 
     genotype = load_genotype_from_json(genotype_path)
@@ -238,14 +213,85 @@ def test_orientation_round_trips_through_json(tmp_path):
     loaded = load_genotype_from_json(path)
 
     assert data["nodes"]["body"]["orientation"] == [10.0, 20.0, 30.0]
-    assert data["nodes"]["body"]["children"][0]["orientation"] == [0.0, 0.0, 30.0]
-    assert data["nodes"]["body"]["children"][0]["child_surface_uv"] == [0.25, -0.5]
+    connection_name = data["nodes"]["body"]["child_connections"][0]
+    assert data["connections"][connection_name]["orientation"] == [0.0, 0.0, 30.0]
+    assert data["connections"][connection_name]["child_surface_uv"] == [0.25, -0.5]
     assert loaded.nodes["body"].orientation == (10.0, 20.0, 30.0)
     assert loaded.nodes["body"].children[0].orientation == (0.0, 0.0, 30.0)
     assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
 
 
-def test_legacy_connection_control_mode_migrates_to_genotype(tmp_path):
+def test_named_connection_can_be_shared_by_different_nodes(tmp_path):
+    path = tmp_path / "shared.json"
+    path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {
+            "body": {
+                "size": [0.2, 0.2, 0.2],
+                "joint_type": "free",
+                "child_connections": ["to_limb"],
+            },
+            "branch": {
+                "size": [0.1, 0.1, 0.1],
+                "child_connections": ["to_limb"],
+            },
+            "limb": {"size": [0.05, 0.05, 0.05]},
+        },
+        "connections": {
+            "to_limb": {"child": "limb", "axis": [0, 1, 0]},
+        },
+    }))
+
+    genotype = load_genotype_from_json(path)
+
+    assert genotype.nodes["body"].children[0] is genotype.connections["to_limb"]
+    assert genotype.nodes["branch"].children[0] is genotype.connections["to_limb"]
+
+
+def test_duplicate_connection_reference_in_one_node_is_rejected():
+    connection = ConnectionGene(name="shared", child="limb", axis=(0, 1, 0))
+    with pytest.raises(ValueError, match="duplicate child connection"):
+        Genotype(
+            root="body",
+            nodes={
+                "body": NodeGene(
+                    name="body",
+                    size=(0.2, 0.2, 0.2),
+                    joint_type="free",
+                    child_connections=["shared", "shared"],
+                ),
+                "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
+            },
+            connections={"shared": connection},
+        )
+
+
+def test_removing_one_shared_reference_keeps_connection_active():
+    connection = ConnectionGene(name="shared", child="limb", axis=(0, 1, 0))
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body", size=(0.2, 0.2, 0.2), joint_type="free",
+                child_connections=["shared"],
+            ),
+            "branch": NodeGene(
+                name="branch", size=(0.1, 0.1, 0.1),
+                child_connections=["shared"],
+            ),
+            "limb": NodeGene(name="limb", size=(0.1, 0.1, 0.1)),
+        },
+        connections={"shared": connection},
+    )
+
+    genotype._mutate_connection_removal(connection, "body")
+
+    assert "shared" not in genotype.nodes["body"].child_connections
+    assert genotype.nodes["branch"].child_connections == ["shared"]
+    assert genotype.connections["shared"] is connection
+
+
+def test_legacy_connection_control_mode_is_rejected(tmp_path):
     genotype_path = tmp_path / "legacy_sine.json"
     genotype_path.write_text(json.dumps({
         "root": "body",
@@ -266,14 +312,8 @@ def test_legacy_connection_control_mode_migrates_to_genotype(tmp_path):
         },
     }))
 
-    genotype = load_genotype_from_json(genotype_path)
-    output_path = tmp_path / "round_trip.json"
-    save_genotype_to_json(genotype, output_path)
-    data = json.loads(output_path.read_text())
-
-    assert genotype.control_mode == "sine"
-    assert data["control_mode"] == "sine"
-    assert "control_mode" not in data["nodes"]["body"]["children"][0]
+    with pytest.raises(ValueError, match="Embedded 'children' is unsupported"):
+        load_genotype_from_json(genotype_path)
 
 
 def test_mixed_legacy_connection_control_modes_are_rejected(tmp_path):
@@ -302,7 +342,7 @@ def test_mixed_legacy_connection_control_modes_are_rejected(tmp_path):
         },
     }))
 
-    with pytest.raises(ValueError, match="mixed per-connection control modes"):
+    with pytest.raises(ValueError, match="Embedded 'children' is unsupported"):
         load_genotype_from_json(genotype_path)
 
 
@@ -314,13 +354,14 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
             "body": {
                 "size": [0.2, 0.2, 0.2],
                 "joint_type": "free",
-                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+                "child_connections": ["body_to_limb"],
             },
             "limb": {
                 "size": [0.1, 0.1, 0.1],
                 "joint_type": "hinge",
             },
         },
+        "connections": {"body_to_limb": {"child": "limb", "axis": [0, 1, 0]}},
     }))
 
     genotype = load_genotype_from_json(genotype_path)
@@ -391,6 +432,7 @@ def test_missing_global_control_frequency_loads_default(tmp_path):
             "nodes": {
                 "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
             },
+            "connections": {},
         })
     )
 
@@ -461,6 +503,7 @@ def test_missing_shape_loads_as_box(tmp_path):
             "nodes": {
                 "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
             },
+            "connections": {},
         })
     )
 
@@ -512,7 +555,7 @@ def test_body_shapes_emit_expected_mujoco_geom_and_compile(
         assert _vector(geom, "size") == pytest.approx((0.3, 0.2, 0.1))
 
 
-def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
+def test_missing_joint_type_uses_node_gene_default(tmp_path):
     genotype_path = tmp_path / "fixed_default.json"
     genotype_path.write_text(json.dumps({
         "root": "body",
@@ -520,16 +563,17 @@ def test_missing_non_root_joint_type_loads_from_file_as_fixed(tmp_path):
             "body": {
                 "size": [0.2, 0.2, 0.2],
                 "joint_type": "free",
-                "children": [{"child": "limb", "axis": [0, 1, 0]}],
+                "child_connections": ["body_to_limb"],
             },
             "limb": {"size": [0.1, 0.1, 0.1]},
             "template": {"size": [0.1, 0.1, 0.1]},
         },
+        "connections": {"body_to_limb": {"child": "limb", "axis": [0, 1, 0]}},
     }))
 
     genotype = load_genotype_from_json(genotype_path)
 
-    assert genotype.nodes["limb"].joint_type == "fixed"
+    assert genotype.nodes["limb"].joint_type == "hinge"
     assert genotype.nodes["template"].joint_type == "hinge"
 
 
@@ -995,6 +1039,7 @@ def test_out_of_bounds_json_sizes_warn_and_load_unchanged(tmp_path):
                 "joint_type": "free",
             },
         },
+        "connections": {},
     }))
 
     with pytest.warns(UserWarning, match=r"Body part 'body'.*\[0.01, 1.0\]"):
@@ -1013,6 +1058,7 @@ def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
                 "joint_type": "free",
             },
         },
+        "connections": {},
     }))
 
     with warnings.catch_warnings(record=True) as warnings_record:
