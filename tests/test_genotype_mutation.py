@@ -595,6 +595,39 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
     assert "unchanged; connection is archived" in description
 
 
+def test_preselected_origin_mutation_skips_connection_moved_from_origin():
+    connection = ConnectionGene(child="limb", axis=(0, 1, 0))
+    genotype = Genotype(
+        root="body",
+        nodes={
+            "body": NodeGene(
+                name="body",
+                size=(0.2, 0.2, 0.2),
+                joint_type="free",
+                children=[connection],
+            ),
+            "limb": NodeGene(
+                name="limb",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+            "other": NodeGene(
+                name="other",
+                size=(0.1, 0.1, 0.1),
+                joint_type="hinge",
+            ),
+        },
+    )
+
+    genotype._mutate_connection_origin(connection, random.Random(1), "body")
+    description = genotype._mutate_parameter_path(
+        ("connection_origin", connection, "body"),
+        random.Random(2),
+    )
+
+    assert "unchanged; connection is no longer attached to this origin" in description
+
+
 def _neural_hinge_genotype():
     connection = ConnectionGene(
         child="limb",

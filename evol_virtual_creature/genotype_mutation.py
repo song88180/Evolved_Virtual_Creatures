@@ -491,6 +491,23 @@ class GenotypeMutationMixin:
                 "unchanged; connection is archived"
             )
 
+        origin_bound_parameter_types = {
+            "connection_origin",
+            "connection_replacement",
+            "connection_origin_node_replacement",
+            "connection_removal",
+        }
+        if (
+            parameter_type in origin_bound_parameter_types
+            and len(parameter_path) > 2
+            and parameter_path[1].name
+            not in self.nodes[parameter_path[2]].child_connections
+        ):
+            return (
+                f"connection from {parameter_path[2]!r}: unchanged; "
+                "connection is no longer attached to this origin"
+            )
+
         if parameter_type == "connection_neural":
             return self._mutate_connection_neural_parameter(
                 parameter_path,
