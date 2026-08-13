@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from ..phenotype import DEFAULT_FLYING_FLUID_COEF, DEFAULT_FLYING_FLUID_DENSITY, DEFAULT_FLYING_FLUID_SHAPE, DEFAULT_FLYING_FLUID_VISCOSITY, DEFAULT_FLYING_GRAVITY
-from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, evaluate_flying
+from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, TaskDefinition, evaluate_flying
 
 
 @dataclass(frozen=True)

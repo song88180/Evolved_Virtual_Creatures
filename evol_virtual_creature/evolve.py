@@ -16,11 +16,8 @@ import random
 from statistics import mean
 from typing import Any
 
-from .evaluation import (
-    EvaluationConfig,
-    evaluate_for_task,
-    task_definition_for_config,
-)
+from .evaluation import evaluate_for_task, task_definition_for_config
+from .evolution_tasks.shared import EvaluationConfig
 from .genotype import Genotype
 from .genotype_io import genotype_to_dict, save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort

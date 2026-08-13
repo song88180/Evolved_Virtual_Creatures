@@ -15,7 +15,6 @@ from evol_virtual_creature.evaluation import (
     INITIAL_FLOOR_OVERLAP_REASON,
     MAXIMUM_CREATURE_HEIGHT_REASON,
     WALKING_CENTER_HEIGHT_DROP_REASON,
-    TASK_REGISTRY,
     load_task_definition,
     task_definition,
     task_definition_for_config,
@@ -28,6 +27,12 @@ from evol_virtual_creature.evaluation import (
     initialize_flying_model,
     initialize_walking_model,
     simulation_failure_reason,
+)
+from evol_virtual_creature.evolution_tasks.shared import (
+    EvaluationConfig,
+    ResultField,
+    TASK_REGISTRY,
+    TaskDefinition,
 )
 from evol_virtual_creature.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
@@ -127,7 +132,8 @@ def test_task_registry_covers_every_task_and_config():
 def test_evaluation_module_lazily_loads_builtin_tasks():
     script = (
         "import evol_virtual_creature.evaluation as evaluation; "
-        "assert not evaluation.TASK_REGISTRY; "
+        "from evol_virtual_creature.evolution_tasks import shared; "
+        "assert not shared.TASK_REGISTRY; "
         "assert evaluation.task_names() == "
         "('swimming_x', 'swimming_away', 'walking_x', 'walking_away', "
         "'flying_x', 'flying_away')"
@@ -138,9 +144,34 @@ def test_evaluation_module_lazily_loads_builtin_tasks():
 def test_evolution_tasks_package_import_has_no_registration_side_effect():
     script = (
         "import importlib; "
-        "import evol_virtual_creature.evaluation as evaluation; "
+        "import evol_virtual_creature.evaluation; "
+        "from evol_virtual_creature.evolution_tasks import shared; "
         "importlib.import_module('evol_virtual_creature.evolution_tasks'); "
-        "assert not evaluation.TASK_REGISTRY"
+        "assert not shared.TASK_REGISTRY"
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+@pytest.mark.parametrize(
+    "imports",
+    (
+        "import evol_virtual_creature.evaluation; "
+        "import evol_virtual_creature.evolution_tasks.shared",
+        "import evol_virtual_creature.evolution_tasks.shared; "
+        "import evol_virtual_creature.evaluation",
+    ),
+)
+def test_evaluation_and_shared_import_cleanly_in_either_order(imports):
+    script = (
+        f"{imports}; "
+        "import evol_virtual_creature.evaluation as evaluation; "
+        "from evol_virtual_creature.evolution_tasks import shared; "
+        "assert not hasattr(evaluation, 'EvaluationConfig'); "
+        "assert not hasattr(evaluation, 'ResultField'); "
+        "assert not hasattr(evaluation, 'TaskDefinition'); "
+        "assert not hasattr(evaluation, 'TASK_REGISTRY'); "
+        "assert shared.EvaluationConfig; assert shared.ResultField; "
+        "assert shared.TaskDefinition; assert shared.TASK_REGISTRY == {}"
     )
     subprocess.run([sys.executable, "-c", script], check=True)
 
@@ -151,6 +182,9 @@ def test_load_task_definition_matches_task_to_module_filename():
         "evol_virtual_creature.evolution_tasks.swimming_x"
     )
     assert definition is module.TASK_DEFINITION
+    assert isinstance(definition, TaskDefinition)
+    assert isinstance(definition.result_fields[0], ResultField)
+    assert EvaluationConfig.__module__.endswith("evolution_tasks.shared")
     assert load_task_definition("swimming_x") is definition
 
     for invalid_task in ("turn-around", "tasks.walking_x", "../walking_x", "_shared"):

@@ -769,7 +769,7 @@
   },
   "evol_virtual_creature.evolution_tasks": {
     "Overview": {
-      "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, evaluator, and metadata; shared MuJoCo rollout mechanics live in evolution_tasks.shared.",
+      "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, evaluator, and metadata; evolution_tasks.shared owns the metadata types, registry state, and common task rollout helpers.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",

@@ -6,9 +6,8 @@ from typing import Sequence
 
 from .. import evaluation as evaluation_engine
 from ..constants import EnvironmentFamily
-from ..evaluation import TaskDefinition
 from ..genotype import Genotype
-from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, SWIMMING_RESULT_FIELDS, failed_swimming
+from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, SWIMMING_RESULT_FIELDS, TaskDefinition, failed_swimming
 
 
 @dataclass(frozen=True)

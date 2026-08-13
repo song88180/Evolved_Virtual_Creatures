@@ -3,11 +3,54 @@
 from __future__ import annotations
 
 import math
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Protocol
 
-from .. import evaluation as evaluation_engine
-from ..evaluation import ResultField
+from ..constants import EnvironmentFamily
 from ..genotype import Genotype
+
+
+class EvaluationConfig(Protocol):
+    """Settings required by shared evaluation and rendering infrastructure."""
+
+    episode_seconds: float
+    max_node: int
+    self_collision: bool
+    disallow_collision: bool
+    build_failure_fitness: float
+    max_abs_state_value: float
+    max_abs_velocity: float
+    max_abs_acceleration: float
+    max_volume: float
+
+
+@dataclass(frozen=True)
+class ResultField:
+    """One task-specific result value printed by the evaluation CLI."""
+
+    label: str
+    attribute: str
+    format_spec: str = ".6f"
+    none_text: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskDefinition:
+    """Complete public definition exported by one task module."""
+
+    name: str
+    config_type: type
+    result_type: type
+    evaluator: Callable
+    environment_family: EnvironmentFamily
+    title: str
+    result_fields: tuple[ResultField, ...]
+    order: int
+
+
+TASK_REGISTRY: dict[str, TaskDefinition] = {}
+_TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
+_BUILTIN_TASKS_LOADED = False
 
 
 DEFAULT_MIN_BODY_VOLUME = 1e-6
@@ -33,6 +76,8 @@ FLYING_RESULT_FIELDS = (
 def evaluate_walking(
     genotype: Genotype, config, *, away: bool, result_type: Callable
 ):
+    from .. import evaluation as evaluation_engine
+
     built = evaluation_engine._build_model(genotype, config)
     if isinstance(built, str):
         return failed_walking(config, built, result_type)
@@ -83,6 +128,8 @@ def evaluate_walking(
 
 
 def evaluate_flying(genotype: Genotype, config, speed_metric: str, result_type: Callable):
+    from .. import evaluation as evaluation_engine
+
     built = evaluation_engine._build_model(genotype, config)
     if isinstance(built, str):
         return failed_flying(config, built, result_type)
@@ -119,6 +166,8 @@ def evaluate_flying(genotype: Genotype, config, speed_metric: str, result_type: 
 
 
 def flying_fitness(config, metrics: dict, speed_metric: str) -> float:
+    from .. import evaluation as evaluation_engine
+
     speed_weight = config.speed_weight if hasattr(config, "speed_weight") else config.distance_weight
     return (
         speed_weight * metrics[speed_metric]
@@ -134,6 +183,8 @@ def flying_fitness(config, metrics: dict, speed_metric: str) -> float:
 
 
 def failure_flags(reason: str) -> dict:
+    from .. import evaluation as evaluation_engine
+
     collision = reason == evaluation_engine.DISALLOWED_COLLISION_REASON
     return dict(build_failed=not collision, disqualified=collision, failure_reason=reason)
 

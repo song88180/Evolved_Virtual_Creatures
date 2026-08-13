@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import TaskDefinition
 from ..genotype import Genotype
-from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, evaluate_walking
+from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, TaskDefinition, evaluate_walking
 
 
 @dataclass(frozen=True)

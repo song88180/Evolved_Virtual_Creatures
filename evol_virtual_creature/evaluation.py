@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from importlib import import_module
 import math
 from pkgutil import iter_modules
-from typing import Callable, Protocol, Sequence
+from typing import Sequence
 
 import mujoco
 import numpy as np
 
 from .genotype import Genotype
-from .constants import EnvironmentFamily
+from .evolution_tasks import shared as task_shared
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
@@ -37,61 +36,20 @@ _FLYING_FLOOR_CLEARANCE = 5.0
 DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 
 
-class EvaluationConfig(Protocol):
-    """Settings required by shared evaluation and rendering infrastructure."""
-
-    episode_seconds: float
-    max_node: int
-    self_collision: bool
-    disallow_collision: bool
-    build_failure_fitness: float
-    max_abs_state_value: float
-    max_abs_velocity: float
-    max_abs_acceleration: float
-    max_volume: float
-
-
-@dataclass(frozen=True)
-class ResultField:
-    """One task-specific result value printed by the evaluation CLI."""
-
-    label: str
-    attribute: str
-    format_spec: str = ".6f"
-    none_text: str | None = None
-
-
-@dataclass(frozen=True)
-class TaskDefinition:
-    """Complete public definition exported by one task module."""
-
-    name: str
-    config_type: type
-    result_type: type
-    evaluator: Callable
-    environment_family: EnvironmentFamily
-    title: str
-    result_fields: tuple[ResultField, ...]
-    order: int
-
-
-TASK_REGISTRY: dict[str, TaskDefinition] = {}
-_TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
-_BUILTIN_TASKS_LOADED = False
-
-
-def _cache_task_definition(definition: TaskDefinition) -> TaskDefinition:
-    existing = TASK_REGISTRY.get(definition.name)
+def _cache_task_definition(
+    definition: task_shared.TaskDefinition,
+) -> task_shared.TaskDefinition:
+    existing = task_shared.TASK_REGISTRY.get(definition.name)
     if existing is not None and existing is not definition:
         raise ValueError(f"Task name {definition.name!r} is already loaded")
-    config_definition = _TASKS_BY_CONFIG_TYPE.get(definition.config_type)
+    config_definition = task_shared._TASKS_BY_CONFIG_TYPE.get(definition.config_type)
     if config_definition is not None and config_definition is not definition:
         raise ValueError(
             f"Config type {definition.config_type.__name__} is already used by "
             f"task {config_definition.name!r}"
         )
-    TASK_REGISTRY[definition.name] = definition
-    _TASKS_BY_CONFIG_TYPE[definition.config_type] = definition
+    task_shared.TASK_REGISTRY[definition.name] = definition
+    task_shared._TASKS_BY_CONFIG_TYPE[definition.config_type] = definition
     return definition
 
 
@@ -104,11 +62,11 @@ def _task_module_names() -> tuple[str, ...]:
     )
 
 
-def load_task_definition(task: str) -> TaskDefinition:
+def load_task_definition(task: str) -> task_shared.TaskDefinition:
     """Load a task whose name exactly matches its module filename."""
     if not task.isidentifier() or task.startswith("_"):
         raise KeyError(f"Unknown task: {task!r}")
-    existing = TASK_REGISTRY.get(task)
+    existing = task_shared.TASK_REGISTRY.get(task)
     if existing is not None:
         return existing
     expected_module = f"{__package__}.evolution_tasks.{task}"
@@ -122,7 +80,7 @@ def load_task_definition(task: str) -> TaskDefinition:
         definition = module.TASK_DEFINITION
     except AttributeError as error:
         raise ValueError(f"Task module {task!r} does not define TASK_DEFINITION") from error
-    if not isinstance(definition, TaskDefinition):
+    if not isinstance(definition, task_shared.TaskDefinition):
         raise TypeError(f"Task module {task!r} has an invalid TASK_DEFINITION")
     if definition.name != task:
         raise ValueError(
@@ -133,33 +91,34 @@ def load_task_definition(task: str) -> TaskDefinition:
 
 def _load_builtin_tasks() -> None:
     """Load and validate every built-in task module once."""
-    global _BUILTIN_TASKS_LOADED
-    if not _BUILTIN_TASKS_LOADED:
+    if not task_shared._BUILTIN_TASKS_LOADED:
         for task in _task_module_names():
             load_task_definition(task)
-        _BUILTIN_TASKS_LOADED = True
+        task_shared._BUILTIN_TASKS_LOADED = True
 
 
-def task_definition(task: str) -> TaskDefinition:
+def task_definition(task: str) -> task_shared.TaskDefinition:
     """Return canonical metadata for a task name."""
     return load_task_definition(task)
 
 
-def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
+def task_definition_for_config(
+    config: task_shared.EvaluationConfig,
+) -> task_shared.TaskDefinition:
     """Return canonical task metadata for a concrete config instance."""
     _load_builtin_tasks()
-    definition = _TASKS_BY_CONFIG_TYPE.get(type(config))
+    definition = task_shared._TASKS_BY_CONFIG_TYPE.get(type(config))
     if definition is None:
         raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
     return definition
 
 
-def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
+def evaluate_for_task(genotype: Genotype, config: task_shared.EvaluationConfig):
     """Dispatch evaluation through the canonical task registry."""
     return task_definition_for_config(config).evaluator(genotype, config)
 
 
-def task_for_config(config: EvaluationConfig) -> str:
+def task_for_config(config: task_shared.EvaluationConfig) -> str:
     """Return the canonical task name for a concrete config instance."""
     return task_definition_for_config(config).name
 
@@ -170,7 +129,7 @@ def task_names() -> tuple[str, ...]:
     return tuple(
         definition.name
         for definition in sorted(
-            TASK_REGISTRY.values(),
+            task_shared.TASK_REGISTRY.values(),
             key=lambda definition: (definition.order, definition.name),
         )
     )
@@ -264,7 +223,7 @@ def initialize_flying_model(
 def _walking_height_failure_reason(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
 ) -> str | None:
     max_height = getattr(config, "max_creature_height", 0.0)
     if max_height <= 0.0:
@@ -356,7 +315,7 @@ def _has_floor_penetration(
 def settle_walking_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
 ) -> str | None:
     """Let a walking creature fall onto the floor before controls and scoring."""
     settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
@@ -374,7 +333,7 @@ def settle_walking_model(
     return None
 
 
-def _build_model(genotype: Genotype, config: EvaluationConfig):
+def _build_model(genotype: Genotype, config: task_shared.EvaluationConfig):
     try:
         definition = task_definition_for_config(config)
         builder = PhenotypeBuilder(
@@ -413,7 +372,7 @@ def _run_flying_episode(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     builder: PhenotypeBuilder,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
     apply_controls: bool = True,
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
@@ -516,7 +475,7 @@ def _run_controlled_episode(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     builder: PhenotypeBuilder,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
     root_body_name: str | None = None,
     horizontal_origin_distance: bool = False,
 ):
@@ -680,7 +639,7 @@ def _creature_body_volumes(model: mujoco.MjModel) -> dict[int, float]:
 
 def _creature_volume_failure_reason(
     model: mujoco.MjModel,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
 ) -> str | None:
     min_body_volume = getattr(config, "min_body_volume", 0.0)
     body_volumes = _creature_body_volumes(model)
@@ -733,7 +692,7 @@ def _has_nonparent_self_collision(
 def simulation_failure_reason(
     data: mujoco.MjData,
     previous_time: float,
-    config: EvaluationConfig,
+    config: task_shared.EvaluationConfig,
 ) -> str | None:
     if not math.isfinite(float(data.time)) or data.time <= previous_time:
         return NUMERICAL_INSTABILITY_REASON
