@@ -117,299 +117,6 @@ def _load_builtin_tasks() -> None:
         _BUILTIN_TASKS_LOADED = True
 
 
-def _evaluate_x_axis_swimming(
-    genotype: Genotype,
-    config: SwimmingEvaluationConfig | None = None,
-) -> SwimmingEvaluationResult:
-    """Score a genotype by how well it swims in the positive x direction."""
-    from .evolution_tasks import SwimmingEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_swimming(config, built)
-    model, data, builder = built
-
-    metrics = _run_controlled_episode(model, data, builder, config)
-    if isinstance(metrics, str):
-        return _failed_swimming(config, metrics)
-
-    fitness = (
-        config.forward_speed_weight * metrics["average_forward_speed"]
-        - config.energy_weight * metrics["control_energy"]
-        - config.sideways_drift_weight * metrics["sideways_drift_speed"]
-        - config.vertical_drift_weight * metrics["vertical_drift_speed"]
-        - config.angular_speed_weight * metrics["mean_angular_speed"]
-        - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * _excess_volume(
-            metrics["total_volume"], config.volume_penalty_cutoff
-        )
-    )
-    if not math.isfinite(fitness):
-        return _failed_swimming(config, "Simulation produced a non-finite fitness.")
-
-    return SwimmingEvaluationResult(fitness=fitness, **metrics)
-
-
-def _evaluate_origin_distance(
-    genotype: Genotype,
-    config: SwimmingAwayEvaluationConfig | None = None,
-) -> OriginDistanceEvaluationResult:
-    """Score a genotype by final root distance from its starting position."""
-    from .evolution_tasks import OriginDistanceEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_origin_distance(config, built)
-    model, data, builder = built
-
-    metrics = _run_controlled_episode(model, data, builder, config)
-    if isinstance(metrics, str):
-        return _failed_origin_distance(config, metrics)
-
-    fitness = (
-        config.speed_weight * metrics["average_origin_speed"]
-        - config.energy_weight * metrics["control_energy"]
-        - config.angular_speed_weight * metrics["mean_angular_speed"]
-        - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * _excess_volume(
-            metrics["total_volume"], config.volume_penalty_cutoff
-        )
-    )
-    if not math.isfinite(fitness):
-        return _failed_origin_distance(
-            config, "Simulation produced a non-finite fitness."
-        )
-
-    return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
-
-
-def _evaluate_x_axis_flying(
-    genotype: Genotype,
-    config: FlyingEvaluationConfig | None = None,
-) -> FlyingEvaluationResult:
-    """Score flight by horizontal pre-contact speed while penalizing altitude loss."""
-    from .evolution_tasks import FlyingEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_flying(config, built)
-    model, data, builder = built
-
-    failure = initialize_flying_model(model, data)
-    if failure is not None:
-        return _failed_flying(config, failure)
-
-    evaluated = _flying_metrics_with_passive_baseline(
-        model,
-        data,
-        builder,
-        config,
-        speed_metric="average_forward_speed",
-    )
-    if isinstance(evaluated, str):
-        return _failed_flying(config, evaluated)
-    metrics, fitness = evaluated
-    if not math.isfinite(fitness):
-        return _failed_flying(config, "Simulation produced a non-finite fitness.")
-
-    return FlyingEvaluationResult(fitness=fitness, **metrics)
-
-
-def _evaluate_flying_away(
-    genotype: Genotype,
-    config: FlyingAwayEvaluationConfig | None = None,
-) -> FlyingEvaluationResult:
-    """Score flight by horizontal pre-contact speed from the starting point."""
-    from .evolution_tasks import FlyingEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_flying(config, built)
-    model, data, builder = built
-
-    failure = initialize_flying_model(model, data)
-    if failure is not None:
-        return _failed_flying(config, failure)
-
-    evaluated = _flying_metrics_with_passive_baseline(
-        model,
-        data,
-        builder,
-        config,
-        speed_metric="average_origin_speed",
-    )
-    if isinstance(evaluated, str):
-        return _failed_flying(config, evaluated)
-    metrics, fitness = evaluated
-    if not math.isfinite(fitness):
-        return _failed_flying(config, "Simulation produced a non-finite fitness.")
-
-    return FlyingEvaluationResult(fitness=fitness, **metrics)
-
-def _flying_metrics_with_passive_baseline(
-    model: mujoco.MjModel,
-    initialized_data: mujoco.MjData,
-    builder: PhenotypeBuilder,
-    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
-    speed_metric: str,
-):
-    controlled_data = _copy_simulation_state(model, initialized_data)
-    passive_data = _copy_simulation_state(model, initialized_data)
-
-    controlled_metrics = _run_flying_episode(
-        model, controlled_data, builder, config, apply_controls=True
-    )
-    if isinstance(controlled_metrics, str):
-        return controlled_metrics
-    passive_metrics = _run_flying_episode(
-        model, passive_data, builder, config, apply_controls=False
-    )
-    if isinstance(passive_metrics, str):
-        return passive_metrics
-
-    controlled_fitness = _flying_fitness(config, controlled_metrics, speed_metric)
-    passive_fitness = _flying_fitness(config, passive_metrics, speed_metric)
-    fitness_gain = controlled_fitness - passive_fitness
-    gain_fraction = config.fitness_gain_fraction
-    fitness = (
-        fitness_gain * gain_fraction
-        + controlled_fitness * (1.0 - gain_fraction)
-    )
-    controlled_metrics["controlled_fitness"] = controlled_fitness
-    controlled_metrics["passive_fitness"] = passive_fitness
-    controlled_metrics["fitness_gain"] = fitness_gain
-    return controlled_metrics, fitness
-
-
-def _copy_simulation_state(
-    model: mujoco.MjModel, source: mujoco.MjData
-) -> mujoco.MjData:
-    copied = mujoco.MjData(model)
-    copied.time = source.time
-    copied.qpos[:] = source.qpos
-    copied.qvel[:] = source.qvel
-    copied.ctrl[:] = source.ctrl
-    if copied.act.size:
-        copied.act[:] = source.act
-    if copied.mocap_pos.size:
-        copied.mocap_pos[:] = source.mocap_pos
-    if copied.mocap_quat.size:
-        copied.mocap_quat[:] = source.mocap_quat
-    mujoco.mj_forward(model, copied)
-    return copied
-
-
-def _evaluate_walking_away(
-    genotype: Genotype,
-    config: WalkingAwayEvaluationConfig | None = None,
-) -> WalkingEvaluationResult:
-    """Score ground locomotion by final root distance from its starting position."""
-    from .evolution_tasks import WalkingEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_walking(config, built)
-    model, data, builder = built
-
-    failure = initialize_walking_model(model, data)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    failure = _walking_height_failure_reason(model, data, config)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    failure = settle_walking_model(model, data, config)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    data.time = 0.0
-
-    metrics = _run_controlled_episode(
-        model,
-        data,
-        builder,
-        config,
-        root_body_name=f"{genotype.root}_1",
-        horizontal_origin_distance=True,
-    )
-    if isinstance(metrics, str):
-        return _failed_walking(config, metrics)
-
-    walking_metrics = {
-        key: value
-        for key, value in metrics.items()
-        if key != "vertical_drift_speed"
-    }
-    fitness = (
-        config.speed_weight * walking_metrics["average_origin_speed"]
-        - config.energy_weight * walking_metrics["control_energy"]
-        - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
-        - config.height_loss_weight * walking_metrics["height_loss"]
-        - config.body_count_weight * walking_metrics["body_count"]
-        - config.volume_weight * _excess_volume(
-            walking_metrics["total_volume"], config.volume_penalty_cutoff
-        )
-    )
-    if not math.isfinite(fitness):
-        return _failed_walking(config, "Simulation produced a non-finite fitness.")
-
-    return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
-
-
-def _evaluate_x_axis_walking(
-    genotype: Genotype,
-    config: WalkingEvaluationConfig | None = None,
-) -> WalkingEvaluationResult:
-    """Score positive-x ground locomotion while penalizing falling and rolling."""
-    from .evolution_tasks import WalkingEvaluationResult
-
-    built = _build_model(genotype, config)
-    if isinstance(built, str):
-        return _failed_walking(config, built)
-    model, data, builder = built
-
-    failure = initialize_walking_model(model, data)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    failure = _walking_height_failure_reason(model, data, config)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    failure = settle_walking_model(model, data, config)
-    if failure is not None:
-        return _failed_walking(config, failure)
-    data.time = 0.0
-
-    metrics = _run_controlled_episode(
-        model,
-        data,
-        builder,
-        config,
-        root_body_name=f"{genotype.root}_1",
-    )
-    if isinstance(metrics, str):
-        return _failed_walking(config, metrics)
-
-    walking_metrics = {
-        key: value
-        for key, value in metrics.items()
-        if key != "vertical_drift_speed"
-    }
-    fitness = (
-        config.forward_speed_weight * walking_metrics["average_forward_speed"]
-        - config.energy_weight * walking_metrics["control_energy"]
-        - config.sideways_drift_weight * walking_metrics["sideways_drift_speed"]
-        - config.angular_speed_weight * walking_metrics["mean_angular_speed"]
-        - config.upright_weight * walking_metrics["mean_upright_error"]
-        - config.height_loss_weight * walking_metrics["height_loss"]
-        - config.body_count_weight * walking_metrics["body_count"]
-        - config.volume_weight * _excess_volume(
-            walking_metrics["total_volume"], config.volume_penalty_cutoff
-        )
-    )
-    if not math.isfinite(fitness):
-        return _failed_walking(config, "Simulation produced a non-finite fitness.")
-
-    return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
-
-
 def task_definition(task: str) -> TaskDefinition:
     """Return canonical metadata for a task name."""
     _load_builtin_tasks()
@@ -439,6 +146,25 @@ def task_names() -> tuple[str, ...]:
     """Return the registered built-in task names in declaration order."""
     _load_builtin_tasks()
     return tuple(TASK_REGISTRY)
+
+
+def _copy_simulation_state(
+    model: mujoco.MjModel, source: mujoco.MjData
+) -> mujoco.MjData:
+    """Copy the dynamic MuJoCo state for an independent rollout."""
+    copied = mujoco.MjData(model)
+    copied.time = source.time
+    copied.qpos[:] = source.qpos
+    copied.qvel[:] = source.qvel
+    copied.ctrl[:] = source.ctrl
+    if copied.act.size:
+        copied.act[:] = source.act
+    if copied.mocap_pos.size:
+        copied.mocap_pos[:] = source.mocap_pos
+    if copied.mocap_quat.size:
+        copied.mocap_quat[:] = source.mocap_quat
+    mujoco.mj_forward(model, copied)
+    return copied
 
 
 def initialize_walking_model(
@@ -510,7 +236,7 @@ def initialize_flying_model(
 def _walking_height_failure_reason(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig,
+    config: EvaluationConfig,
 ) -> str | None:
     max_height = getattr(config, "max_creature_height", 0.0)
     if max_height <= 0.0:
@@ -602,7 +328,7 @@ def _has_floor_penetration(
 def settle_walking_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig,
+    config: EvaluationConfig,
 ) -> str | None:
     """Let a walking creature fall onto the floor before controls and scoring."""
     settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
@@ -659,7 +385,7 @@ def _run_flying_episode(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     builder: PhenotypeBuilder,
-    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
+    config: EvaluationConfig,
     apply_controls: bool = True,
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
@@ -758,30 +484,6 @@ def _run_flying_episode(
     }
 
 
-def _flying_fitness(
-    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig,
-    metrics: dict,
-    speed_metric: str,
-) -> float:
-    speed_weight = (
-        config.speed_weight
-        if hasattr(config, "speed_weight")
-        else config.distance_weight
-    )
-    return (
-        speed_weight * metrics[speed_metric]
-        + metrics["no_ground_touch_bonus"]
-        - config.height_loss_weight * metrics["height_loss"]
-        - metrics["ground_touch_penalty"]
-        - config.energy_weight * metrics["control_energy"]
-        - config.angular_speed_weight * metrics["mean_angular_speed"]
-        - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * _excess_volume(
-            metrics["total_volume"], config.volume_penalty_cutoff
-        )
-    )
-
-
 def _run_controlled_episode(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -873,107 +575,6 @@ def _run_controlled_episode(
         )
         metrics["mean_upright_error"] = upright_error_sum / max(sample_count, 1)
     return metrics
-
-
-def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
-    from .evolution_tasks import SwimmingEvaluationResult
-
-    return SwimmingEvaluationResult(
-        fitness=config.build_failure_fitness,
-        origin_distance=0.0,
-        average_origin_speed=0.0,
-        forward_distance=0.0,
-        average_forward_speed=0.0,
-        sideways_drift_speed=0.0,
-        vertical_drift_speed=0.0,
-        control_energy=0.0,
-        mean_angular_speed=0.0,
-        simulated_seconds=0.0,
-        actuator_count=0,
-        body_count=0,
-        total_volume=0.0,
-        build_failed=reason != DISALLOWED_COLLISION_REASON,
-        disqualified=reason == DISALLOWED_COLLISION_REASON,
-        failure_reason=reason,
-    )
-
-
-def _failed_origin_distance(config: SwimmingAwayEvaluationConfig, reason: str):
-    from .evolution_tasks import OriginDistanceEvaluationResult
-
-    return OriginDistanceEvaluationResult(
-        fitness=config.build_failure_fitness,
-        origin_distance=0.0,
-        average_origin_speed=0.0,
-        forward_distance=0.0,
-        average_forward_speed=0.0,
-        sideways_drift_speed=0.0,
-        vertical_drift_speed=0.0,
-        control_energy=0.0,
-        mean_angular_speed=0.0,
-        simulated_seconds=0.0,
-        actuator_count=0,
-        body_count=0,
-        total_volume=0.0,
-        build_failed=reason != DISALLOWED_COLLISION_REASON,
-        disqualified=reason == DISALLOWED_COLLISION_REASON,
-        failure_reason=reason,
-    )
-
-
-def _failed_flying(
-    config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig, reason: str
-):
-    from .evolution_tasks import FlyingEvaluationResult
-
-    return FlyingEvaluationResult(
-        fitness=config.build_failure_fitness,
-        origin_distance=0.0,
-        average_origin_speed=0.0,
-        forward_distance=0.0,
-        average_forward_speed=0.0,
-        sideways_drift_speed=0.0,
-        height_loss=0.0,
-        first_ground_contact_time=None,
-        ground_touch_penalty=0.0,
-        no_ground_touch_bonus=0.0,
-        controlled_fitness=0.0,
-        passive_fitness=0.0,
-        fitness_gain=0.0,
-        control_energy=0.0,
-        mean_angular_speed=0.0,
-        simulated_seconds=0.0,
-        actuator_count=0,
-        body_count=0,
-        total_volume=0.0,
-        build_failed=reason != DISALLOWED_COLLISION_REASON,
-        disqualified=reason == DISALLOWED_COLLISION_REASON,
-        failure_reason=reason,
-    )
-
-
-def _failed_walking(config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig, reason: str):
-    from .evolution_tasks import WalkingEvaluationResult
-
-    return WalkingEvaluationResult(
-        fitness=config.build_failure_fitness,
-        origin_distance=0.0,
-        average_origin_speed=0.0,
-        forward_distance=0.0,
-        average_forward_speed=0.0,
-        sideways_drift_speed=0.0,
-        height_loss=0.0,
-        control_energy=0.0,
-        mean_angular_speed=0.0,
-        mean_upright_error=0.0,
-        simulated_seconds=0.0,
-        actuator_count=0,
-        body_count=0,
-        total_volume=0.0,
-        build_failed=reason != DISALLOWED_COLLISION_REASON,
-        disqualified=reason == DISALLOWED_COLLISION_REASON,
-        failure_reason=reason,
-    )
 
 
 def _normalized_target_direction(target_direction: Sequence[float]):

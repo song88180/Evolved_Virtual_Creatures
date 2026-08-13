@@ -21,7 +21,6 @@ from evol_virtual_creature.evaluation import (
     register_task,
     task_definition,
     task_definition_for_config,
-    _flying_fitness,
     _has_nonparent_self_collision,
     _run_flying_episode,
     _run_controlled_episode,
@@ -38,6 +37,8 @@ from evol_virtual_creature.evolution_tasks import (
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
+    _evaluate_flying,
+    _flying_fitness,
     evaluate_flying_away,
     evaluate_origin_distance,
     evaluate_walking_away,
@@ -1394,7 +1395,11 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
     )
     monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
     monkeypatch.setattr(
-        evaluation, "_flying_metrics_with_passive_baseline", fake_baseline
+        "evol_virtual_creature.evolution_tasks._evaluate_flying",
+        lambda _genotype, _config, speed_metric: (
+            observed.setdefault("speed_metric", speed_metric),
+            type("Result", (), {"fitness": 1.75})(),
+        )[1],
     )
 
     result = evaluate_x_axis_flying(
@@ -1409,12 +1414,19 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     from evol_virtual_creature import evaluation
 
     controlled_metrics = {
+        "origin_distance": 2.0,
+        "average_origin_speed": 2.0,
+        "forward_distance": 2.0,
         "average_forward_speed": 2.0,
+        "sideways_drift_speed": 0.0,
         "height_loss": 0.0,
+        "first_ground_contact_time": None,
         "ground_touch_penalty": 0.0,
         "no_ground_touch_bonus": 0.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
+        "simulated_seconds": 1.0,
+        "actuator_count": 0,
         "body_count": 0,
         "total_volume": 0.0,
     }
@@ -1435,14 +1447,14 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     monkeypatch.setattr(evaluation, "_copy_simulation_state", lambda *_args: object())
     monkeypatch.setattr(evaluation, "_run_flying_episode", fake_run)
 
-    metrics, fitness = evaluation._flying_metrics_with_passive_baseline(
-        object(), object(), object(), config, "average_forward_speed"
-    )
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
+    monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
+    result = _evaluate_flying(object(), config, "average_forward_speed")
 
-    assert metrics["controlled_fitness"] == pytest.approx(2.0)
-    assert metrics["passive_fitness"] == pytest.approx(0.5)
-    assert metrics["fitness_gain"] == pytest.approx(1.5)
-    assert fitness == pytest.approx(1.75)
+    assert result.controlled_fitness == pytest.approx(2.0)
+    assert result.passive_fitness == pytest.approx(0.5)
+    assert result.fitness_gain == pytest.approx(1.5)
+    assert result.fitness == pytest.approx(1.75)
 
 
 def test_walking_away_fitness_maximizes_average_origin_speed():
