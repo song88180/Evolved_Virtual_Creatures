@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 import xml.etree.ElementTree as ET
 
@@ -5,6 +6,7 @@ import mujoco
 import numpy as np
 import pytest
 
+import evol_virtual_creature.evaluation as evaluation
 from evol_virtual_creature.control import apply_controller
 from evol_virtual_creature.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
@@ -18,6 +20,8 @@ from evol_virtual_creature.evaluation import (
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
     TASK_REGISTRY,
+    ResultField,
+    register_task,
     task_definition,
     task_definition_for_config,
     _flying_fitness,
@@ -26,6 +30,7 @@ from evol_virtual_creature.evaluation import (
     _run_controlled_episode,
     _creature_volume,
     evaluate_flying_away,
+    evaluate_for_task,
     evaluate_origin_distance,
     evaluate_walking_away,
     evaluate_x_axis_flying,
@@ -83,11 +88,59 @@ def test_task_registry_covers_every_task_and_config():
         assert definition.config_type is config_type
         assert definition.evaluator is evaluator
         assert definition.environment_family is environment_family
-        assert config_type.TASK_NAME == task
+        assert definition.name == task
         assert task_definition_for_config(config_type()) is definition
 
     with pytest.raises(KeyError):
         task_definition("unknown_task")
+
+
+def test_register_task_adds_forward_and_reverse_lookups():
+    @dataclass(frozen=True)
+    class TestConfig:
+        episode_seconds: float = 1.0
+
+    def cleanup():
+        TASK_REGISTRY.pop("test_task", None)
+        evaluation._TASKS_BY_CONFIG_TYPE.pop(TestConfig, None)
+
+    cleanup()
+    try:
+        @register_task(
+            "test_task",
+            config_type=TestConfig,
+            environment_family=EnvironmentFamily.WALKING,
+            title="Test task",
+            result_fields=(ResultField("Fitness", "fitness"),),
+        )
+        def test_evaluator(genotype, config):
+            return genotype, config
+
+        definition = task_definition("test_task")
+        assert definition.evaluator is test_evaluator
+        assert task_definition_for_config(TestConfig()) is definition
+        genotype = object()
+        config = TestConfig()
+        assert evaluate_for_task(genotype, config) == (genotype, config)
+
+        with pytest.raises(ValueError, match="already registered"):
+            register_task(
+                "test_task",
+                config_type=type("AnotherConfig", (), {}),
+                environment_family=EnvironmentFamily.WALKING,
+                title="Duplicate",
+                result_fields=(),
+            )
+        with pytest.raises(ValueError, match="already registered"):
+            register_task(
+                "another_task",
+                config_type=TestConfig,
+                environment_family=EnvironmentFamily.WALKING,
+                title="Duplicate",
+                result_fields=(),
+            )
+    finally:
+        cleanup()
 
 
 def test_task_physics_settings_are_distinct():

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Callable, ClassVar, Sequence, TypeAlias
+from typing import Callable, Protocol, Sequence
 
 import mujoco
 import numpy as np
@@ -45,11 +45,23 @@ _DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
 DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 
 
+class EvaluationConfig(Protocol):
+    """Settings required by shared evaluation and rendering infrastructure."""
+
+    episode_seconds: float
+    max_node: int
+    self_collision: bool
+    disallow_collision: bool
+    build_failure_fitness: float
+    max_abs_state_value: float
+    max_abs_velocity: float
+    max_abs_acceleration: float
+    max_volume: float
+
+
 @dataclass(frozen=True)
 class SwimmingEvaluationConfig:
     """Weights and simulation settings for x-axis swimming fitness."""
-
-    TASK_NAME: ClassVar[str] = "swimming_x"
 
     episode_seconds: float = 10.0
     max_node: int = 500
@@ -76,8 +88,6 @@ class SwimmingEvaluationConfig:
 @dataclass(frozen=True)
 class WalkingEvaluationConfig:
     """Weights and simulation settings for x-axis walking fitness."""
-
-    TASK_NAME: ClassVar[str] = "walking_x"
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -109,8 +119,6 @@ class WalkingEvaluationConfig:
 class SwimmingAwayEvaluationConfig:
     """Weights and simulation settings for swimming-away fitness."""
 
-    TASK_NAME: ClassVar[str] = "swimming_away"
-
     episode_seconds: float = 10.0
     max_node: int = 500
     self_collision: bool = False
@@ -134,8 +142,6 @@ class SwimmingAwayEvaluationConfig:
 @dataclass(frozen=True)
 class WalkingAwayEvaluationConfig:
     """Weights and simulation settings for walking-away fitness."""
-
-    TASK_NAME: ClassVar[str] = "walking_away"
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -164,8 +170,6 @@ class WalkingAwayEvaluationConfig:
 @dataclass(frozen=True)
 class FlyingEvaluationConfig:
     """Weights and simulation settings for x-axis flying fitness."""
-
-    TASK_NAME: ClassVar[str] = "flying_x"
 
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
@@ -200,8 +204,6 @@ class FlyingEvaluationConfig:
 class FlyingAwayEvaluationConfig:
     """Weights and simulation settings for flying-away fitness."""
 
-    TASK_NAME: ClassVar[str] = "flying_away"
-
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
     fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
@@ -229,16 +231,6 @@ class FlyingAwayEvaluationConfig:
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
     max_abs_acceleration: float = 100_000.0
-
-
-EvaluationConfig: TypeAlias = (
-    SwimmingEvaluationConfig
-    | WalkingEvaluationConfig
-    | SwimmingAwayEvaluationConfig
-    | WalkingAwayEvaluationConfig
-    | FlyingEvaluationConfig
-    | FlyingAwayEvaluationConfig
-)
 
 
 @dataclass(frozen=True)
@@ -328,6 +320,94 @@ class FlyingEvaluationResult:
     failure_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class ResultField:
+    """One task-specific result value printed by the evaluation CLI."""
+
+    label: str
+    attribute: str
+    format_spec: str = ".6f"
+    none_text: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskDefinition:
+    """Config, evaluator, environment, and CLI presentation for one task."""
+
+    name: str
+    config_type: type
+    evaluator: Callable
+    environment_family: EnvironmentFamily
+    title: str
+    result_fields: tuple[ResultField, ...]
+
+
+TASK_REGISTRY: dict[str, TaskDefinition] = {}
+_TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
+
+
+def register_task(
+    name: str,
+    *,
+    config_type: type,
+    environment_family: EnvironmentFamily,
+    title: str,
+    result_fields: tuple[ResultField, ...],
+):
+    """Register an evaluator and all metadata needed by task consumers."""
+    if name in TASK_REGISTRY:
+        raise ValueError(f"Task name {name!r} is already registered")
+    if config_type in _TASKS_BY_CONFIG_TYPE:
+        raise ValueError(
+            f"Config type {config_type.__name__} is already registered"
+        )
+
+    def decorator(evaluator: Callable) -> Callable:
+        definition = TaskDefinition(
+            name=name,
+            config_type=config_type,
+            evaluator=evaluator,
+            environment_family=environment_family,
+            title=title,
+            result_fields=result_fields,
+        )
+        TASK_REGISTRY[name] = definition
+        _TASKS_BY_CONFIG_TYPE[config_type] = definition
+        return evaluator
+
+    return decorator
+
+
+_SWIMMING_RESULT_FIELDS = (
+    ResultField("Vertical drift speed", "vertical_drift_speed"),
+)
+_WALKING_RESULT_FIELDS = (
+    ResultField("Height loss", "height_loss"),
+    ResultField("Mean upright error", "mean_upright_error"),
+)
+_FLYING_RESULT_FIELDS = (
+    ResultField("Height loss", "height_loss"),
+    ResultField(
+        "First ground contact",
+        "first_ground_contact_time",
+        ".2f",
+        none_text="none",
+    ),
+    ResultField("Ground touch penalty", "ground_touch_penalty"),
+    ResultField("No-ground-touch bonus", "no_ground_touch_bonus"),
+    ResultField("Controlled fitness", "controlled_fitness"),
+    ResultField("Passive fitness", "passive_fitness"),
+    ResultField("Fitness gain", "fitness_gain"),
+)
+
+
+@register_task(
+    "swimming_x",
+    config_type=SwimmingEvaluationConfig,
+    environment_family=EnvironmentFamily.SWIMMING,
+    title="X-axis swimming_x evaluation",
+    result_fields=_SWIMMING_RESULT_FIELDS,
+)
 def evaluate_x_axis_swimming(
     genotype: Genotype,
     config: SwimmingEvaluationConfig | None = None,
@@ -360,6 +440,13 @@ def evaluate_x_axis_swimming(
     return SwimmingEvaluationResult(fitness=fitness, **metrics)
 
 
+@register_task(
+    "swimming_away",
+    config_type=SwimmingAwayEvaluationConfig,
+    environment_family=EnvironmentFamily.SWIMMING,
+    title="Distance-from-origin swimming_away evaluation",
+    result_fields=_SWIMMING_RESULT_FIELDS,
+)
 def evaluate_origin_distance(
     genotype: Genotype,
     config: SwimmingAwayEvaluationConfig | None = None,
@@ -392,6 +479,13 @@ def evaluate_origin_distance(
     return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
 
 
+@register_task(
+    "flying_x",
+    config_type=FlyingEvaluationConfig,
+    environment_family=EnvironmentFamily.FLYING,
+    title="X-axis flying_x evaluation",
+    result_fields=_FLYING_RESULT_FIELDS,
+)
 def evaluate_x_axis_flying(
     genotype: Genotype,
     config: FlyingEvaluationConfig | None = None,
@@ -423,6 +517,13 @@ def evaluate_x_axis_flying(
     return FlyingEvaluationResult(fitness=fitness, **metrics)
 
 
+@register_task(
+    "flying_away",
+    config_type=FlyingAwayEvaluationConfig,
+    environment_family=EnvironmentFamily.FLYING,
+    title="Distance-from-origin flying_away evaluation",
+    result_fields=_FLYING_RESULT_FIELDS,
+)
 def evaluate_flying_away(
     genotype: Genotype,
     config: FlyingAwayEvaluationConfig | None = None,
@@ -506,6 +607,13 @@ def _copy_simulation_state(
     return copied
 
 
+@register_task(
+    "walking_away",
+    config_type=WalkingAwayEvaluationConfig,
+    environment_family=EnvironmentFamily.WALKING,
+    title="Distance-from-origin walking_away evaluation",
+    result_fields=_WALKING_RESULT_FIELDS,
+)
 def evaluate_walking_away(
     genotype: Genotype,
     config: WalkingAwayEvaluationConfig | None = None,
@@ -560,6 +668,13 @@ def evaluate_walking_away(
     return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
 
 
+@register_task(
+    "walking_x",
+    config_type=WalkingEvaluationConfig,
+    environment_family=EnvironmentFamily.WALKING,
+    title="X-axis walking_x evaluation",
+    result_fields=_WALKING_RESULT_FIELDS,
+)
 def evaluate_x_axis_walking(
     genotype: Genotype,
     config: WalkingEvaluationConfig | None = None,
@@ -615,49 +730,6 @@ def evaluate_x_axis_walking(
     return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
 
 
-@dataclass(frozen=True)
-class TaskDefinition:
-    """Config, evaluator, and physical environment for one task."""
-
-    config_type: type
-    evaluator: Callable
-    environment_family: EnvironmentFamily
-
-
-TASK_REGISTRY: dict[str, TaskDefinition] = {
-    "swimming_x": TaskDefinition(
-        SwimmingEvaluationConfig,
-        evaluate_x_axis_swimming,
-        EnvironmentFamily.SWIMMING,
-    ),
-    "swimming_away": TaskDefinition(
-        SwimmingAwayEvaluationConfig,
-        evaluate_origin_distance,
-        EnvironmentFamily.SWIMMING,
-    ),
-    "walking_x": TaskDefinition(
-        WalkingEvaluationConfig,
-        evaluate_x_axis_walking,
-        EnvironmentFamily.WALKING,
-    ),
-    "walking_away": TaskDefinition(
-        WalkingAwayEvaluationConfig,
-        evaluate_walking_away,
-        EnvironmentFamily.WALKING,
-    ),
-    "flying_x": TaskDefinition(
-        FlyingEvaluationConfig,
-        evaluate_x_axis_flying,
-        EnvironmentFamily.FLYING,
-    ),
-    "flying_away": TaskDefinition(
-        FlyingAwayEvaluationConfig,
-        evaluate_flying_away,
-        EnvironmentFamily.FLYING,
-    ),
-}
-
-
 def task_definition(task: str) -> TaskDefinition:
     """Return canonical metadata for a task name."""
     return TASK_REGISTRY[task]
@@ -665,14 +737,9 @@ def task_definition(task: str) -> TaskDefinition:
 
 def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
     """Return canonical task metadata for a concrete config instance."""
-    task = getattr(type(config), "TASK_NAME", None)
-    if task is None or task not in TASK_REGISTRY:
+    definition = _TASKS_BY_CONFIG_TYPE.get(type(config))
+    if definition is None:
         raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
-    definition = TASK_REGISTRY[task]
-    if type(config) is not definition.config_type:
-        raise TypeError(
-            f"Config type {type(config).__name__} does not match task {task!r}"
-        )
     return definition
 
 
@@ -683,8 +750,7 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
 
 def task_for_config(config: EvaluationConfig) -> str:
     """Return the canonical task name for a concrete config instance."""
-    task_definition_for_config(config)
-    return type(config).TASK_NAME
+    return task_definition_for_config(config).name
 
 
 def initialize_walking_model(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import datetime
 import json
 from pathlib import Path
@@ -16,6 +16,7 @@ from evol_virtual_creature.evaluation import (
     TASK_REGISTRY,
     task_definition,
 )
+from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genes import CONTROL_MODES
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolve import (
@@ -49,7 +50,8 @@ def main() -> None:
 
     seed_genotype = load_genotype_from_json(args.genotype)
     _validate_genotype_control_mode(seed_genotype, args.control_mode)
-    config_type = task_definition(args.task).config_type
+    definition = task_definition(args.task)
+    config_type = definition.config_type
     config_kwargs = {
         "episode_seconds": args.duration,
         "max_node": args.max_node,
@@ -62,19 +64,24 @@ def main() -> None:
         "self_collision": args.self_collision,
         "disallow_collision": args.disallow_collision,
     }
-    if args.task == "walking_x":
-        config_kwargs["upright_weight"] = (
+    config_kwargs.update(
+        upright_weight=(
             DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
-        )
-    if args.task.startswith("flying"):
-        config_kwargs.update(
-            fluid_density=args.fluid_density,
-            fluid_viscosity=args.fluid_viscosity,
-            fluid_shape=args.fluid_shape,
-            fluid_coef=tuple(args.fluid_coef),
-            fitness_gain_fraction=args.fitness_gain_fraction,
-        )
-    config = config_type(**config_kwargs)
+        ),
+        fluid_density=args.fluid_density,
+        fluid_viscosity=args.fluid_viscosity,
+        fluid_shape=args.fluid_shape,
+        fluid_coef=tuple(args.fluid_coef),
+        fitness_gain_fraction=args.fitness_gain_fraction,
+    )
+    supported_fields = {field.name for field in fields(config_type)}
+    config = config_type(
+        **{
+            name: value
+            for name, value in config_kwargs.items()
+            if name in supported_fields
+        }
+    )
 
     population = initial_population(
         seed_genotype=seed_genotype,
@@ -555,8 +562,11 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
         if getattr(args, name) is None:
             setattr(args, name, getattr(task_defaults, name))
 
+    definition = task_definition(args.task)
     flying_defaults = (
-        task_defaults if args.task.startswith("flying") else FlyingEvaluationConfig()
+        task_defaults
+        if definition.environment_family is EnvironmentFamily.FLYING
+        else FlyingEvaluationConfig()
     )
     for name in (
         "fluid_density",
@@ -612,7 +622,11 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--fluid-density must be non-negative")
     if not 0.0 <= args.fitness_gain_fraction <= 1.0:
         raise ValueError("--fitness-gain-fraction must be between 0 and 1")
-    if args.gradual_gravity_change is not None and not args.task.startswith("flying"):
+    if (
+        args.gradual_gravity_change is not None
+        and task_definition(args.task).environment_family
+        is not EnvironmentFamily.FLYING
+    ):
         raise ValueError("--gradual-gravity-change is only supported for flying tasks")
     if args.fluid_viscosity < 0.0:
         raise ValueError("--fluid-viscosity must be non-negative")

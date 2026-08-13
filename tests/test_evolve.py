@@ -337,7 +337,10 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
     monkeypatch.setattr(
         module,
         "task_definition",
-        lambda _task: argparse.Namespace(config_type=TaskDefaults),
+        lambda _task: argparse.Namespace(
+            config_type=TaskDefaults,
+            environment_family=evaluate.EnvironmentFamily.FLYING,
+        ),
     )
     monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
 
@@ -376,7 +379,10 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
     monkeypatch.setattr(
         module,
         "task_definition",
-        lambda _task: argparse.Namespace(config_type=TaskDefaults),
+        lambda _task: argparse.Namespace(
+            config_type=TaskDefaults,
+            environment_family=evaluate.EnvironmentFamily.FLYING,
+        ),
     )
     monkeypatch.setattr(
         sys,

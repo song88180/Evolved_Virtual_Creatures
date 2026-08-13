@@ -1,6 +1,7 @@
 """Evaluate a genotype on a selected locomotion task."""
 
 import argparse
+from dataclasses import fields
 import os
 from pathlib import Path
 import sys
@@ -24,6 +25,7 @@ from evol_virtual_creature.evaluation import (
     evaluate_for_task,
     task_definition,
 )
+from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video
 
@@ -35,7 +37,8 @@ _DEFAULT_VIDEO_SENTINEL = Path("__task_default_video__")
 def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
-    config_type = task_definition(args.task).config_type
+    definition = task_definition(args.task)
+    config_type = definition.config_type
     config_kwargs = {
         "episode_seconds": args.duration,
         "body_count_weight": args.body_count_weight,
@@ -47,19 +50,24 @@ def main():
         "self_collision": args.self_collision,
         "disallow_collision": args.disallow_collision,
     }
-    if args.task == "walking_x":
-        config_kwargs["upright_weight"] = (
+    config_kwargs.update(
+        upright_weight=(
             DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
-        )
-    if args.task.startswith("flying"):
-        config_kwargs.update(
-            fluid_density=args.fluid_density,
-            fluid_viscosity=args.fluid_viscosity,
-            fluid_shape=args.fluid_shape,
-            fluid_coef=tuple(args.fluid_coef),
-            fitness_gain_fraction=args.fitness_gain_fraction,
-        )
-    config = config_type(**config_kwargs)
+        ),
+        fluid_density=args.fluid_density,
+        fluid_viscosity=args.fluid_viscosity,
+        fluid_shape=args.fluid_shape,
+        fluid_coef=tuple(args.fluid_coef),
+        fitness_gain_fraction=args.fitness_gain_fraction,
+    )
+    supported_fields = {field.name for field in fields(config_type)}
+    config = config_type(
+        **{
+            name: value
+            for name, value in config_kwargs.items()
+            if name in supported_fields
+        }
+    )
     result = evaluate_for_task(genotype, config)
 
     if result.disqualified:
@@ -72,12 +80,7 @@ def main():
         print(f"Fitness: {result.fitness:.6f}")
         return
 
-    title = (
-        f"Distance-from-origin {args.task} evaluation"
-        if args.task.endswith("_away")
-        else f"X-axis {args.task} evaluation"
-    )
-    print(title)
+    print(definition.title)
     print(f"Genotype: {args.genotype}")
     print(f"Fitness: {result.fitness:.6f}")
     print(f"Origin distance: {result.origin_distance:.6f}")
@@ -85,22 +88,14 @@ def main():
     print(f"Forward distance: {result.forward_distance:.6f}")
     print(f"Average forward speed: {result.average_forward_speed:.6f}")
     print(f"Sideways drift speed: {result.sideways_drift_speed:.6f}")
-    if args.task.startswith("swimming"):
-        print(f"Vertical drift speed: {result.vertical_drift_speed:.6f}")
-    elif args.task.startswith("flying"):
-        print(f"Height loss: {result.height_loss:.6f}")
-        if result.first_ground_contact_time is None:
-            print("First ground contact: none")
-        else:
-            print(f"First ground contact: {result.first_ground_contact_time:.2f}")
-        print(f"Ground touch penalty: {result.ground_touch_penalty:.6f}")
-        print(f"No-ground-touch bonus: {result.no_ground_touch_bonus:.6f}")
-        print(f"Controlled fitness: {result.controlled_fitness:.6f}")
-        print(f"Passive fitness: {result.passive_fitness:.6f}")
-        print(f"Fitness gain: {result.fitness_gain:.6f}")
-    else:
-        print(f"Height loss: {result.height_loss:.6f}")
-        print(f"Mean upright error: {result.mean_upright_error:.6f}")
+    for result_field in definition.result_fields:
+        value = getattr(result, result_field.attribute)
+        rendered = (
+            result_field.none_text
+            if value is None and result_field.none_text is not None
+            else format(value, result_field.format_spec)
+        )
+        print(f"{result_field.label}: {rendered}")
     print(f"Control energy: {result.control_energy:.6f}")
     print(f"Mean angular speed: {result.mean_angular_speed:.6f}")
     print(f"Simulated seconds: {result.simulated_seconds:.2f}")
@@ -377,8 +372,11 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
         if getattr(args, name) is None:
             setattr(args, name, getattr(task_defaults, name))
 
+    definition = task_definition(args.task)
     flying_defaults = (
-        task_defaults if args.task.startswith("flying") else FlyingEvaluationConfig()
+        task_defaults
+        if definition.environment_family is EnvironmentFamily.FLYING
+        else FlyingEvaluationConfig()
     )
     for name in (
         "fluid_density",

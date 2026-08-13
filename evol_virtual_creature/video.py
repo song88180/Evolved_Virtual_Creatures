@@ -7,11 +7,7 @@ import mujoco
 
 from .evaluation import (
     EvaluationConfig,
-    FlyingAwayEvaluationConfig,
-    FlyingEvaluationConfig,
     SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
     initialize_flying_model,
@@ -20,6 +16,7 @@ from .evaluation import (
     simulation_failure_reason,
     task_definition_for_config,
 )
+from .constants import EnvironmentFamily
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
@@ -160,7 +157,7 @@ def save_x_axis_video(
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
-    if isinstance(config, (WalkingEvaluationConfig, WalkingAwayEvaluationConfig)):
+    if task.environment_family is EnvironmentFamily.WALKING:
         failure = initialize_walking_model(model, data)
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
@@ -168,7 +165,7 @@ def save_x_axis_video(
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
         data.time = 0.0
-    elif isinstance(config, (FlyingEvaluationConfig, FlyingAwayEvaluationConfig)):
+    elif task.environment_family is EnvironmentFamily.FLYING:
         failure = initialize_flying_model(model, data)
         if failure is not None:
             raise RuntimeError(f"Cannot record video: {failure}")
