@@ -332,7 +332,11 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
         fitness_gain_fraction = 0.7
 
-    monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
+    monkeypatch.setattr(
+        module,
+        "task_definition",
+        lambda _task: argparse.Namespace(config_type=TaskDefaults),
+    )
     monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
 
     args = module.parse_args()
@@ -367,7 +371,11 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
         fitness_gain_fraction = 0.7
 
-    monkeypatch.setattr(module, "_config_type_for_task", lambda _task: TaskDefaults)
+    monkeypatch.setattr(
+        module,
+        "task_definition",
+        lambda _task: argparse.Namespace(config_type=TaskDefaults),
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -1145,4 +1153,3 @@ def test_population_helpers_forward_root_mutation_setting(monkeypatch):
     )
 
     assert settings == [False, False]
-

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Sequence, TypeAlias
+from typing import Callable, ClassVar, Sequence, TypeAlias
 
 import mujoco
 import numpy as np
 
 from .genotype import Genotype
+from .constants import EnvironmentFamily, TaskName
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
@@ -48,6 +49,8 @@ DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 class SwimmingEvaluationConfig:
     """Weights and simulation settings for x-axis swimming fitness."""
 
+    TASK_NAME: ClassVar[TaskName] = TaskName.SWIMMING_X
+
     episode_seconds: float = 10.0
     max_node: int = 500
     self_collision: bool = False
@@ -73,6 +76,8 @@ class SwimmingEvaluationConfig:
 @dataclass(frozen=True)
 class WalkingEvaluationConfig:
     """Weights and simulation settings for x-axis walking fitness."""
+
+    TASK_NAME: ClassVar[TaskName] = TaskName.WALKING_X
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -104,6 +109,8 @@ class WalkingEvaluationConfig:
 class SwimmingAwayEvaluationConfig:
     """Weights and simulation settings for swimming-away fitness."""
 
+    TASK_NAME: ClassVar[TaskName] = TaskName.SWIMMING_AWAY
+
     episode_seconds: float = 10.0
     max_node: int = 500
     self_collision: bool = False
@@ -127,6 +134,8 @@ class SwimmingAwayEvaluationConfig:
 @dataclass(frozen=True)
 class WalkingAwayEvaluationConfig:
     """Weights and simulation settings for walking-away fitness."""
+
+    TASK_NAME: ClassVar[TaskName] = TaskName.WALKING_AWAY
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -155,6 +164,8 @@ class WalkingAwayEvaluationConfig:
 @dataclass(frozen=True)
 class FlyingEvaluationConfig:
     """Weights and simulation settings for x-axis flying fitness."""
+
+    TASK_NAME: ClassVar[TaskName] = TaskName.FLYING_X
 
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
@@ -188,6 +199,8 @@ class FlyingEvaluationConfig:
 @dataclass(frozen=True)
 class FlyingAwayEvaluationConfig:
     """Weights and simulation settings for flying-away fitness."""
+
+    TASK_NAME: ClassVar[TaskName] = TaskName.FLYING_AWAY
 
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
@@ -321,7 +334,7 @@ def evaluate_x_axis_swimming(
 ) -> SwimmingEvaluationResult:
     """Score a genotype by how well it swims in the positive x direction."""
     config = config or SwimmingEvaluationConfig()
-    built = _build_model(genotype, config, "swimming_x")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_swimming(config, built)
     model, data, builder = built
@@ -353,7 +366,7 @@ def evaluate_origin_distance(
 ) -> OriginDistanceEvaluationResult:
     """Score a genotype by final root distance from its starting position."""
     config = config or SwimmingAwayEvaluationConfig()
-    built = _build_model(genotype, config, "swimming_away")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_origin_distance(config, built)
     model, data, builder = built
@@ -385,7 +398,7 @@ def evaluate_x_axis_flying(
 ) -> FlyingEvaluationResult:
     """Score flight by horizontal pre-contact speed while penalizing altitude loss."""
     config = config or FlyingEvaluationConfig()
-    built = _build_model(genotype, config, "flying_x")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_flying(config, built)
     model, data, builder = built
@@ -416,7 +429,7 @@ def evaluate_flying_away(
 ) -> FlyingEvaluationResult:
     """Score flight by horizontal pre-contact speed from the starting point."""
     config = config or FlyingAwayEvaluationConfig()
-    built = _build_model(genotype, config, "flying_away")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_flying(config, built)
     model, data, builder = built
@@ -499,7 +512,7 @@ def evaluate_walking_away(
 ) -> WalkingEvaluationResult:
     """Score ground locomotion by final root distance from its starting position."""
     config = config or WalkingAwayEvaluationConfig()
-    built = _build_model(genotype, config, "walking_away")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_walking(config, built)
     model, data, builder = built
@@ -553,7 +566,7 @@ def evaluate_x_axis_walking(
 ) -> WalkingEvaluationResult:
     """Score positive-x ground locomotion while penalizing falling and rolling."""
     config = config or WalkingEvaluationConfig()
-    built = _build_model(genotype, config, "walking_x")
+    built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_walking(config, built)
     model, data, builder = built
@@ -602,33 +615,76 @@ def evaluate_x_axis_walking(
     return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
 
 
+@dataclass(frozen=True)
+class TaskDefinition:
+    """Config, evaluator, and physical environment for one task."""
+
+    config_type: type
+    evaluator: Callable
+    environment_family: EnvironmentFamily
+
+
+TASK_REGISTRY: dict[TaskName, TaskDefinition] = {
+    TaskName.SWIMMING_X: TaskDefinition(
+        SwimmingEvaluationConfig,
+        evaluate_x_axis_swimming,
+        EnvironmentFamily.SWIMMING,
+    ),
+    TaskName.SWIMMING_AWAY: TaskDefinition(
+        SwimmingAwayEvaluationConfig,
+        evaluate_origin_distance,
+        EnvironmentFamily.SWIMMING,
+    ),
+    TaskName.WALKING_X: TaskDefinition(
+        WalkingEvaluationConfig,
+        evaluate_x_axis_walking,
+        EnvironmentFamily.WALKING,
+    ),
+    TaskName.WALKING_AWAY: TaskDefinition(
+        WalkingAwayEvaluationConfig,
+        evaluate_walking_away,
+        EnvironmentFamily.WALKING,
+    ),
+    TaskName.FLYING_X: TaskDefinition(
+        FlyingEvaluationConfig,
+        evaluate_x_axis_flying,
+        EnvironmentFamily.FLYING,
+    ),
+    TaskName.FLYING_AWAY: TaskDefinition(
+        FlyingAwayEvaluationConfig,
+        evaluate_flying_away,
+        EnvironmentFamily.FLYING,
+    ),
+}
+
+
+def task_definition(task: TaskName | str) -> TaskDefinition:
+    """Return canonical metadata for a task name."""
+    return TASK_REGISTRY[TaskName(task)]
+
+
+def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
+    """Return canonical task metadata for a concrete config instance."""
+    task = getattr(type(config), "TASK_NAME", None)
+    if task is None or task not in TASK_REGISTRY:
+        raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
+    definition = TASK_REGISTRY[task]
+    if type(config) is not definition.config_type:
+        raise TypeError(
+            f"Config type {type(config).__name__} does not match task {task.value!r}"
+        )
+    return definition
+
+
 def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
-    """Dispatch evaluation from the concrete task configuration type."""
-    if isinstance(config, FlyingAwayEvaluationConfig):
-        return evaluate_flying_away(genotype, config)
-    if isinstance(config, FlyingEvaluationConfig):
-        return evaluate_x_axis_flying(genotype, config)
-    if isinstance(config, WalkingAwayEvaluationConfig):
-        return evaluate_walking_away(genotype, config)
-    if isinstance(config, WalkingEvaluationConfig):
-        return evaluate_x_axis_walking(genotype, config)
-    if isinstance(config, SwimmingAwayEvaluationConfig):
-        return evaluate_origin_distance(genotype, config)
-    return evaluate_x_axis_swimming(genotype, config)
+    """Dispatch evaluation through the canonical task registry."""
+    return task_definition_for_config(config).evaluator(genotype, config)
 
 
-def task_for_config(config: EvaluationConfig) -> str:
-    if isinstance(config, FlyingAwayEvaluationConfig):
-        return "flying_away"
-    if isinstance(config, FlyingEvaluationConfig):
-        return "flying_x"
-    if isinstance(config, WalkingAwayEvaluationConfig):
-        return "walking_away"
-    if isinstance(config, WalkingEvaluationConfig):
-        return "walking_x"
-    if isinstance(config, SwimmingAwayEvaluationConfig):
-        return "swimming_away"
-    return "swimming_x"
+def task_for_config(config: EvaluationConfig) -> TaskName:
+    """Return the canonical task name for a concrete config instance."""
+    task_definition_for_config(config)
+    return type(config).TASK_NAME
 
 
 def initialize_walking_model(
@@ -810,12 +866,13 @@ def settle_walking_model(
     return None
 
 
-def _build_model(genotype: Genotype, config: EvaluationConfig, task: str):
+def _build_model(genotype: Genotype, config: EvaluationConfig):
     try:
+        definition = task_definition_for_config(config)
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            task=task,
+            environment_family=definition.environment_family,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

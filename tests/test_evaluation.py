@@ -17,6 +17,8 @@ from evol_virtual_creature.evaluation import (
     SwimmingEvaluationConfig,
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
+    TASK_REGISTRY,
+    task_definition_for_config,
     _flying_fitness,
     _has_nonparent_self_collision,
     _run_flying_episode,
@@ -32,11 +34,68 @@ from evol_virtual_creature.evaluation import (
     initialize_walking_model,
     simulation_failure_reason,
 )
+from evol_virtual_creature.constants import EnvironmentFamily, TaskName
 from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 
 GENOTYPE_PATH = "examples/example_genotype.json"
+
+
+def test_task_registry_covers_every_task_and_config():
+    expected = {
+        TaskName.SWIMMING_X: (
+            SwimmingEvaluationConfig,
+            evaluate_x_axis_swimming,
+            EnvironmentFamily.SWIMMING,
+        ),
+        TaskName.SWIMMING_AWAY: (
+            SwimmingAwayEvaluationConfig,
+            evaluate_origin_distance,
+            EnvironmentFamily.SWIMMING,
+        ),
+        TaskName.WALKING_X: (
+            WalkingEvaluationConfig,
+            evaluate_x_axis_walking,
+            EnvironmentFamily.WALKING,
+        ),
+        TaskName.WALKING_AWAY: (
+            WalkingAwayEvaluationConfig,
+            evaluate_walking_away,
+            EnvironmentFamily.WALKING,
+        ),
+        TaskName.FLYING_X: (
+            FlyingEvaluationConfig,
+            evaluate_x_axis_flying,
+            EnvironmentFamily.FLYING,
+        ),
+        TaskName.FLYING_AWAY: (
+            FlyingAwayEvaluationConfig,
+            evaluate_flying_away,
+            EnvironmentFamily.FLYING,
+        ),
+    }
+
+    assert set(TASK_REGISTRY) == set(TaskName)
+    for task, (config_type, evaluator, environment_family) in expected.items():
+        definition = TASK_REGISTRY[task]
+        assert definition.config_type is config_type
+        assert definition.evaluator is evaluator
+        assert definition.environment_family is environment_family
+        assert config_type.TASK_NAME is task
+        assert task_definition_for_config(config_type()) is definition
+
+
+def test_phenotype_builder_rejects_conflicting_task_and_environment():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+
+    with pytest.raises(ValueError, match="uses the 'flying' environment"):
+        PhenotypeBuilder(
+            genotype,
+            max_node=500,
+            task="flying_x",
+            environment_family=EnvironmentFamily.SWIMMING,
+        )
 
 
 def test_task_physics_settings_are_distinct():

@@ -19,14 +19,11 @@ _configure_video_rendering_backend()
 
 from evol_virtual_creature.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
-    FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
-    SwimmingAwayEvaluationConfig,
-    SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
     evaluate_for_task,
+    task_definition,
 )
+from evol_virtual_creature.constants import TaskName
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video
 
@@ -38,7 +35,7 @@ _DEFAULT_VIDEO_SENTINEL = Path("__task_default_video__")
 def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
-    config_type = _config_type_for_task(args.task)
+    config_type = task_definition(args.task).config_type
     config_kwargs = {
         "episode_seconds": args.duration,
         "body_count_weight": args.body_count_weight,
@@ -135,20 +132,6 @@ def main():
         print(f"Saved video: {video_path}")
 
 
-def _config_type_for_task(task: str):
-    if task == "flying_x":
-        return FlyingEvaluationConfig
-    if task == "flying_away":
-        return FlyingAwayEvaluationConfig
-    if task == "walking_x":
-        return WalkingEvaluationConfig
-    if task == "walking_away":
-        return WalkingAwayEvaluationConfig
-    if task == "swimming_away":
-        return SwimmingAwayEvaluationConfig
-    return SwimmingEvaluationConfig
-
-
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
     def _get_help_string(self, action):
         if action.default is None or action.default is argparse.SUPPRESS:
@@ -165,15 +148,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task",
-        choices=(
-            "swimming_x",
-            "swimming_away",
-            "walking_x",
-            "walking_away",
-            "flying_x",
-            "flying_away",
-        ),
-        default="swimming_x",
+        choices=tuple(TaskName),
+        type=TaskName,
+        default=TaskName.SWIMMING_X,
         help="Locomotion task to evaluate.",
     )
     parser.add_argument(
@@ -389,7 +366,7 @@ def parse_args() -> argparse.Namespace:
 
 def _apply_task_defaults(args: argparse.Namespace) -> None:
     """Fill task-dependent CLI defaults after ``--task`` has been parsed."""
-    task_defaults = _config_type_for_task(args.task)()
+    task_defaults = task_definition(args.task).config_type()
     for name in (
         "body_count_weight",
         "volume_weight",

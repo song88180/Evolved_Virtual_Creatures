@@ -12,13 +12,10 @@ import random
 
 from evol_virtual_creature.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
-    FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
-    SwimmingAwayEvaluationConfig,
-    SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
+    task_definition,
 )
+from evol_virtual_creature.constants import TaskName
 from evol_virtual_creature.genes import CONTROL_MODES
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolve import (
@@ -52,7 +49,7 @@ def main() -> None:
 
     seed_genotype = load_genotype_from_json(args.genotype)
     _validate_genotype_control_mode(seed_genotype, args.control_mode)
-    config_type = _config_type_for_task(args.task)
+    config_type = task_definition(args.task).config_type
     config_kwargs = {
         "episode_seconds": args.duration,
         "max_node": args.max_node,
@@ -192,20 +189,6 @@ def _format_generation_progress(
     return progress
 
 
-def _config_type_for_task(task: str):
-    if task == "flying_x":
-        return FlyingEvaluationConfig
-    if task == "flying_away":
-        return FlyingAwayEvaluationConfig
-    if task == "walking_x":
-        return WalkingEvaluationConfig
-    if task == "walking_away":
-        return WalkingAwayEvaluationConfig
-    if task == "swimming_away":
-        return SwimmingAwayEvaluationConfig
-    return SwimmingEvaluationConfig
-
-
 def _parse_gravity_range(value: str) -> tuple[float, float]:
     """Parse START,END gravity values for flying evolution."""
     parts = value.split(",")
@@ -282,15 +265,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task",
-        choices=(
-            "swimming_x",
-            "swimming_away",
-            "walking_x",
-            "walking_away",
-            "flying_x",
-            "flying_away",
-        ),
-        default="swimming_x",
+        choices=tuple(TaskName),
+        type=TaskName,
+        default=TaskName.SWIMMING_X,
         help="Locomotion task used for fitness evaluation.",
     )
     parser.add_argument(
@@ -567,7 +544,7 @@ def parse_args() -> argparse.Namespace:
 
 def _apply_task_defaults(args: argparse.Namespace) -> None:
     """Fill task-dependent CLI defaults after ``--task`` has been parsed."""
-    task_defaults = _config_type_for_task(args.task)()
+    task_defaults = task_definition(args.task).config_type()
     for name in (
         "body_count_weight",
         "volume_weight",

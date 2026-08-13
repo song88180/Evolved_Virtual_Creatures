@@ -16,7 +16,11 @@ import random
 from statistics import mean
 from typing import Any
 
-from .evaluation import EvaluationConfig, evaluate_for_task, task_for_config
+from .evaluation import (
+    EvaluationConfig,
+    evaluate_for_task,
+    task_definition_for_config,
+)
 from .genotype import Genotype
 from .genotype_io import genotype_to_dict, save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort
@@ -109,7 +113,7 @@ def _write_best_xml(
         mjcf = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            task=task_for_config(config),
+            environment_family=task_definition_for_config(config).environment_family,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

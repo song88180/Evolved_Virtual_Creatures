@@ -18,7 +18,7 @@ from .evaluation import (
     initialize_walking_model,
     settle_walking_model,
     simulation_failure_reason,
-    task_for_config,
+    task_definition_for_config,
 )
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
@@ -121,12 +121,12 @@ def save_x_axis_video(
             "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
         ) from error
 
-    task = task_for_config(config)
+    task = task_definition_for_config(config)
     try:
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            task=task,
+            environment_family=task.environment_family,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

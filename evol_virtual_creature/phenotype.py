@@ -4,7 +4,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
-from .constants import FACE_NORMALS
+from .constants import EnvironmentFamily, FACE_NORMALS, TaskName
 from .control import (
     BALL_NEURAL_AXES,
     ActuatorController,
@@ -41,7 +41,8 @@ class PhenotypeBuilder:
         self,
         genotype: Genotype,
         max_node: int,
-        task: str = "swimming_x",
+        task: TaskName | str | None = None,
+        environment_family: EnvironmentFamily | str | None = None,
         self_collision: bool = False,
         fluid_density: float | None = None,
         fluid_viscosity: float | None = None,
@@ -51,22 +52,31 @@ class PhenotypeBuilder:
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
-        if task not in {
-            "swimming_x",
-            "swimming_away",
-            "walking_x",
-            "walking_away",
-            "flying_x",
-            "flying_away",
-        }:
-            raise ValueError(
-                "task must be 'swimming_x', 'swimming_away', "
-                "'walking_x', 'walking_away', 'flying_x', or 'flying_away'"
-            )
+        normalized_task = TaskName(task) if task is not None else None
+        normalized_environment = (
+            EnvironmentFamily(environment_family)
+            if environment_family is not None
+            else None
+        )
+        if normalized_task is not None:
+            task_environment = normalized_task.environment_family
+            if (
+                normalized_environment is not None
+                and normalized_environment is not task_environment
+            ):
+                raise ValueError(
+                    f"task {normalized_task.value!r} uses the "
+                    f"{task_environment.value!r} environment, not "
+                    f"{normalized_environment.value!r}"
+                )
+            normalized_environment = task_environment
+        if normalized_environment is None:
+            normalized_environment = EnvironmentFamily.SWIMMING
 
         self.genotype = genotype
         self.max_node = max_node
-        self.task = task
+        self.task = normalized_task
+        self.environment_family = normalized_environment
         self.self_collision = self_collision
         self.fluid_density = (
             DEFAULT_FLYING_FLUID_DENSITY
@@ -150,11 +160,11 @@ class PhenotypeBuilder:
         compiler.set("angle", "degree")
 
         option = ET.SubElement(self.mujoco_xml, "option")
-        if self.task in {"swimming_x", "swimming_away"}:
+        if self.environment_family is EnvironmentFamily.SWIMMING:
             option.set("gravity", "0 0 0")
             option.set("density", "1000")
             option.set("viscosity", "0.001")
-        elif self.task in {"flying_x", "flying_away"}:
+        elif self.environment_family is EnvironmentFamily.FLYING:
             option.set("gravity", f"0 0 {self.gravity}")
             option.set("density", str(self.fluid_density))
             option.set("viscosity", str(self.fluid_viscosity))
@@ -197,10 +207,10 @@ class PhenotypeBuilder:
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
         geom_default.set("density", "500")
-        if self.task in {"flying_x", "flying_away"}:
+        if self.environment_family is EnvironmentFamily.FLYING:
             geom_default.set("fluidshape", self.fluid_shape)
             geom_default.set("fluidcoef", vec_to_str(self.fluid_coef))
-        if self.task in {"swimming_x", "swimming_away"}:
+        if self.environment_family is EnvironmentFamily.SWIMMING:
             geom_default.set("friction", "1.0 0.5 0.5")
             collision_mask = "2" if self.self_collision else "0"
             geom_default.set("contype", collision_mask)
@@ -227,7 +237,10 @@ class PhenotypeBuilder:
         floor.set("size", "5 5 0.1")
         floor.set("pos", "0 0 -0.05")
         floor.set("material", "floor_material")
-        if self.task in {"walking_x", "walking_away", "flying_x", "flying_away"}:
+        if self.environment_family in {
+            EnvironmentFamily.WALKING,
+            EnvironmentFamily.FLYING,
+        }:
             floor.set("contype", "1")
             floor.set("conaffinity", "2")
         else:
