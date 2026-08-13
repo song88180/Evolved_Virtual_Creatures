@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import register_task
+from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from ..phenotype import DEFAULT_FLYING_FLUID_COEF, DEFAULT_FLYING_FLUID_DENSITY, DEFAULT_FLYING_FLUID_SHAPE, DEFAULT_FLYING_FLUID_VISCOSITY, DEFAULT_FLYING_GRAVITY
 from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, evaluate_flying
@@ -67,10 +67,18 @@ class FlyingAwayEvaluationResult:
     failure_reason: str | None = None
 
 
-@register_task("flying_away", config_type=FlyingAwayEvaluationConfig,
-               environment_family=EnvironmentFamily.FLYING,
-               title="Distance-from-origin flying_away evaluation",
-               result_fields=FLYING_RESULT_FIELDS, order=60)
 def evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None):
     config = config or FlyingAwayEvaluationConfig()
     return evaluate_flying(genotype, config, "average_origin_speed", FlyingAwayEvaluationResult)
+
+
+TASK_DEFINITION = TaskDefinition(
+    name="flying_away",
+    config_type=FlyingAwayEvaluationConfig,
+    result_type=FlyingAwayEvaluationResult,
+    evaluator=evaluate_flying_away,
+    environment_family=EnvironmentFamily.FLYING,
+    title="Distance-from-origin flying_away evaluation",
+    result_fields=FLYING_RESULT_FIELDS,
+    order=60,
+)

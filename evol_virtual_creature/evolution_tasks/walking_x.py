@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import register_task
+from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, evaluate_walking
 
@@ -58,11 +58,18 @@ class WalkingEvaluationResult:
     failure_reason: str | None = None
 
 
-@register_task("walking_x", config_type=WalkingEvaluationConfig,
-               environment_family=EnvironmentFamily.WALKING,
-               title="X-axis walking_x evaluation", result_fields=WALKING_RESULT_FIELDS,
-               order=30)
 def evaluate_x_axis_walking(genotype: Genotype, config: WalkingEvaluationConfig | None = None):
     config = config or WalkingEvaluationConfig()
     return evaluate_walking(genotype, config, away=False, result_type=WalkingEvaluationResult)
 
+
+TASK_DEFINITION = TaskDefinition(
+    name="walking_x",
+    config_type=WalkingEvaluationConfig,
+    result_type=WalkingEvaluationResult,
+    evaluator=evaluate_x_axis_walking,
+    environment_family=EnvironmentFamily.WALKING,
+    title="X-axis walking_x evaluation",
+    result_fields=WALKING_RESULT_FIELDS,
+    order=30,
+)

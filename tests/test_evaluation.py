@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import importlib
 import math
 import subprocess
@@ -17,10 +16,10 @@ from evol_virtual_creature.evaluation import (
     MAXIMUM_CREATURE_HEIGHT_REASON,
     WALKING_CENTER_HEIGHT_DROP_REASON,
     TASK_REGISTRY,
-    ResultField,
-    register_task,
+    load_task_definition,
     task_definition,
     task_definition_for_config,
+    task_names,
     _has_nonparent_self_collision,
     _run_flying_episode,
     _run_controlled_episode,
@@ -44,10 +43,14 @@ from evol_virtual_creature.evolution_tasks.shared import (
     evaluate_flying as _evaluate_flying, flying_fitness as _flying_fitness,
 )
 from evol_virtual_creature.evolution_tasks.swimming_away import (
-    SwimmingAwayEvaluationConfig, evaluate_origin_distance,
+    OriginDistanceEvaluationResult,
+    SwimmingAwayEvaluationConfig,
+    evaluate_origin_distance,
 )
 from evol_virtual_creature.evolution_tasks.swimming_x import (
-    SwimmingEvaluationConfig, evaluate_x_axis_swimming,
+    SwimmingEvaluationConfig,
+    SwimmingEvaluationResult,
+    evaluate_x_axis_swimming,
 )
 from evol_virtual_creature.evolution_tasks.walking_away import (
     WalkingAwayEvaluationConfig,
@@ -71,40 +74,47 @@ def test_task_registry_covers_every_task_and_config():
     expected = {
         "swimming_x": (
             SwimmingEvaluationConfig,
+            SwimmingEvaluationResult,
             evaluate_x_axis_swimming,
             EnvironmentFamily.SWIMMING,
         ),
         "swimming_away": (
             SwimmingAwayEvaluationConfig,
+            OriginDistanceEvaluationResult,
             evaluate_origin_distance,
             EnvironmentFamily.SWIMMING,
         ),
         "walking_x": (
             WalkingEvaluationConfig,
+            WalkingEvaluationResult,
             evaluate_x_axis_walking,
             EnvironmentFamily.WALKING,
         ),
         "walking_away": (
             WalkingAwayEvaluationConfig,
+            WalkingAwayEvaluationResult,
             evaluate_walking_away,
             EnvironmentFamily.WALKING,
         ),
         "flying_x": (
             FlyingEvaluationConfig,
+            FlyingEvaluationResult,
             evaluate_x_axis_flying,
             EnvironmentFamily.FLYING,
         ),
         "flying_away": (
             FlyingAwayEvaluationConfig,
+            FlyingAwayEvaluationResult,
             evaluate_flying_away,
             EnvironmentFamily.FLYING,
         ),
     }
 
-    assert set(TASK_REGISTRY) == set(expected)
-    for task, (config_type, evaluator, environment_family) in expected.items():
+    assert set(task_names()) == set(expected)
+    for task, (config_type, result_type, evaluator, environment_family) in expected.items():
         definition = TASK_REGISTRY[task]
         assert definition.config_type is config_type
+        assert definition.result_type is result_type
         assert definition.evaluator is evaluator
         assert definition.environment_family is environment_family
         assert definition.name == task
@@ -125,64 +135,32 @@ def test_evaluation_module_lazily_loads_builtin_tasks():
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-def test_evolution_tasks_normal_import_registers_only_once():
-    tasks = importlib.import_module("evol_virtual_creature.evolution_tasks")
-    before = dict(TASK_REGISTRY)
-    assert importlib.import_module("evol_virtual_creature.evolution_tasks") is tasks
-    assert TASK_REGISTRY == before
+def test_evolution_tasks_package_import_has_no_registration_side_effect():
+    script = (
+        "import importlib; "
+        "import evol_virtual_creature.evaluation as evaluation; "
+        "importlib.import_module('evol_virtual_creature.evolution_tasks'); "
+        "assert not evaluation.TASK_REGISTRY"
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_load_task_definition_matches_task_to_module_filename():
+    definition = load_task_definition("swimming_x")
+    module = importlib.import_module(
+        "evol_virtual_creature.evolution_tasks.swimming_x"
+    )
+    assert definition is module.TASK_DEFINITION
+    assert load_task_definition("swimming_x") is definition
+
+    for invalid_task in ("turn-around", "tasks.walking_x", "../walking_x", "_shared"):
+        with pytest.raises(KeyError, match="Unknown task"):
+            load_task_definition(invalid_task)
 
 
 def test_away_tasks_have_task_specific_result_types():
     assert WalkingAwayEvaluationResult is not WalkingEvaluationResult
     assert FlyingAwayEvaluationResult is not FlyingEvaluationResult
-
-
-def test_register_task_adds_forward_and_reverse_lookups():
-    @dataclass(frozen=True)
-    class TestConfig:
-        episode_seconds: float = 1.0
-
-    def cleanup():
-        TASK_REGISTRY.pop("test_task", None)
-        evaluation._TASKS_BY_CONFIG_TYPE.pop(TestConfig, None)
-
-    cleanup()
-    try:
-        @register_task(
-            "test_task",
-            config_type=TestConfig,
-            environment_family=EnvironmentFamily.WALKING,
-            title="Test task",
-            result_fields=(ResultField("Fitness", "fitness"),),
-        )
-        def test_evaluator(genotype, config):
-            return genotype, config
-
-        definition = task_definition("test_task")
-        assert definition.evaluator is test_evaluator
-        assert task_definition_for_config(TestConfig()) is definition
-        genotype = object()
-        config = TestConfig()
-        assert evaluate_for_task(genotype, config) == (genotype, config)
-
-        with pytest.raises(ValueError, match="already registered"):
-            register_task(
-                "test_task",
-                config_type=type("AnotherConfig", (), {}),
-                environment_family=EnvironmentFamily.WALKING,
-                title="Duplicate",
-                result_fields=(),
-            )
-        with pytest.raises(ValueError, match="already registered"):
-            register_task(
-                "another_task",
-                config_type=TestConfig,
-                environment_family=EnvironmentFamily.WALKING,
-                title="Duplicate",
-                result_fields=(),
-            )
-    finally:
-        cleanup()
 
 
 def test_task_physics_settings_are_distinct():

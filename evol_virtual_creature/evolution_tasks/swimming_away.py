@@ -6,7 +6,7 @@ from typing import Sequence
 
 from .. import evaluation as evaluation_engine
 from ..constants import EnvironmentFamily
-from ..evaluation import register_task
+from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, SWIMMING_RESULT_FIELDS, failed_swimming
 
@@ -53,10 +53,6 @@ class OriginDistanceEvaluationResult:
     failure_reason: str | None = None
 
 
-@register_task("swimming_away", config_type=SwimmingAwayEvaluationConfig,
-               environment_family=EnvironmentFamily.SWIMMING,
-               title="Distance-from-origin swimming_away evaluation",
-               result_fields=SWIMMING_RESULT_FIELDS, order=20)
 def evaluate_origin_distance(genotype: Genotype, config: SwimmingAwayEvaluationConfig | None = None):
     config = config or SwimmingAwayEvaluationConfig()
     built = evaluation_engine._build_model(genotype, config)
@@ -78,3 +74,15 @@ def evaluate_origin_distance(genotype: Genotype, config: SwimmingAwayEvaluationC
     if not math.isfinite(fitness):
         return failed_swimming(config, "Simulation produced a non-finite fitness.", OriginDistanceEvaluationResult)
     return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
+
+
+TASK_DEFINITION = TaskDefinition(
+    name="swimming_away",
+    config_type=SwimmingAwayEvaluationConfig,
+    result_type=OriginDistanceEvaluationResult,
+    evaluator=evaluate_origin_distance,
+    environment_family=EnvironmentFamily.SWIMMING,
+    title="Distance-from-origin swimming_away evaluation",
+    result_fields=SWIMMING_RESULT_FIELDS,
+    order=20,
+)

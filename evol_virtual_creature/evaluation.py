@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 import math
+from pkgutil import iter_modules
 from typing import Callable, Protocol, Sequence
 
 import mujoco
@@ -62,10 +63,11 @@ class ResultField:
 
 @dataclass(frozen=True)
 class TaskDefinition:
-    """Config, evaluator, environment, and CLI presentation for one task."""
+    """Complete public definition exported by one task module."""
 
     name: str
     config_type: type
+    result_type: type
     evaluator: Callable
     environment_family: EnvironmentFamily
     title: str
@@ -78,52 +80,69 @@ _TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
 _BUILTIN_TASKS_LOADED = False
 
 
-def register_task(
-    name: str,
-    *,
-    config_type: type,
-    environment_family: EnvironmentFamily,
-    title: str,
-    result_fields: tuple[ResultField, ...],
-    order: int = 1_000,
-):
-    """Register an evaluator and all metadata needed by task consumers."""
-    if name in TASK_REGISTRY:
-        raise ValueError(f"Task name {name!r} is already registered")
-    if config_type in _TASKS_BY_CONFIG_TYPE:
+def _cache_task_definition(definition: TaskDefinition) -> TaskDefinition:
+    existing = TASK_REGISTRY.get(definition.name)
+    if existing is not None and existing is not definition:
+        raise ValueError(f"Task name {definition.name!r} is already loaded")
+    config_definition = _TASKS_BY_CONFIG_TYPE.get(definition.config_type)
+    if config_definition is not None and config_definition is not definition:
         raise ValueError(
-            f"Config type {config_type.__name__} is already registered"
+            f"Config type {definition.config_type.__name__} is already used by "
+            f"task {config_definition.name!r}"
         )
+    TASK_REGISTRY[definition.name] = definition
+    _TASKS_BY_CONFIG_TYPE[definition.config_type] = definition
+    return definition
 
-    def decorator(evaluator: Callable) -> Callable:
-        definition = TaskDefinition(
-            name=name,
-            config_type=config_type,
-            evaluator=evaluator,
-            environment_family=environment_family,
-            title=title,
-            result_fields=result_fields,
-            order=order,
+
+def _task_module_names() -> tuple[str, ...]:
+    package = import_module(".evolution_tasks", package=__package__)
+    return tuple(
+        module.name
+        for module in sorted(iter_modules(package.__path__), key=lambda item: item.name)
+        if module.name != "shared" and not module.name.startswith("_")
+    )
+
+
+def load_task_definition(task: str) -> TaskDefinition:
+    """Load a task whose name exactly matches its module filename."""
+    if not task.isidentifier() or task.startswith("_"):
+        raise KeyError(f"Unknown task: {task!r}")
+    existing = TASK_REGISTRY.get(task)
+    if existing is not None:
+        return existing
+    expected_module = f"{__package__}.evolution_tasks.{task}"
+    try:
+        module = import_module(f".evolution_tasks.{task}", package=__package__)
+    except ModuleNotFoundError as error:
+        if error.name != expected_module:
+            raise
+        raise KeyError(f"Unknown task: {task!r}") from error
+    try:
+        definition = module.TASK_DEFINITION
+    except AttributeError as error:
+        raise ValueError(f"Task module {task!r} does not define TASK_DEFINITION") from error
+    if not isinstance(definition, TaskDefinition):
+        raise TypeError(f"Task module {task!r} has an invalid TASK_DEFINITION")
+    if definition.name != task:
+        raise ValueError(
+            f"Task module {task!r} declares name {definition.name!r}"
         )
-        TASK_REGISTRY[name] = definition
-        _TASKS_BY_CONFIG_TYPE[config_type] = definition
-        return evaluator
-
-    return decorator
+    return _cache_task_definition(definition)
 
 
 def _load_builtin_tasks() -> None:
-    """Import the built-in task catalog once so its decorators register tasks."""
+    """Load and validate every built-in task module once."""
     global _BUILTIN_TASKS_LOADED
     if not _BUILTIN_TASKS_LOADED:
-        import_module(".evolution_tasks", package=__package__)
+        for task in _task_module_names():
+            load_task_definition(task)
         _BUILTIN_TASKS_LOADED = True
 
 
 def task_definition(task: str) -> TaskDefinition:
     """Return canonical metadata for a task name."""
-    _load_builtin_tasks()
-    return TASK_REGISTRY[task]
+    return load_task_definition(task)
 
 
 def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:

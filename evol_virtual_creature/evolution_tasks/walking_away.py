@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import register_task
+from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, evaluate_walking
 
@@ -56,10 +56,18 @@ class WalkingAwayEvaluationResult:
     failure_reason: str | None = None
 
 
-@register_task("walking_away", config_type=WalkingAwayEvaluationConfig,
-               environment_family=EnvironmentFamily.WALKING,
-               title="Distance-from-origin walking_away evaluation",
-               result_fields=WALKING_RESULT_FIELDS, order=40)
 def evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None):
     config = config or WalkingAwayEvaluationConfig()
     return evaluate_walking(genotype, config, away=True, result_type=WalkingAwayEvaluationResult)
+
+
+TASK_DEFINITION = TaskDefinition(
+    name="walking_away",
+    config_type=WalkingAwayEvaluationConfig,
+    result_type=WalkingAwayEvaluationResult,
+    evaluator=evaluate_walking_away,
+    environment_family=EnvironmentFamily.WALKING,
+    title="Distance-from-origin walking_away evaluation",
+    result_fields=WALKING_RESULT_FIELDS,
+    order=40,
+)

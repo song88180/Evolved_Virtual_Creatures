@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..constants import EnvironmentFamily
-from ..evaluation import register_task
+from ..evaluation import TaskDefinition
 from ..genotype import Genotype
 from ..phenotype import DEFAULT_FLYING_FLUID_COEF, DEFAULT_FLYING_FLUID_DENSITY, DEFAULT_FLYING_FLUID_SHAPE, DEFAULT_FLYING_FLUID_VISCOSITY, DEFAULT_FLYING_GRAVITY
 from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, evaluate_flying
@@ -67,11 +67,18 @@ class FlyingEvaluationResult:
     failure_reason: str | None = None
 
 
-@register_task("flying_x", config_type=FlyingEvaluationConfig,
-               environment_family=EnvironmentFamily.FLYING,
-               title="X-axis flying_x evaluation", result_fields=FLYING_RESULT_FIELDS,
-               order=50)
 def evaluate_x_axis_flying(genotype: Genotype, config: FlyingEvaluationConfig | None = None):
     config = config or FlyingEvaluationConfig()
     return evaluate_flying(genotype, config, "average_forward_speed", FlyingEvaluationResult)
 
+
+TASK_DEFINITION = TaskDefinition(
+    name="flying_x",
+    config_type=FlyingEvaluationConfig,
+    result_type=FlyingEvaluationResult,
+    evaluator=evaluate_x_axis_flying,
+    environment_family=EnvironmentFamily.FLYING,
+    title="X-axis flying_x evaluation",
+    result_fields=FLYING_RESULT_FIELDS,
+    order=50,
+)
