@@ -18,6 +18,7 @@ from evol_virtual_creature.evaluation import (
     WalkingAwayEvaluationConfig,
     WalkingEvaluationConfig,
     TASK_REGISTRY,
+    task_definition,
     task_definition_for_config,
     _flying_fitness,
     _has_nonparent_self_collision,
@@ -34,7 +35,7 @@ from evol_virtual_creature.evaluation import (
     initialize_walking_model,
     simulation_failure_reason,
 )
-from evol_virtual_creature.constants import EnvironmentFamily, TaskName
+from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
@@ -44,79 +45,74 @@ GENOTYPE_PATH = "examples/example_genotype.json"
 
 def test_task_registry_covers_every_task_and_config():
     expected = {
-        TaskName.SWIMMING_X: (
+        "swimming_x": (
             SwimmingEvaluationConfig,
             evaluate_x_axis_swimming,
             EnvironmentFamily.SWIMMING,
         ),
-        TaskName.SWIMMING_AWAY: (
+        "swimming_away": (
             SwimmingAwayEvaluationConfig,
             evaluate_origin_distance,
             EnvironmentFamily.SWIMMING,
         ),
-        TaskName.WALKING_X: (
+        "walking_x": (
             WalkingEvaluationConfig,
             evaluate_x_axis_walking,
             EnvironmentFamily.WALKING,
         ),
-        TaskName.WALKING_AWAY: (
+        "walking_away": (
             WalkingAwayEvaluationConfig,
             evaluate_walking_away,
             EnvironmentFamily.WALKING,
         ),
-        TaskName.FLYING_X: (
+        "flying_x": (
             FlyingEvaluationConfig,
             evaluate_x_axis_flying,
             EnvironmentFamily.FLYING,
         ),
-        TaskName.FLYING_AWAY: (
+        "flying_away": (
             FlyingAwayEvaluationConfig,
             evaluate_flying_away,
             EnvironmentFamily.FLYING,
         ),
     }
 
-    assert set(TASK_REGISTRY) == set(TaskName)
+    assert set(TASK_REGISTRY) == set(expected)
     for task, (config_type, evaluator, environment_family) in expected.items():
         definition = TASK_REGISTRY[task]
         assert definition.config_type is config_type
         assert definition.evaluator is evaluator
         assert definition.environment_family is environment_family
-        assert config_type.TASK_NAME is task
+        assert config_type.TASK_NAME == task
         assert task_definition_for_config(config_type()) is definition
 
-
-def test_phenotype_builder_rejects_conflicting_task_and_environment():
-    genotype = load_genotype_from_json(GENOTYPE_PATH)
-
-    with pytest.raises(ValueError, match="uses the 'flying' environment"):
-        PhenotypeBuilder(
-            genotype,
-            max_node=500,
-            task="flying_x",
-            environment_family=EnvironmentFamily.SWIMMING,
-        )
+    with pytest.raises(KeyError):
+        task_definition("unknown_task")
 
 
 def test_task_physics_settings_are_distinct():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     swimming = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="swimming_x").build()
+        PhenotypeBuilder(
+            genotype, max_node=500, environment_family="swimming"
+        ).build()
     )
     walking = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="walking_x").build()
+        PhenotypeBuilder(genotype, max_node=500, environment_family="walking").build()
     )
     swimming_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="swimming_away").build()
+        PhenotypeBuilder(
+            genotype, max_node=500, environment_family="swimming"
+        ).build()
     )
     walking_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="walking_away").build()
+        PhenotypeBuilder(genotype, max_node=500, environment_family="walking").build()
     )
     flying = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+        PhenotypeBuilder(genotype, max_node=500, environment_family="flying").build()
     )
     flying_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, task="flying_away").build()
+        PhenotypeBuilder(genotype, max_node=500, environment_family="flying").build()
     )
 
     swimming_option = swimming.find("option")
@@ -179,7 +175,9 @@ def test_task_physics_settings_are_distinct():
 
 def test_flying_fluid_settings_compile_in_mujoco():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    mjcf = PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+    mjcf = PhenotypeBuilder(
+        genotype, max_node=500, environment_family="flying"
+    ).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
 
     assert model.opt.density == pytest.approx(1.225)
@@ -192,7 +190,7 @@ def test_flying_fluid_settings_can_be_overridden():
         PhenotypeBuilder(
             genotype,
             max_node=500,
-            task="flying_x",
+            environment_family="flying",
             fluid_density=0.9,
             fluid_viscosity=0.00002,
             fluid_shape="none",
@@ -248,7 +246,10 @@ def test_self_collision_masks_and_parent_filtering():
 
     walking_without_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, task="walking_x", self_collision=False
+            genotype,
+            max_node=500,
+            environment_family="walking",
+            self_collision=False,
         ).build()
     )
     floor_id = mujoco.mj_name2id(
@@ -267,7 +268,10 @@ def test_self_collision_masks_and_parent_filtering():
 
     walking_with_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, task="walking_x", self_collision=True
+            genotype,
+            max_node=500,
+            environment_family="walking",
+            self_collision=True,
         ).build()
     )
     parent_pair, nonparent_pair = _direct_parent_and_nonparent_pairs(
@@ -282,7 +286,10 @@ def test_self_collision_masks_and_parent_filtering():
 
     swimming_with_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, task="swimming_x", self_collision=True
+            genotype,
+            max_node=500,
+            environment_family="swimming",
+            self_collision=True,
         ).build()
     )
     floor_id = mujoco.mj_name2id(
@@ -724,7 +731,7 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     builder = PhenotypeBuilder(
         genotype,
         max_node=config.max_node,
-        task="flying_away",
+        environment_family="flying",
         fluid_density=config.fluid_density,
         fluid_viscosity=config.fluid_viscosity,
         fluid_shape=config.fluid_shape,
@@ -815,7 +822,9 @@ def test_flying_initialization_raises_low_creature_above_floor():
         },
     )
     model = mujoco.MjModel.from_xml_string(
-        PhenotypeBuilder(genotype, max_node=500, task="flying_x").build()
+        PhenotypeBuilder(
+            genotype, max_node=500, environment_family="flying"
+        ).build()
     )
     data = mujoco.MjData(model)
 
@@ -840,7 +849,9 @@ def test_walking_initialization_raises_low_creature_above_floor():
         },
     )
     model = mujoco.MjModel.from_xml_string(
-        PhenotypeBuilder(genotype, max_node=500, task="walking_x").build()
+        PhenotypeBuilder(
+            genotype, max_node=500, environment_family="walking"
+        ).build()
     )
     data = mujoco.MjData(model)
 

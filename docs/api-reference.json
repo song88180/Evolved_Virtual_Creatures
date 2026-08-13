@@ -539,7 +539,7 @@
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
         "Constructor": {
-          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, task: str = \"swimming_x\", self_collision: bool = false)",
+          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, environment_family: EnvironmentFamily | str | None = null, self_collision: bool = false)",
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
             "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},

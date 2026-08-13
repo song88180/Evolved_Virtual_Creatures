@@ -225,9 +225,11 @@ def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
 def test_evaluate_and_evolve_accept_away_tasks(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "swimming_away"])
     assert evaluate.parse_args().task == "swimming_away"
+    assert isinstance(evaluate.parse_args().task, str)
 
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--task", "walking_away"])
     assert evolve_cli.parse_args().task == "walking_away"
+    assert isinstance(evolve_cli.parse_args().task, str)
 
 
 def test_evaluate_and_evolve_accept_flying_tasks(monkeypatch):

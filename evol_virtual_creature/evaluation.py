@@ -8,7 +8,7 @@ import mujoco
 import numpy as np
 
 from .genotype import Genotype
-from .constants import EnvironmentFamily, TaskName
+from .constants import EnvironmentFamily
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
@@ -49,7 +49,7 @@ DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 class SwimmingEvaluationConfig:
     """Weights and simulation settings for x-axis swimming fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.SWIMMING_X
+    TASK_NAME: ClassVar[str] = "swimming_x"
 
     episode_seconds: float = 10.0
     max_node: int = 500
@@ -77,7 +77,7 @@ class SwimmingEvaluationConfig:
 class WalkingEvaluationConfig:
     """Weights and simulation settings for x-axis walking fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.WALKING_X
+    TASK_NAME: ClassVar[str] = "walking_x"
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -109,7 +109,7 @@ class WalkingEvaluationConfig:
 class SwimmingAwayEvaluationConfig:
     """Weights and simulation settings for swimming-away fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.SWIMMING_AWAY
+    TASK_NAME: ClassVar[str] = "swimming_away"
 
     episode_seconds: float = 10.0
     max_node: int = 500
@@ -135,7 +135,7 @@ class SwimmingAwayEvaluationConfig:
 class WalkingAwayEvaluationConfig:
     """Weights and simulation settings for walking-away fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.WALKING_AWAY
+    TASK_NAME: ClassVar[str] = "walking_away"
 
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
@@ -165,7 +165,7 @@ class WalkingAwayEvaluationConfig:
 class FlyingEvaluationConfig:
     """Weights and simulation settings for x-axis flying fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.FLYING_X
+    TASK_NAME: ClassVar[str] = "flying_x"
 
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
@@ -200,7 +200,7 @@ class FlyingEvaluationConfig:
 class FlyingAwayEvaluationConfig:
     """Weights and simulation settings for flying-away fitness."""
 
-    TASK_NAME: ClassVar[TaskName] = TaskName.FLYING_AWAY
+    TASK_NAME: ClassVar[str] = "flying_away"
 
     episode_seconds: float = 10.0
     fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
@@ -624,33 +624,33 @@ class TaskDefinition:
     environment_family: EnvironmentFamily
 
 
-TASK_REGISTRY: dict[TaskName, TaskDefinition] = {
-    TaskName.SWIMMING_X: TaskDefinition(
+TASK_REGISTRY: dict[str, TaskDefinition] = {
+    "swimming_x": TaskDefinition(
         SwimmingEvaluationConfig,
         evaluate_x_axis_swimming,
         EnvironmentFamily.SWIMMING,
     ),
-    TaskName.SWIMMING_AWAY: TaskDefinition(
+    "swimming_away": TaskDefinition(
         SwimmingAwayEvaluationConfig,
         evaluate_origin_distance,
         EnvironmentFamily.SWIMMING,
     ),
-    TaskName.WALKING_X: TaskDefinition(
+    "walking_x": TaskDefinition(
         WalkingEvaluationConfig,
         evaluate_x_axis_walking,
         EnvironmentFamily.WALKING,
     ),
-    TaskName.WALKING_AWAY: TaskDefinition(
+    "walking_away": TaskDefinition(
         WalkingAwayEvaluationConfig,
         evaluate_walking_away,
         EnvironmentFamily.WALKING,
     ),
-    TaskName.FLYING_X: TaskDefinition(
+    "flying_x": TaskDefinition(
         FlyingEvaluationConfig,
         evaluate_x_axis_flying,
         EnvironmentFamily.FLYING,
     ),
-    TaskName.FLYING_AWAY: TaskDefinition(
+    "flying_away": TaskDefinition(
         FlyingAwayEvaluationConfig,
         evaluate_flying_away,
         EnvironmentFamily.FLYING,
@@ -658,9 +658,9 @@ TASK_REGISTRY: dict[TaskName, TaskDefinition] = {
 }
 
 
-def task_definition(task: TaskName | str) -> TaskDefinition:
+def task_definition(task: str) -> TaskDefinition:
     """Return canonical metadata for a task name."""
-    return TASK_REGISTRY[TaskName(task)]
+    return TASK_REGISTRY[task]
 
 
 def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
@@ -671,7 +671,7 @@ def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
     definition = TASK_REGISTRY[task]
     if type(config) is not definition.config_type:
         raise TypeError(
-            f"Config type {type(config).__name__} does not match task {task.value!r}"
+            f"Config type {type(config).__name__} does not match task {task!r}"
         )
     return definition
 
@@ -681,7 +681,7 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
     return task_definition_for_config(config).evaluator(genotype, config)
 
 
-def task_for_config(config: EvaluationConfig) -> TaskName:
+def task_for_config(config: EvaluationConfig) -> str:
     """Return the canonical task name for a concrete config instance."""
     task_definition_for_config(config)
     return type(config).TASK_NAME

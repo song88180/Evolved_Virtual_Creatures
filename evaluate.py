@@ -20,10 +20,10 @@ _configure_video_rendering_backend()
 from evol_virtual_creature.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
     FlyingEvaluationConfig,
+    TASK_REGISTRY,
     evaluate_for_task,
     task_definition,
 )
-from evol_virtual_creature.constants import TaskName
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video
 
@@ -148,9 +148,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task",
-        choices=tuple(TaskName),
-        type=TaskName,
-        default=TaskName.SWIMMING_X,
+        choices=tuple(TASK_REGISTRY),
+        default="swimming_x",
         help="Locomotion task to evaluate.",
     )
     parser.add_argument(

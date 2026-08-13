@@ -4,7 +4,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
-from .constants import EnvironmentFamily, FACE_NORMALS, TaskName
+from .constants import EnvironmentFamily, FACE_NORMALS
 from .control import (
     BALL_NEURAL_AXES,
     ActuatorController,
@@ -41,7 +41,6 @@ class PhenotypeBuilder:
         self,
         genotype: Genotype,
         max_node: int,
-        task: TaskName | str | None = None,
         environment_family: EnvironmentFamily | str | None = None,
         self_collision: bool = False,
         fluid_density: float | None = None,
@@ -52,30 +51,16 @@ class PhenotypeBuilder:
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
-        normalized_task = TaskName(task) if task is not None else None
         normalized_environment = (
             EnvironmentFamily(environment_family)
             if environment_family is not None
             else None
         )
-        if normalized_task is not None:
-            task_environment = normalized_task.environment_family
-            if (
-                normalized_environment is not None
-                and normalized_environment is not task_environment
-            ):
-                raise ValueError(
-                    f"task {normalized_task.value!r} uses the "
-                    f"{task_environment.value!r} environment, not "
-                    f"{normalized_environment.value!r}"
-                )
-            normalized_environment = task_environment
         if normalized_environment is None:
             normalized_environment = EnvironmentFamily.SWIMMING
 
         self.genotype = genotype
         self.max_node = max_node
-        self.task = normalized_task
         self.environment_family = normalized_environment
         self.self_collision = self_collision
         self.fluid_density = (
