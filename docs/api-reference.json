@@ -769,13 +769,20 @@
   },
   "evol_virtual_creature.evolution_tasks": {
     "Overview": {
-      "Purpose": "Defines and registers concrete swimming, walking, and flying task configs and evaluators backed by shared MuJoCo rollout mechanics.",
+      "Purpose": "Automatically discovers task modules. Each task-specific submodule defines and registers its config, result type, metadata, and evaluator; shared MuJoCo rollout mechanics live in evolution_tasks.shared.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
         "Convert phenotype build failures or unstable simulations into failed evaluation results"
       ],
       "Related_Modules": [
+        "evol_virtual_creature.evolution_tasks.swimming_x",
+        "evol_virtual_creature.evolution_tasks.swimming_away",
+        "evol_virtual_creature.evolution_tasks.walking_x",
+        "evol_virtual_creature.evolution_tasks.walking_away",
+        "evol_virtual_creature.evolution_tasks.flying_x",
+        "evol_virtual_creature.evolution_tasks.flying_away",
+        "evol_virtual_creature.evolution_tasks.shared",
         "evol_virtual_creature.genotype",
         "evol_virtual_creature.evaluation",
         "evol_virtual_creature.graph_analysis",
@@ -910,6 +917,12 @@
         "Methods": {},
         "Example": "config = WalkingAwayEvaluationConfig(episode_seconds=6.0, settle_seconds=1.0)"
       },
+      "WalkingAwayEvaluationResult": {
+        "Purpose": "Frozen task-specific result dataclass for walking_away fitness and diagnostics.",
+        "Constructor": {"Signature": "WalkingAwayEvaluationResult(...)"},
+        "Attributes": {},
+        "Methods": {}
+      },
       "FlyingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_x.",
         "Constructor": {
@@ -931,6 +944,12 @@
         "Attributes": {},
         "Methods": {},
         "Example": "config = FlyingAwayEvaluationConfig(episode_seconds=6.0)"
+      },
+      "FlyingAwayEvaluationResult": {
+        "Purpose": "Frozen task-specific result dataclass for flying_away fitness and diagnostics.",
+        "Constructor": {"Signature": "FlyingAwayEvaluationResult(...)"},
+        "Attributes": {},
+        "Methods": {}
       }
     },
     "Functions": {
@@ -962,10 +981,10 @@
         "Example": "result = evaluate_x_axis_walking(genotype, WalkingEvaluationConfig(episode_seconds=6.0))"
       },
       "evaluate_walking_away": {
-        "Signature": "evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None) -> WalkingEvaluationResult",
+        "Signature": "evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None) -> WalkingAwayEvaluationResult",
         "Purpose": "Score walking_away using land physics, settling, and average speed away from the starting point.",
         "Parameters": {},
-        "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Returns": {"Type": "WalkingAwayEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
         "Example": "result = evaluate_walking_away(genotype, WalkingAwayEvaluationConfig(episode_seconds=6.0))"
       },
@@ -978,10 +997,10 @@
         "Example": "result = evaluate_x_axis_flying(genotype, FlyingEvaluationConfig(episode_seconds=6.0))"
       },
       "evaluate_flying_away": {
-        "Signature": "evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None) -> FlyingEvaluationResult",
+        "Signature": "evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None) -> FlyingAwayEvaluationResult",
         "Purpose": "Score flying_away using horizontal speed away from origin, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
         "Parameters": {},
-        "Returns": {"Type": "FlyingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
+        "Returns": {"Type": "FlyingAwayEvaluationResult", "Description": "Fitness and diagnostic metrics."},
         "Raises": ["ValueError"],
         "Example": "result = evaluate_flying_away(genotype, FlyingAwayEvaluationConfig(episode_seconds=6.0))"
       }

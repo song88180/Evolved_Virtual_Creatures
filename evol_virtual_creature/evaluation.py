@@ -70,6 +70,7 @@ class TaskDefinition:
     environment_family: EnvironmentFamily
     title: str
     result_fields: tuple[ResultField, ...]
+    order: int
 
 
 TASK_REGISTRY: dict[str, TaskDefinition] = {}
@@ -84,6 +85,7 @@ def register_task(
     environment_family: EnvironmentFamily,
     title: str,
     result_fields: tuple[ResultField, ...],
+    order: int = 1_000,
 ):
     """Register an evaluator and all metadata needed by task consumers."""
     if name in TASK_REGISTRY:
@@ -101,6 +103,7 @@ def register_task(
             environment_family=environment_family,
             title=title,
             result_fields=result_fields,
+            order=order,
         )
         TASK_REGISTRY[name] = definition
         _TASKS_BY_CONFIG_TYPE[config_type] = definition
@@ -143,9 +146,15 @@ def task_for_config(config: EvaluationConfig) -> str:
 
 
 def task_names() -> tuple[str, ...]:
-    """Return the registered built-in task names in declaration order."""
+    """Return registered task names in presentation order."""
     _load_builtin_tasks()
-    return tuple(TASK_REGISTRY)
+    return tuple(
+        definition.name
+        for definition in sorted(
+            TASK_REGISTRY.values(),
+            key=lambda definition: (definition.order, definition.name),
+        )
+    )
 
 
 def _copy_simulation_state(

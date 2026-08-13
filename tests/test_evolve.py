@@ -11,14 +11,12 @@ import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.evolution_tasks import (
-    FlyingAwayEvaluationConfig,
-    FlyingEvaluationConfig,
-    SwimmingAwayEvaluationConfig,
-    SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
-)
+from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
+from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
+from evol_virtual_creature.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
+from evol_virtual_creature.evolution_tasks.swimming_x import SwimmingEvaluationConfig
+from evol_virtual_creature.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
+from evol_virtual_creature.evolution_tasks.walking_x import WalkingEvaluationConfig
 import generate_model
 
 

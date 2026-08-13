@@ -31,7 +31,7 @@ The code is split by responsibility:
 - `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
 - `evol_virtual_creature/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
 - `evol_virtual_creature/evaluation.py`: shared MuJoCo rollout mechanics and lazy task lookup.
-- `evol_virtual_creature/evolution_tasks.py`: concrete task configs, evaluators, and registration metadata.
+- `evol_virtual_creature/evolution_tasks/`: task-specific configs, results, evaluators, and registration metadata, with common rollout helpers in `shared.py`.
 - `evol_virtual_creature/video.py`: optional evaluation video rendering helpers.
 - `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
 
@@ -467,7 +467,7 @@ The current script is intentionally minimal, but it leaves several natural place
 
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
-- Add or tune fitness functions in `evolution_tasks.py`. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs. New tasks define a config dataclass and decorate their evaluator with `register_task(...)`; lazy loading then supplies CLI discovery, evaluator dispatch, environment selection, and result presentation metadata.
+- Add or tune fitness functions in the task-specific modules under `evolution_tasks/`. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs. A new task is a single module containing its config dataclass, result dataclass, and evaluator decorated with `register_task(...)`; package discovery then supplies CLI discovery, evaluator dispatch, environment selection, and result presentation metadata.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary

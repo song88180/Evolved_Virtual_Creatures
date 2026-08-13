@@ -15,7 +15,7 @@ from .evaluation import (
     simulation_failure_reason,
     task_definition_for_config,
 )
-from .evolution_tasks import SwimmingEvaluationConfig
+from .evolution_tasks.swimming_x import SwimmingEvaluationConfig
 from .constants import EnvironmentFamily
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort

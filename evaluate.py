@@ -24,9 +24,7 @@ from evol_virtual_creature.evaluation import (
     task_definition,
     task_names,
 )
-from evol_virtual_creature.evolution_tasks import (
-    FlyingEvaluationConfig,
-)
+from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
 from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video

@@ -30,20 +30,33 @@ from evol_virtual_creature.evaluation import (
     initialize_walking_model,
     simulation_failure_reason,
 )
-from evol_virtual_creature.evolution_tasks import (
+from evol_virtual_creature.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
-    FlyingEvaluationConfig,
-    SwimmingAwayEvaluationConfig,
-    SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
-    _evaluate_flying,
-    _flying_fitness,
+    FlyingAwayEvaluationResult,
     evaluate_flying_away,
-    evaluate_origin_distance,
-    evaluate_walking_away,
+)
+from evol_virtual_creature.evolution_tasks.flying_x import (
+    FlyingEvaluationConfig,
+    FlyingEvaluationResult,
     evaluate_x_axis_flying,
-    evaluate_x_axis_swimming,
+)
+from evol_virtual_creature.evolution_tasks.shared import (
+    evaluate_flying as _evaluate_flying, flying_fitness as _flying_fitness,
+)
+from evol_virtual_creature.evolution_tasks.swimming_away import (
+    SwimmingAwayEvaluationConfig, evaluate_origin_distance,
+)
+from evol_virtual_creature.evolution_tasks.swimming_x import (
+    SwimmingEvaluationConfig, evaluate_x_axis_swimming,
+)
+from evol_virtual_creature.evolution_tasks.walking_away import (
+    WalkingAwayEvaluationConfig,
+    WalkingAwayEvaluationResult,
+    evaluate_walking_away,
+)
+from evol_virtual_creature.evolution_tasks.walking_x import (
+    WalkingEvaluationConfig,
+    WalkingEvaluationResult,
     evaluate_x_axis_walking,
 )
 from evol_virtual_creature.constants import EnvironmentFamily
@@ -117,6 +130,11 @@ def test_evolution_tasks_normal_import_registers_only_once():
     before = dict(TASK_REGISTRY)
     assert importlib.import_module("evol_virtual_creature.evolution_tasks") is tasks
     assert TASK_REGISTRY == before
+
+
+def test_away_tasks_have_task_specific_result_types():
+    assert WalkingAwayEvaluationResult is not WalkingEvaluationResult
+    assert FlyingAwayEvaluationResult is not FlyingEvaluationResult
 
 
 def test_register_task_adds_forward_and_reverse_lookups():
@@ -1395,8 +1413,8 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
     )
     monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
     monkeypatch.setattr(
-        "evol_virtual_creature.evolution_tasks._evaluate_flying",
-        lambda _genotype, _config, speed_metric: (
+        "evol_virtual_creature.evolution_tasks.flying_x.evaluate_flying",
+        lambda _genotype, _config, speed_metric, _result_type: (
             observed.setdefault("speed_metric", speed_metric),
             type("Result", (), {"fitness": 1.75})(),
         )[1],
@@ -1449,7 +1467,9 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
     monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
-    result = _evaluate_flying(object(), config, "average_forward_speed")
+    result = _evaluate_flying(
+        object(), config, "average_forward_speed", FlyingEvaluationResult
+    )
 
     assert result.controlled_fitness == pytest.approx(2.0)
     assert result.passive_fitness == pytest.approx(0.5)

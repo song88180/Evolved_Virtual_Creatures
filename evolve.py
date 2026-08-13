@@ -15,9 +15,7 @@ from evol_virtual_creature.evaluation import (
     task_definition,
     task_names,
 )
-from evol_virtual_creature.evolution_tasks import (
-    FlyingEvaluationConfig,
-)
+from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
 from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genes import CONTROL_MODES
 from evol_virtual_creature.genotype import Genotype
