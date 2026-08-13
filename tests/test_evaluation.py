@@ -188,6 +188,26 @@ def test_evolution_tasks_package_import_has_no_registration_side_effect():
 
 
 @pytest.mark.parametrize(
+    "task",
+    (
+        "swimming_x",
+        "swimming_away",
+        "walking_x",
+        "walking_away",
+        "flying_x",
+        "flying_away",
+    ),
+)
+def test_task_module_import_does_not_import_evaluation_engine(task):
+    script = (
+        "import importlib, sys; "
+        f"importlib.import_module('evol_virtual_creature.evolution_tasks.{task}'); "
+        "assert 'evol_virtual_creature.evaluation' not in sys.modules"
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+@pytest.mark.parametrize(
     "imports",
     (
         "import evol_virtual_creature.evaluation; "

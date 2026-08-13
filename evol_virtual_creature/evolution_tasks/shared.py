@@ -157,6 +157,7 @@ _BUILTIN_TASKS_LOADED = False
 DEFAULT_MIN_BODY_VOLUME = 1e-6
 DEFAULT_MIN_TOTAL_VOLUME = 0.0
 DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
+DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 
 SWIMMING_RESULT_FIELDS = (ResultField("Vertical drift speed", "vertical_drift_speed"),)
 WALKING_RESULT_FIELDS = (
@@ -175,7 +176,10 @@ FLYING_RESULT_FIELDS = (
 
 
 def failure_flags(reason: str) -> dict:
-    from .. import evaluation as evaluation_engine
-
-    collision = reason == evaluation_engine.DISALLOWED_COLLISION_REASON
+    collision = reason == DISALLOWED_COLLISION_REASON
     return dict(build_failed=not collision, disqualified=collision, failure_reason=reason)
+
+
+def excess_volume(total_volume: float, cutoff: float) -> float:
+    """Return the creature volume above the unpenalized cutoff."""
+    return max(0.0, total_volume - cutoff)

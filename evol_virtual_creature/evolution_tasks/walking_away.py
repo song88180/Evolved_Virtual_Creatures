@@ -1,8 +1,7 @@
 """Distance-from-origin walking task."""
 
 from dataclasses import dataclass, replace
-from .. import evaluation as evaluation_engine
-from .shared import DEFAULT_ENVIRONMENT, WALKING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, failure_flags
+from .shared import DEFAULT_ENVIRONMENT, WALKING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
 
 TASK_ENVIRONMENT = replace(
@@ -43,7 +42,7 @@ def fitness_callback(config, metrics: dict, _passive_metrics: dict | None):
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.height_loss_weight * metrics["height_loss"]
         - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * evaluation_engine._excess_volume(
+        - config.volume_weight * excess_volume(
             metrics["total_volume"], config.volume_penalty_cutoff
         )
     )

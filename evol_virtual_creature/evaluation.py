@@ -10,6 +10,7 @@ import numpy as np
 
 from .genotype import Genotype
 from .evolution_tasks import shared as task_shared
+from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
@@ -20,7 +21,6 @@ from .control import (
 from .phenotype import PhenotypeBuilder
 
 
-DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
 MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed volume."
@@ -536,10 +536,6 @@ def _normalized_target_direction(target_direction: Sequence[float]):
     if norm == 0.0:
         raise ValueError("target_direction must be non-zero")
     return tuple(component / norm for component in target_direction)
-
-
-def _excess_volume(total_volume: float, cutoff: float) -> float:
-    return max(0.0, total_volume - cutoff)
 
 
 def _creature_center_of_mass(

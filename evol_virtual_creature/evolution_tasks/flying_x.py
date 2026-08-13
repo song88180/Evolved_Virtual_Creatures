@@ -1,8 +1,7 @@
 """X-axis flying task."""
 
 from dataclasses import dataclass, replace
-from .. import evaluation as evaluation_engine
-from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, failure_flags
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
 
 TASK_ENVIRONMENT = replace(
@@ -53,7 +52,7 @@ def _episode_fitness(config, metrics: dict) -> float:
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * evaluation_engine._excess_volume(
+        - config.volume_weight * excess_volume(
             metrics["total_volume"], config.volume_penalty_cutoff
         )
     )
