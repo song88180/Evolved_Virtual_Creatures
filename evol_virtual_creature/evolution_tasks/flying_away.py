@@ -1,10 +1,8 @@
 """Distance-from-origin flying task."""
 
 from dataclasses import dataclass, replace
-from typing import Sequence
-
 from .. import evaluation as evaluation_engine
-from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, RolloutPolicy, TaskDefinition, failure_flags
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, failure_flags
 
 
 TASK_ENVIRONMENT = replace(
@@ -19,17 +17,9 @@ TASK_ENVIRONMENT = replace(
 
 
 @dataclass(frozen=True)
-class FlyingAwayEvaluationConfig:
+class FlyingAwayEvaluationConfig(EvaluationConfig):
     environment: EnvironmentFamily = TASK_ENVIRONMENT
-    settle_seconds: float = 0.0
-    max_creature_height: float = 0.0
-    min_center_height_fraction: float = 0.0
     initial_floor_contact_policy: str = "contact"
-    episode_seconds: float = 10.0
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
     speed_weight: float = 0.1
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
@@ -37,26 +27,11 @@ class FlyingAwayEvaluationConfig:
     ground_touch_weight: float = 0.0
     no_ground_touch_bonus: float = 10
     fitness_gain_fraction: float = 0.5
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = DEFAULT_MIN_BODY_VOLUME
     min_total_volume: float = DEFAULT_FLYING_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
 
 
 @dataclass(frozen=True)
-class FlyingAwayEvaluationResult:
-    fitness: float
-    origin_distance: float
-    average_origin_speed: float
-    forward_distance: float
-    average_forward_speed: float
-    sideways_drift_speed: float
+class FlyingAwayEvaluationResult(EvaluationResult):
     height_loss: float
     first_ground_contact_time: float | None
     ground_touch_penalty: float
@@ -64,12 +39,6 @@ class FlyingAwayEvaluationResult:
     controlled_fitness: float
     passive_fitness: float
     fitness_gain: float
-    control_energy: float
-    mean_angular_speed: float
-    simulated_seconds: float
-    actuator_count: int
-    body_count: int
-    total_volume: float
     build_failed: bool = False
     disqualified: bool = False
     failure_reason: str | None = None

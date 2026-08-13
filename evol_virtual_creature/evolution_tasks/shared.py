@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, Protocol, Sequence
+from typing import Callable, Literal, Sequence
 
 
 @dataclass(frozen=True)
@@ -69,23 +69,48 @@ class EnvironmentFamily:
 DEFAULT_ENVIRONMENT = EnvironmentFamily()
 
 
-class EvaluationConfig(Protocol):
-    """Settings required by shared evaluation and rendering infrastructure."""
+@dataclass(frozen=True)
+class EvaluationConfig:
+    """Common simulation, safety, and complexity settings for every task."""
 
-    episode_seconds: float
-    max_node: int
-    self_collision: bool
-    disallow_collision: bool
-    build_failure_fitness: float
-    max_abs_state_value: float
-    max_abs_velocity: float
-    max_abs_acceleration: float
-    max_volume: float
-    environment: EnvironmentFamily
-    settle_seconds: float
-    max_creature_height: float
-    min_center_height_fraction: float
-    initial_floor_contact_policy: str
+    environment: EnvironmentFamily = DEFAULT_ENVIRONMENT
+    settle_seconds: float = 0.0
+    max_creature_height: float = 0.0
+    min_center_height_fraction: float = 0.0
+    initial_floor_contact_policy: str = "allow"
+    episode_seconds: float = 10.0
+    max_node: int = 500
+    self_collision: bool = False
+    disallow_collision: bool = False
+    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
+    body_count_weight: float = 0.001
+    volume_weight: float = 0.01
+    volume_penalty_cutoff: float = 0.1
+    min_body_volume: float = 1e-6
+    min_total_volume: float = 0.0
+    max_volume: float = 1.0
+    build_failure_fitness: float = -1_000.0
+    max_abs_state_value: float = 1_000_000.0
+    max_abs_velocity: float = 1_000.0
+    max_abs_acceleration: float = 100_000.0
+
+
+@dataclass(frozen=True)
+class EvaluationResult:
+    """Metrics produced by every locomotion task."""
+
+    fitness: float
+    origin_distance: float
+    average_origin_speed: float
+    forward_distance: float
+    average_forward_speed: float
+    sideways_drift_speed: float
+    control_energy: float
+    mean_angular_speed: float
+    simulated_seconds: float
+    actuator_count: int
+    body_count: int
+    total_volume: float
 
 
 @dataclass(frozen=True)

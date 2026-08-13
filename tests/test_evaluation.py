@@ -32,6 +32,7 @@ from evol_virtual_creature.evolution_tasks.shared import (
     DEFAULT_ENVIRONMENT,
     EnvironmentFamily,
     EvaluationConfig,
+    EvaluationResult,
     ResultField,
     TASK_REGISTRY,
     TaskDefinition,
@@ -223,6 +224,36 @@ def test_load_task_definition_matches_task_to_module_filename():
 def test_away_tasks_have_task_specific_result_types():
     assert WalkingAwayEvaluationResult is not WalkingEvaluationResult
     assert FlyingAwayEvaluationResult is not FlyingEvaluationResult
+
+
+@pytest.mark.parametrize(
+    "config_type",
+    (
+        SwimmingEvaluationConfig,
+        SwimmingAwayEvaluationConfig,
+        WalkingEvaluationConfig,
+        WalkingAwayEvaluationConfig,
+        FlyingEvaluationConfig,
+        FlyingAwayEvaluationConfig,
+    ),
+)
+def test_task_configs_reuse_shared_evaluation_config(config_type):
+    assert issubclass(config_type, EvaluationConfig)
+
+
+@pytest.mark.parametrize(
+    "result_type",
+    (
+        SwimmingEvaluationResult,
+        OriginDistanceEvaluationResult,
+        WalkingEvaluationResult,
+        WalkingAwayEvaluationResult,
+        FlyingEvaluationResult,
+        FlyingAwayEvaluationResult,
+    ),
+)
+def test_task_results_reuse_shared_evaluation_result(result_type):
+    assert issubclass(result_type, EvaluationResult)
 
 
 def test_task_physics_settings_are_distinct():
