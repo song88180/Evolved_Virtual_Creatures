@@ -96,7 +96,11 @@ TASK_DEFINITION = TaskDefinition(
     result_type=FlyingAwayEvaluationResult,
     fitness_callback=fitness_callback,
     failed_task_callback=failed_task_callback,
-    rollout_policy=RolloutPolicy(episode="flying"),
+    rollout_policy=RolloutPolicy(
+        passive_baseline=True,
+        track_floor_contact=True,
+        horizontal_origin_distance=True,
+    ),
     environment=TASK_ENVIRONMENT,
     title="Distance-from-origin flying_away evaluation",
     result_fields=FLYING_RESULT_FIELDS,

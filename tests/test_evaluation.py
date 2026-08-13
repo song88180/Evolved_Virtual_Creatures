@@ -1,6 +1,7 @@
 import importlib
 from dataclasses import replace
 import math
+from pathlib import Path
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -21,8 +22,7 @@ from evol_virtual_creature.evaluation import (
     task_definition_for_config,
     task_names,
     _has_nonparent_self_collision,
-    _run_flying_episode,
-    _run_controlled_episode,
+    _run_episode,
     _creature_volume,
     evaluate_task,
     initialize_model,
@@ -149,13 +149,19 @@ def test_task_registry_covers_every_task_and_config():
         assert definition.result_type is result_type
         assert definition.fitness_callback is fitness_callback
         assert callable(definition.failed_task_callback)
-        assert definition.rollout_policy.episode in {"controlled", "flying"}
+        assert isinstance(definition.rollout_policy.passive_baseline, bool)
+        assert isinstance(definition.rollout_policy.track_floor_contact, bool)
         assert definition.environment is environment
         assert definition.name == task
         assert task_definition_for_config(config_type()) is definition
 
     with pytest.raises(KeyError):
         task_definition("unknown_task")
+
+
+def test_shared_evaluation_engine_has_no_task_specific_airborne_terms():
+    source = Path(evaluation.__file__).read_text()
+    assert "fl" + "y" not in source.lower()
 
 
 def test_evaluation_module_lazily_loads_builtin_tasks():
@@ -539,17 +545,17 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
 
     data = mujoco.MjData(model)
     data.qvel[:3] = (3.0, 4.0, 12.0)
-    horizontal_metrics = _run_controlled_episode(
+    horizontal_metrics = _run_episode(
         model,
         data,
         Builder(),
         config,
-        horizontal_origin_distance=True,
+        policy=evaluation.task_definition_for_config(config).rollout_policy,
     )
 
     data = mujoco.MjData(model)
     data.qvel[:3] = (3.0, 4.0, 12.0)
-    spatial_metrics = _run_controlled_episode(model, data, Builder(), config)
+    spatial_metrics = _run_episode(model, data, Builder(), config)
 
     assert not isinstance(horizontal_metrics, str)
     assert not isinstance(spatial_metrics, str)
@@ -584,7 +590,7 @@ def test_controlled_episode_reports_drift_speeds(monkeypatch):
         "_creature_center_of_mass",
         lambda *_args: next(centers),
     )
-    metrics = _run_controlled_episode(
+    metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
@@ -617,7 +623,7 @@ def test_controlled_episode_initializes_center_of_mass_before_scoring():
     class Builder:
         actuator_controllers = []
 
-    metrics = _run_controlled_episode(
+    metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
@@ -662,14 +668,16 @@ def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
         lambda *_args: next(centers),
     )
 
-    horizontal_metrics = _run_controlled_episode(
+    horizontal_metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
         WalkingAwayEvaluationConfig(episode_seconds=1.0),
-        horizontal_origin_distance=True,
+        policy=evaluation.task_definition_for_config(
+            WalkingAwayEvaluationConfig()
+        ).rollout_policy,
     )
-    spatial_metrics = _run_controlled_episode(
+    spatial_metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
@@ -712,7 +720,7 @@ def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
         lambda *_args: next(centers),
     )
 
-    metrics = _run_controlled_episode(
+    metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
@@ -754,7 +762,7 @@ def test_controlled_episode_rejects_large_center_of_mass_drop(monkeypatch):
         lambda *_args: next(centers),
     )
 
-    result = _run_controlled_episode(
+    result = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
@@ -822,7 +830,7 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
-    monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
+    monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
     default_result = evaluate_task(
         genotype, WalkingEvaluationConfig(volume_penalty_cutoff=0.0)
@@ -868,7 +876,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
-    monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
+    monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
     result = evaluate_task(
         genotype, WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0)
@@ -902,7 +910,13 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     assert initialize_model(model, data, config) is None
     data.qvel[0] = 10.0
 
-    metrics = _run_flying_episode(model, data, builder, config)
+    metrics = _run_episode(
+        model,
+        data,
+        builder,
+        config,
+        evaluation.task_definition_for_config(config).rollout_policy,
+    )
 
     assert not isinstance(metrics, str)
     assert metrics["first_ground_contact_time"] is not None
@@ -955,11 +969,13 @@ def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
         lambda *_args: next(floor_contacts),
     )
 
-    metrics = _run_flying_episode(
+    config = FlyingAwayEvaluationConfig(episode_seconds=1.0)
+    metrics = _run_episode(
         model,
         mujoco.MjData(model),
         Builder(),
-        FlyingAwayEvaluationConfig(episode_seconds=1.0),
+        config,
+        evaluation.task_definition_for_config(config).rollout_policy,
     )
 
     assert not isinstance(metrics, str)
@@ -1523,7 +1539,9 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     }
     passive_metrics = dict(controlled_metrics, average_forward_speed=0.5)
 
-    def fake_run(_model, _data, _builder, _config, apply_controls=True):
+    def fake_run(
+        _model, _data, _builder, _config, _policy, apply_controls=True, **_kwargs
+    ):
         return controlled_metrics.copy() if apply_controls else passive_metrics.copy()
 
     config = FlyingEvaluationConfig(
@@ -1536,7 +1554,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
         fitness_gain_fraction=0.5,
     )
     monkeypatch.setattr(evaluation, "_copy_simulation_state", lambda *_args: object())
-    monkeypatch.setattr(evaluation, "_run_flying_episode", fake_run)
+    monkeypatch.setattr(evaluation, "_run_episode", fake_run)
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)

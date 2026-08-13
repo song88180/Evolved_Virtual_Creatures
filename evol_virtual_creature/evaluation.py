@@ -131,41 +131,32 @@ def evaluate_task(genotype: Genotype, config: task_shared.EvaluationConfig):
         return failed(failure)
 
     policy = definition.rollout_policy
+    initial_state = data
+    if policy.passive_baseline:
+        initial_state = _copy_simulation_state(model, data)
+    controlled_metrics = _run_episode(
+        model,
+        initial_state,
+        builder,
+        config,
+        policy,
+        root_body_name=(f"{genotype.root}_1" if policy.track_root_upright else None),
+    )
+    if isinstance(controlled_metrics, str):
+        return failed(controlled_metrics)
+
     passive_metrics = None
-    if policy.episode == "flying":
-        controlled_metrics = _run_flying_episode(
+    if policy.passive_baseline:
+        passive_metrics = _run_episode(
             model,
             _copy_simulation_state(model, data),
             builder,
             config,
-            apply_controls=True,
-        )
-        if isinstance(controlled_metrics, str):
-            return failed(controlled_metrics)
-        passive_metrics = _run_flying_episode(
-            model,
-            _copy_simulation_state(model, data),
-            builder,
-            config,
+            policy,
             apply_controls=False,
         )
         if isinstance(passive_metrics, str):
             return failed(passive_metrics)
-    elif policy.episode == "controlled":
-        controlled_metrics = _run_controlled_episode(
-            model,
-            data,
-            builder,
-            config,
-            root_body_name=(
-                f"{genotype.root}_1" if policy.track_root_upright else None
-            ),
-            horizontal_origin_distance=policy.horizontal_origin_distance,
-        )
-        if isinstance(controlled_metrics, str):
-            return failed(controlled_metrics)
-    else:
-        raise ValueError(f"Unknown rollout episode type: {policy.episode!r}")
 
     result = definition.fitness_callback(
         config, controlled_metrics, passive_metrics
@@ -400,18 +391,22 @@ def _build_model(genotype: Genotype, config: task_shared.EvaluationConfig):
     return model, mujoco.MjData(model), builder
 
 
-def _run_flying_episode(
+def _run_episode(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     builder: PhenotypeBuilder,
     config: task_shared.EvaluationConfig,
+    policy: task_shared.RolloutPolicy = task_shared.RolloutPolicy(),
+    root_body_name: str | None = None,
     apply_controls: bool = True,
 ):
     actuator_ids = _actuator_ids(model, builder.actuator_controllers)
     body_count = max(model.nbody - 1, 0)
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
-    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    floor_id = -1
+    if policy.track_floor_contact:
+        floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     mujoco.mj_forward(model, data)
     initial_center_of_mass = _creature_center_of_mass(model, data)
     previous_time = data.time
@@ -421,12 +416,16 @@ def _run_flying_episode(
         axis=1,
     )
     angular_speed_sum = 0.0
+    upright_error_sum = 0.0
     sample_count = 0
     first_ground_contact_time = None
     distance_measurement_position = None
     if floor_id >= 0 and _has_floor_contact(model, data, floor_id):
         first_ground_contact_time = 0.0
         distance_measurement_position = initial_center_of_mass.copy()
+    root_body_id = -1
+    if root_body_name is not None:
+        root_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, root_body_name)
 
     max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
     for _ in range(max_steps):
@@ -460,112 +459,25 @@ def _run_flying_episode(
         control_energy += float(dt * (control_effort @ control_effort))
         if model.nv >= 6:
             angular_speed_sum += float(np.linalg.norm(data.qvel[3:6]))
+        if root_body_id >= 0:
+            upright_error_sum += max(0.0, 1.0 - float(data.xmat[root_body_id, 8]))
         sample_count += 1
 
     final_center_of_mass = _creature_center_of_mass(model, data)
     if distance_measurement_position is None:
         distance_measurement_position = final_center_of_mass
     displacement = distance_measurement_position - initial_center_of_mass
-    horizontal_displacement = displacement.copy()
-    horizontal_displacement[2] = 0.0
-    forward_distance = float(horizontal_displacement @ np.asarray(target_direction))
-    origin_distance = float(np.linalg.norm(horizontal_displacement))
-    simulated_seconds = max(float(data.time), model.opt.timestep)
-    measurement_seconds = simulated_seconds
-    ground_touch_penalty = 0.0
-    no_ground_touch_bonus = config.no_ground_touch_bonus
-    if first_ground_contact_time is not None:
-        measurement_seconds = max(first_ground_contact_time, model.opt.timestep)
-        touch_fraction = min(first_ground_contact_time / config.episode_seconds, 1.0)
-        ground_touch_penalty = config.ground_touch_weight * (1.0 - touch_fraction)
-        no_ground_touch_bonus = 0.0
-    height_loss = max(
-        0.0, float(initial_center_of_mass[2] - final_center_of_mass[2])
-    )
-    lateral = horizontal_displacement - forward_distance * np.asarray(target_direction)
-
-    return {
-        "origin_distance": origin_distance,
-        "average_origin_speed": origin_distance / measurement_seconds,
-        "forward_distance": forward_distance,
-        "average_forward_speed": forward_distance / measurement_seconds,
-        "sideways_drift_speed": abs(float(lateral[1])) / measurement_seconds,
-        "height_loss": height_loss,
-        "first_ground_contact_time": first_ground_contact_time,
-        "ground_touch_penalty": ground_touch_penalty,
-        "no_ground_touch_bonus": no_ground_touch_bonus,
-        "control_energy": control_energy,
-        "mean_angular_speed": angular_speed_sum / max(sample_count, 1),
-        "simulated_seconds": simulated_seconds,
-        "actuator_count": len(actuator_ids),
-        "body_count": body_count,
-        "total_volume": total_volume,
-    }
-
-
-def _run_controlled_episode(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    builder: PhenotypeBuilder,
-    config: task_shared.EvaluationConfig,
-    root_body_name: str | None = None,
-    horizontal_origin_distance: bool = False,
-):
-    actuator_ids = _actuator_ids(model, builder.actuator_controllers)
-    body_count = max(model.nbody - 1, 0)
-    total_volume = _creature_volume(model)
-    target_direction = _normalized_target_direction(config.target_direction)
-    mujoco.mj_forward(model, data)
-    initial_center_of_mass = _creature_center_of_mass(model, data)
-    previous_time = data.time
-    control_energy = 0.0
-    actuator_gear_norms = np.linalg.norm(
-        model.actuator_gear[actuator_ids],
-        axis=1,
-    )
-    angular_speed_sum = 0.0
-    upright_error_sum = 0.0
-    sample_count = 0
-    root_body_id = -1
-    if root_body_name is not None:
-        root_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, root_body_name)
-
-    max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
-    for _ in range(max_steps):
-        if data.time >= config.episode_seconds:
-            break
-        apply_controller(model, data, builder.actuator_controllers)
-        ctrl = data.ctrl.copy()
-        mujoco.mj_step(model, data)
-        if (
-            config.disallow_collision
-            and _has_nonparent_self_collision(model, data)
-        ):
-            return DISALLOWED_COLLISION_REASON
-        failure = simulation_failure_reason(data, previous_time, config)
-        if failure is not None:
-            return failure
-
-        dt = data.time - previous_time
-        previous_time = data.time
-        control_effort = ctrl[actuator_ids] * actuator_gear_norms
-        control_energy += float(dt * (control_effort @ control_effort))
-        if model.nv >= 6:
-            angular_speed_sum += float(np.linalg.norm(data.qvel[3:6]))
-        if root_body_id >= 0:
-            upright_error_sum += max(0.0, 1.0 - float(data.xmat[root_body_id, 8]))
-        sample_count += 1
-
-    final_center_of_mass = _creature_center_of_mass(model, data)
-    displacement = final_center_of_mass - initial_center_of_mass
+    if policy.horizontal_origin_distance:
+        displacement = displacement.copy()
+        displacement[2] = 0.0
     forward_distance = float(displacement @ target_direction)
     simulated_seconds = max(float(data.time), model.opt.timestep)
-    average_forward_speed = forward_distance / simulated_seconds
-    origin_displacement = displacement.copy()
-    if horizontal_origin_distance:
-        origin_displacement[2] = 0.0
-    origin_distance = float(np.linalg.norm(origin_displacement))
-    average_origin_speed = origin_distance / simulated_seconds
+    measurement_seconds = simulated_seconds
+    if first_ground_contact_time is not None:
+        measurement_seconds = max(first_ground_contact_time, model.opt.timestep)
+    average_forward_speed = forward_distance / measurement_seconds
+    origin_distance = float(np.linalg.norm(displacement))
+    average_origin_speed = origin_distance / measurement_seconds
     lateral = displacement - forward_distance * np.asarray(target_direction)
 
     metrics = {
@@ -573,8 +485,7 @@ def _run_controlled_episode(
         "average_origin_speed": average_origin_speed,
         "forward_distance": forward_distance,
         "average_forward_speed": average_forward_speed,
-        "sideways_drift_speed": abs(float(lateral[1])) / simulated_seconds,
-        "vertical_drift_speed": abs(float(displacement[2])) / simulated_seconds,
+        "sideways_drift_speed": abs(float(lateral[1])) / measurement_seconds,
         "control_energy": control_energy,
         "mean_angular_speed": angular_speed_sum / max(sample_count, 1),
         "simulated_seconds": simulated_seconds,
@@ -582,6 +493,28 @@ def _run_controlled_episode(
         "body_count": body_count,
         "total_volume": total_volume,
     }
+    if policy.track_floor_contact:
+        ground_touch_penalty = 0.0
+        no_ground_touch_bonus = config.no_ground_touch_bonus
+        if first_ground_contact_time is not None:
+            touch_fraction = min(
+                first_ground_contact_time / config.episode_seconds, 1.0
+            )
+            ground_touch_penalty = config.ground_touch_weight * (1.0 - touch_fraction)
+            no_ground_touch_bonus = 0.0
+        metrics.update(
+            height_loss=max(
+                0.0,
+                float(initial_center_of_mass[2] - final_center_of_mass[2]),
+            ),
+            first_ground_contact_time=first_ground_contact_time,
+            ground_touch_penalty=ground_touch_penalty,
+            no_ground_touch_bonus=no_ground_touch_bonus,
+        )
+    else:
+        metrics["vertical_drift_speed"] = abs(
+            float(final_center_of_mass[2] - initial_center_of_mass[2])
+        ) / simulated_seconds
     if root_body_id >= 0:
         min_center_height = (
             initial_center_of_mass[2]

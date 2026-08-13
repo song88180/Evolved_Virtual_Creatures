@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal, Sequence
+from typing import Callable, Sequence
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,8 @@ class ResultField:
 class RolloutPolicy:
     """Declarative simulation behavior used by the shared evaluation engine."""
 
-    episode: Literal["controlled", "flying"] = "controlled"
+    passive_baseline: bool = False
+    track_floor_contact: bool = False
     track_root_upright: bool = False
     horizontal_origin_distance: bool = False
 
