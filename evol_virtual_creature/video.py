@@ -7,7 +7,6 @@ import mujoco
 
 from .evaluation import (
     EvaluationConfig,
-    SwimmingEvaluationConfig,
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
     initialize_flying_model,
@@ -16,6 +15,7 @@ from .evaluation import (
     simulation_failure_reason,
     task_definition_for_config,
 )
+from .evolution_tasks import SwimmingEvaluationConfig
 from .constants import EnvironmentFamily
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort

@@ -11,7 +11,7 @@ import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.evaluation import (
+from evol_virtual_creature.evolution_tasks import (
     FlyingAwayEvaluationConfig,
     FlyingEvaluationConfig,
     SwimmingAwayEvaluationConfig,

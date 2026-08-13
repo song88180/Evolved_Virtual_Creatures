@@ -12,9 +12,11 @@ import random
 
 from evol_virtual_creature.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
-    FlyingEvaluationConfig,
-    TASK_REGISTRY,
     task_definition,
+    task_names,
+)
+from evol_virtual_creature.evolution_tasks import (
+    FlyingEvaluationConfig,
 )
 from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genes import CONTROL_MODES
@@ -272,7 +274,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task",
-        choices=tuple(TASK_REGISTRY),
+        choices=task_names(),
         default="swimming_x",
         help="Locomotion task used for fitness evaluation.",
     )

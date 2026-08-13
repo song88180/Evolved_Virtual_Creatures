@@ -767,9 +767,9 @@
       "PhenotypeNodeLimitExceeded": {"Description": "Raised when XML body creation would exceed max_node."}
     }
   },
-  "evol_virtual_creature.evaluation": {
+  "evol_virtual_creature.evolution_tasks": {
     "Overview": {
-      "Purpose": "Scores genotypes on x-axis and away-from-origin swimming, walking, and flying tasks using MuJoCo simulation and open-loop actuator control.",
+      "Purpose": "Defines and registers concrete swimming, walking, and flying task configs and evaluators backed by shared MuJoCo rollout mechanics.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
@@ -777,6 +777,7 @@
       ],
       "Related_Modules": [
         "evol_virtual_creature.genotype",
+        "evol_virtual_creature.evaluation",
         "evol_virtual_creature.graph_analysis",
         "evol_virtual_creature.phenotype",
         "evol_virtual_creature.video"

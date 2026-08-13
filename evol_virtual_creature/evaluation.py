@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 import math
 from typing import Callable, Protocol, Sequence
 
@@ -16,14 +17,7 @@ from .control import (
     apply_controller,
     apply_open_loop_controller,
 )
-from .phenotype import (
-    DEFAULT_FLYING_FLUID_COEF,
-    DEFAULT_FLYING_FLUID_DENSITY,
-    DEFAULT_FLYING_FLUID_SHAPE,
-    DEFAULT_FLYING_FLUID_VISCOSITY,
-    DEFAULT_FLYING_GRAVITY,
-    PhenotypeBuilder,
-)
+from .phenotype import PhenotypeBuilder
 
 
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
@@ -39,9 +33,6 @@ WALKING_CENTER_HEIGHT_DROP_REASON = (
 MAXIMUM_CREATURE_HEIGHT_REASON = "Creature height exceeds the maximum allowed height."
 _WALKING_FLOOR_CLEARANCE = 0.05
 _FLYING_FLOOR_CLEARANCE = 5.0
-_DEFAULT_MIN_BODY_VOLUME = 1e-6
-_DEFAULT_MIN_TOTAL_VOLUME = 0.0
-_DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
 DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 
 
@@ -57,267 +48,6 @@ class EvaluationConfig(Protocol):
     max_abs_velocity: float
     max_abs_acceleration: float
     max_volume: float
-
-
-@dataclass(frozen=True)
-class SwimmingEvaluationConfig:
-    """Weights and simulation settings for x-axis swimming fitness."""
-
-    episode_seconds: float = 10.0
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    forward_speed_weight: float = 1.0
-    energy_weight: float = 1e-6
-    sideways_drift_weight: float = 0.1
-    vertical_drift_weight: float = 0.1
-    angular_speed_weight: float = 0.01
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class WalkingEvaluationConfig:
-    """Weights and simulation settings for x-axis walking fitness."""
-
-    episode_seconds: float = 10.0
-    settle_seconds: float = 1.0
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    forward_speed_weight: float = 1.0
-    energy_weight: float = 1e-7
-    sideways_drift_weight: float = 0.1
-    angular_speed_weight: float = 0.01
-    upright_weight: float = 0.0
-    height_loss_weight: float = 0.2
-    min_center_height_fraction: float = 0.5
-    max_creature_height: float = 10.0
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class SwimmingAwayEvaluationConfig:
-    """Weights and simulation settings for swimming-away fitness."""
-
-    episode_seconds: float = 10.0
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    speed_weight: float = 1.0
-    energy_weight: float = 1e-6
-    angular_speed_weight: float = 0.01
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class WalkingAwayEvaluationConfig:
-    """Weights and simulation settings for walking-away fitness."""
-
-    episode_seconds: float = 10.0
-    settle_seconds: float = 1.0
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    speed_weight: float = 1.0
-    energy_weight: float = 1e-7
-    angular_speed_weight: float = 0.01
-    height_loss_weight: float = 0.2
-    min_center_height_fraction: float = 0.5
-    max_creature_height: float = 10.0
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class FlyingEvaluationConfig:
-    """Weights and simulation settings for x-axis flying fitness."""
-
-    episode_seconds: float = 10.0
-    fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
-    fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
-    fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
-    fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
-    gravity: float = DEFAULT_FLYING_GRAVITY
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    distance_weight: float = 0.1
-    energy_weight: float = 1e-7
-    angular_speed_weight: float = 0.01
-    height_loss_weight: float = 0.5
-    ground_touch_weight: float = 0.0
-    no_ground_touch_bonus: float = 10
-    fitness_gain_fraction: float = 0.5
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_FLYING_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class FlyingAwayEvaluationConfig:
-    """Weights and simulation settings for flying-away fitness."""
-
-    episode_seconds: float = 10.0
-    fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
-    fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
-    fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
-    fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
-    gravity: float = DEFAULT_FLYING_GRAVITY
-    max_node: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    speed_weight: float = 0.1
-    energy_weight: float = 1e-7
-    angular_speed_weight: float = 0.01
-    height_loss_weight: float = 0.5
-    ground_touch_weight: float = 0.0
-    no_ground_touch_bonus: float = 10
-    fitness_gain_fraction: float = 0.5
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = _DEFAULT_MIN_BODY_VOLUME
-    min_total_volume: float = _DEFAULT_FLYING_MIN_TOTAL_VOLUME
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-
-@dataclass(frozen=True)
-class SwimmingEvaluationResult:
-    fitness: float
-    origin_distance: float
-    average_origin_speed: float
-    forward_distance: float
-    average_forward_speed: float
-    sideways_drift_speed: float
-    vertical_drift_speed: float
-    control_energy: float
-    mean_angular_speed: float
-    simulated_seconds: float
-    actuator_count: int
-    body_count: int
-    total_volume: float
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class WalkingEvaluationResult:
-    fitness: float
-    origin_distance: float
-    average_origin_speed: float
-    forward_distance: float
-    average_forward_speed: float
-    sideways_drift_speed: float
-    height_loss: float
-    control_energy: float
-    mean_angular_speed: float
-    mean_upright_error: float
-    simulated_seconds: float
-    actuator_count: int
-    body_count: int
-    total_volume: float
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class OriginDistanceEvaluationResult:
-    fitness: float
-    origin_distance: float
-    average_origin_speed: float
-    forward_distance: float
-    average_forward_speed: float
-    sideways_drift_speed: float
-    vertical_drift_speed: float
-    control_energy: float
-    mean_angular_speed: float
-    simulated_seconds: float
-    actuator_count: int
-    body_count: int
-    total_volume: float
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class FlyingEvaluationResult:
-    fitness: float
-    origin_distance: float
-    average_origin_speed: float
-    forward_distance: float
-    average_forward_speed: float
-    sideways_drift_speed: float
-    height_loss: float
-    first_ground_contact_time: float | None
-    ground_touch_penalty: float
-    no_ground_touch_bonus: float
-    controlled_fitness: float
-    passive_fitness: float
-    fitness_gain: float
-    control_energy: float
-    mean_angular_speed: float
-    simulated_seconds: float
-    actuator_count: int
-    body_count: int
-    total_volume: float
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -344,6 +74,7 @@ class TaskDefinition:
 
 TASK_REGISTRY: dict[str, TaskDefinition] = {}
 _TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
+_BUILTIN_TASKS_LOADED = False
 
 
 def register_task(
@@ -378,42 +109,21 @@ def register_task(
     return decorator
 
 
-_SWIMMING_RESULT_FIELDS = (
-    ResultField("Vertical drift speed", "vertical_drift_speed"),
-)
-_WALKING_RESULT_FIELDS = (
-    ResultField("Height loss", "height_loss"),
-    ResultField("Mean upright error", "mean_upright_error"),
-)
-_FLYING_RESULT_FIELDS = (
-    ResultField("Height loss", "height_loss"),
-    ResultField(
-        "First ground contact",
-        "first_ground_contact_time",
-        ".2f",
-        none_text="none",
-    ),
-    ResultField("Ground touch penalty", "ground_touch_penalty"),
-    ResultField("No-ground-touch bonus", "no_ground_touch_bonus"),
-    ResultField("Controlled fitness", "controlled_fitness"),
-    ResultField("Passive fitness", "passive_fitness"),
-    ResultField("Fitness gain", "fitness_gain"),
-)
+def _load_builtin_tasks() -> None:
+    """Import the built-in task catalog once so its decorators register tasks."""
+    global _BUILTIN_TASKS_LOADED
+    if not _BUILTIN_TASKS_LOADED:
+        import_module(".evolution_tasks", package=__package__)
+        _BUILTIN_TASKS_LOADED = True
 
 
-@register_task(
-    "swimming_x",
-    config_type=SwimmingEvaluationConfig,
-    environment_family=EnvironmentFamily.SWIMMING,
-    title="X-axis swimming_x evaluation",
-    result_fields=_SWIMMING_RESULT_FIELDS,
-)
-def evaluate_x_axis_swimming(
+def _evaluate_x_axis_swimming(
     genotype: Genotype,
     config: SwimmingEvaluationConfig | None = None,
 ) -> SwimmingEvaluationResult:
     """Score a genotype by how well it swims in the positive x direction."""
-    config = config or SwimmingEvaluationConfig()
+    from .evolution_tasks import SwimmingEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_swimming(config, built)
@@ -440,19 +150,13 @@ def evaluate_x_axis_swimming(
     return SwimmingEvaluationResult(fitness=fitness, **metrics)
 
 
-@register_task(
-    "swimming_away",
-    config_type=SwimmingAwayEvaluationConfig,
-    environment_family=EnvironmentFamily.SWIMMING,
-    title="Distance-from-origin swimming_away evaluation",
-    result_fields=_SWIMMING_RESULT_FIELDS,
-)
-def evaluate_origin_distance(
+def _evaluate_origin_distance(
     genotype: Genotype,
     config: SwimmingAwayEvaluationConfig | None = None,
 ) -> OriginDistanceEvaluationResult:
     """Score a genotype by final root distance from its starting position."""
-    config = config or SwimmingAwayEvaluationConfig()
+    from .evolution_tasks import OriginDistanceEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_origin_distance(config, built)
@@ -479,19 +183,13 @@ def evaluate_origin_distance(
     return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
 
 
-@register_task(
-    "flying_x",
-    config_type=FlyingEvaluationConfig,
-    environment_family=EnvironmentFamily.FLYING,
-    title="X-axis flying_x evaluation",
-    result_fields=_FLYING_RESULT_FIELDS,
-)
-def evaluate_x_axis_flying(
+def _evaluate_x_axis_flying(
     genotype: Genotype,
     config: FlyingEvaluationConfig | None = None,
 ) -> FlyingEvaluationResult:
     """Score flight by horizontal pre-contact speed while penalizing altitude loss."""
-    config = config or FlyingEvaluationConfig()
+    from .evolution_tasks import FlyingEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_flying(config, built)
@@ -517,19 +215,13 @@ def evaluate_x_axis_flying(
     return FlyingEvaluationResult(fitness=fitness, **metrics)
 
 
-@register_task(
-    "flying_away",
-    config_type=FlyingAwayEvaluationConfig,
-    environment_family=EnvironmentFamily.FLYING,
-    title="Distance-from-origin flying_away evaluation",
-    result_fields=_FLYING_RESULT_FIELDS,
-)
-def evaluate_flying_away(
+def _evaluate_flying_away(
     genotype: Genotype,
     config: FlyingAwayEvaluationConfig | None = None,
 ) -> FlyingEvaluationResult:
     """Score flight by horizontal pre-contact speed from the starting point."""
-    config = config or FlyingAwayEvaluationConfig()
+    from .evolution_tasks import FlyingEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_flying(config, built)
@@ -607,19 +299,13 @@ def _copy_simulation_state(
     return copied
 
 
-@register_task(
-    "walking_away",
-    config_type=WalkingAwayEvaluationConfig,
-    environment_family=EnvironmentFamily.WALKING,
-    title="Distance-from-origin walking_away evaluation",
-    result_fields=_WALKING_RESULT_FIELDS,
-)
-def evaluate_walking_away(
+def _evaluate_walking_away(
     genotype: Genotype,
     config: WalkingAwayEvaluationConfig | None = None,
 ) -> WalkingEvaluationResult:
     """Score ground locomotion by final root distance from its starting position."""
-    config = config or WalkingAwayEvaluationConfig()
+    from .evolution_tasks import WalkingEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_walking(config, built)
@@ -668,19 +354,13 @@ def evaluate_walking_away(
     return WalkingEvaluationResult(fitness=fitness, **walking_metrics)
 
 
-@register_task(
-    "walking_x",
-    config_type=WalkingEvaluationConfig,
-    environment_family=EnvironmentFamily.WALKING,
-    title="X-axis walking_x evaluation",
-    result_fields=_WALKING_RESULT_FIELDS,
-)
-def evaluate_x_axis_walking(
+def _evaluate_x_axis_walking(
     genotype: Genotype,
     config: WalkingEvaluationConfig | None = None,
 ) -> WalkingEvaluationResult:
     """Score positive-x ground locomotion while penalizing falling and rolling."""
-    config = config or WalkingEvaluationConfig()
+    from .evolution_tasks import WalkingEvaluationResult
+
     built = _build_model(genotype, config)
     if isinstance(built, str):
         return _failed_walking(config, built)
@@ -732,11 +412,13 @@ def evaluate_x_axis_walking(
 
 def task_definition(task: str) -> TaskDefinition:
     """Return canonical metadata for a task name."""
+    _load_builtin_tasks()
     return TASK_REGISTRY[task]
 
 
 def task_definition_for_config(config: EvaluationConfig) -> TaskDefinition:
     """Return canonical task metadata for a concrete config instance."""
+    _load_builtin_tasks()
     definition = _TASKS_BY_CONFIG_TYPE.get(type(config))
     if definition is None:
         raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
@@ -751,6 +433,12 @@ def evaluate_for_task(genotype: Genotype, config: EvaluationConfig):
 def task_for_config(config: EvaluationConfig) -> str:
     """Return the canonical task name for a concrete config instance."""
     return task_definition_for_config(config).name
+
+
+def task_names() -> tuple[str, ...]:
+    """Return the registered built-in task names in declaration order."""
+    _load_builtin_tasks()
+    return tuple(TASK_REGISTRY)
 
 
 def initialize_walking_model(
@@ -1077,7 +765,7 @@ def _flying_fitness(
 ) -> float:
     speed_weight = (
         config.speed_weight
-        if isinstance(config, FlyingAwayEvaluationConfig)
+        if hasattr(config, "speed_weight")
         else config.distance_weight
     )
     return (
@@ -1188,6 +876,8 @@ def _run_controlled_episode(
 
 
 def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
+    from .evolution_tasks import SwimmingEvaluationResult
+
     return SwimmingEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,
@@ -1209,6 +899,8 @@ def _failed_swimming(config: SwimmingEvaluationConfig, reason: str):
 
 
 def _failed_origin_distance(config: SwimmingAwayEvaluationConfig, reason: str):
+    from .evolution_tasks import OriginDistanceEvaluationResult
+
     return OriginDistanceEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,
@@ -1232,6 +924,8 @@ def _failed_origin_distance(config: SwimmingAwayEvaluationConfig, reason: str):
 def _failed_flying(
     config: FlyingEvaluationConfig | FlyingAwayEvaluationConfig, reason: str
 ):
+    from .evolution_tasks import FlyingEvaluationResult
+
     return FlyingEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,
@@ -1259,6 +953,8 @@ def _failed_flying(
 
 
 def _failed_walking(config: WalkingEvaluationConfig | WalkingAwayEvaluationConfig, reason: str):
+    from .evolution_tasks import WalkingEvaluationResult
+
     return WalkingEvaluationResult(
         fitness=config.build_failure_fitness,
         origin_distance=0.0,

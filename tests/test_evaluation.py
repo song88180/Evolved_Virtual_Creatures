@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+import importlib
 import math
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
 
 import mujoco
@@ -13,12 +16,6 @@ from evol_virtual_creature.evaluation import (
     INITIAL_FLOOR_OVERLAP_REASON,
     MAXIMUM_CREATURE_HEIGHT_REASON,
     WALKING_CENTER_HEIGHT_DROP_REASON,
-    FlyingAwayEvaluationConfig,
-    FlyingEvaluationConfig,
-    SwimmingAwayEvaluationConfig,
-    SwimmingEvaluationConfig,
-    WalkingAwayEvaluationConfig,
-    WalkingEvaluationConfig,
     TASK_REGISTRY,
     ResultField,
     register_task,
@@ -29,16 +26,24 @@ from evol_virtual_creature.evaluation import (
     _run_flying_episode,
     _run_controlled_episode,
     _creature_volume,
-    evaluate_flying_away,
     evaluate_for_task,
+    initialize_flying_model,
+    initialize_walking_model,
+    simulation_failure_reason,
+)
+from evol_virtual_creature.evolution_tasks import (
+    FlyingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
+    SwimmingAwayEvaluationConfig,
+    SwimmingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
+    WalkingEvaluationConfig,
+    evaluate_flying_away,
     evaluate_origin_distance,
     evaluate_walking_away,
     evaluate_x_axis_flying,
     evaluate_x_axis_swimming,
     evaluate_x_axis_walking,
-    initialize_flying_model,
-    initialize_walking_model,
-    simulation_failure_reason,
 )
 from evol_virtual_creature.constants import EnvironmentFamily
 from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
@@ -93,6 +98,24 @@ def test_task_registry_covers_every_task_and_config():
 
     with pytest.raises(KeyError):
         task_definition("unknown_task")
+
+
+def test_evaluation_module_lazily_loads_builtin_tasks():
+    script = (
+        "import evol_virtual_creature.evaluation as evaluation; "
+        "assert not evaluation.TASK_REGISTRY; "
+        "assert evaluation.task_names() == "
+        "('swimming_x', 'swimming_away', 'walking_x', 'walking_away', "
+        "'flying_x', 'flying_away')"
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_evolution_tasks_normal_import_registers_only_once():
+    tasks = importlib.import_module("evol_virtual_creature.evolution_tasks")
+    before = dict(TASK_REGISTRY)
+    assert importlib.import_module("evol_virtual_creature.evolution_tasks") is tasks
+    assert TASK_REGISTRY == before
 
 
 def test_register_task_adds_forward_and_reverse_lookups():
@@ -712,10 +735,10 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
-    default_result = evaluation.evaluate_x_axis_walking(
+    default_result = evaluate_x_axis_walking(
         genotype, WalkingEvaluationConfig(volume_penalty_cutoff=0.0)
     )
-    enabled_result = evaluation.evaluate_x_axis_walking(
+    enabled_result = evaluate_x_axis_walking(
         genotype,
         WalkingEvaluationConfig(
             upright_weight=evaluation.DEFAULT_UPRIGHT_ERROR_WEIGHT,
@@ -759,7 +782,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
-    result = evaluation.evaluate_walking_away(
+    result = evaluate_walking_away(
         genotype, WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0)
     )
 
