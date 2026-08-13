@@ -4,6 +4,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from .constants import FACE_NORMALS
 from .control import (
     BALL_NEURAL_AXES,
     ActuatorController,
@@ -15,16 +16,6 @@ from .graph_analysis import (
     GenotypeGraphAnalyzer,
     PhenotypeNodeLimitExceeded,
 )
-
-
-FACE_NORMALS = {
-    "+x": (1.0, 0.0, 0.0),
-    "-x": (-1.0, 0.0, 0.0),
-    "+y": (0.0, 1.0, 0.0),
-    "-y": (0.0, -1.0, 0.0),
-    "+z": (0.0, 0.0, 1.0),
-    "-z": (0.0, 0.0, -1.0),
-}
 
 PLANE_REFLECTIONS = {
     "xy": (1.0, 1.0, -1.0),

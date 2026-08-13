@@ -4,16 +4,10 @@ from dataclasses import dataclass, field
 import math
 from typing import List, Tuple
 
+from .constants import FACE_NORMALS
+
 
 ATTACHMENT_FACES = ("+x", "-x", "+y", "-y", "+z", "-z")
-FACE_NORMALS = {
-    "+x": (1.0, 0.0, 0.0),
-    "-x": (-1.0, 0.0, 0.0),
-    "+y": (0.0, 1.0, 0.0),
-    "-y": (0.0, -1.0, 0.0),
-    "+z": (0.0, 0.0, 1.0),
-    "-z": (0.0, 0.0, -1.0),
-}
 SYMMETRY_PLANES = ("xy", "xz", "yz")
 ARTICULATED_JOINT_TYPES = ("hinge", "slide", "ball")
 CHILD_JOINT_TYPES = ("fixed", *ARTICULATED_JOINT_TYPES)
