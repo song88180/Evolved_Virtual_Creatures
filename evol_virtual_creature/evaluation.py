@@ -115,9 +115,64 @@ def task_definition_for_config(
     return definition
 
 
-def evaluate_for_task(genotype: Genotype, config: task_shared.EvaluationConfig):
-    """Dispatch evaluation through the canonical task registry."""
-    return task_definition_for_config(config).evaluator(genotype, config)
+def evaluate_task(genotype: Genotype, config: task_shared.EvaluationConfig):
+    """Build, simulate, and score a genotype using its registered task callbacks."""
+    definition = task_definition_for_config(config)
+
+    def failed(reason: str):
+        return definition.failed_task_callback(config, reason)
+
+    built = _build_model(genotype, config)
+    if isinstance(built, str):
+        return failed(built)
+    model, data, builder = built
+    failure = initialize_model(model, data, config)
+    if failure is not None:
+        return failed(failure)
+
+    policy = definition.rollout_policy
+    passive_metrics = None
+    if policy.episode == "flying":
+        controlled_metrics = _run_flying_episode(
+            model,
+            _copy_simulation_state(model, data),
+            builder,
+            config,
+            apply_controls=True,
+        )
+        if isinstance(controlled_metrics, str):
+            return failed(controlled_metrics)
+        passive_metrics = _run_flying_episode(
+            model,
+            _copy_simulation_state(model, data),
+            builder,
+            config,
+            apply_controls=False,
+        )
+        if isinstance(passive_metrics, str):
+            return failed(passive_metrics)
+    elif policy.episode == "controlled":
+        controlled_metrics = _run_controlled_episode(
+            model,
+            data,
+            builder,
+            config,
+            root_body_name=(
+                f"{genotype.root}_1" if policy.track_root_upright else None
+            ),
+            horizontal_origin_distance=policy.horizontal_origin_distance,
+        )
+        if isinstance(controlled_metrics, str):
+            return failed(controlled_metrics)
+    else:
+        raise ValueError(f"Unknown rollout episode type: {policy.episode!r}")
+
+    result = definition.fitness_callback(
+        config, controlled_metrics, passive_metrics
+    )
+    if not math.isfinite(result.fitness):
+        return failed("Simulation produced a non-finite fitness.")
+    return result
 
 
 def task_for_config(config: task_shared.EvaluationConfig) -> str:

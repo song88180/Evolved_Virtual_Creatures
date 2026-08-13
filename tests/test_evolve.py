@@ -211,7 +211,7 @@ def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
         )()
 
     monkeypatch.setattr(evaluate, "load_genotype_from_json", lambda _path: object())
-    monkeypatch.setattr(evaluate, "evaluate_for_task", record_config)
+    monkeypatch.setattr(evaluate, "evaluate_task", record_config)
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "--task", "walking_x"])
     evaluate.main()
     monkeypatch.setattr(

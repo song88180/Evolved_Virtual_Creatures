@@ -24,7 +24,7 @@ from evol_virtual_creature.evaluation import (
     _run_flying_episode,
     _run_controlled_episode,
     _creature_volume,
-    evaluate_for_task,
+    evaluate_task,
     initialize_model,
     simulation_failure_reason,
 )
@@ -39,35 +39,34 @@ from evol_virtual_creature.evolution_tasks.shared import (
 from evol_virtual_creature.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
     FlyingAwayEvaluationResult,
-    evaluate_flying_away,
+    _episode_fitness as flying_away_episode_fitness,
+    fitness_callback as flying_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.flying_x import (
     FlyingEvaluationConfig,
     FlyingEvaluationResult,
-    evaluate_x_axis_flying,
-)
-from evol_virtual_creature.evolution_tasks.shared import (
-    evaluate_flying as _evaluate_flying, flying_fitness as _flying_fitness,
+    _episode_fitness as flying_x_episode_fitness,
+    fitness_callback as flying_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
     SwimmingAwayEvaluationConfig,
-    evaluate_origin_distance,
+    fitness_callback as swimming_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.swimming_x import (
     SwimmingEvaluationConfig,
     SwimmingEvaluationResult,
-    evaluate_x_axis_swimming,
+    fitness_callback as swimming_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.walking_away import (
     WalkingAwayEvaluationConfig,
     WalkingAwayEvaluationResult,
-    evaluate_walking_away,
+    fitness_callback as walking_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.walking_x import (
     WalkingEvaluationConfig,
     WalkingEvaluationResult,
-    evaluate_x_axis_walking,
+    fitness_callback as walking_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
 from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT
@@ -107,47 +106,49 @@ def test_task_registry_covers_every_task_and_config():
         "swimming_x": (
             SwimmingEvaluationConfig,
             SwimmingEvaluationResult,
-            evaluate_x_axis_swimming,
+            swimming_x_fitness,
             SWIMMING_X_ENVIRONMENT,
         ),
         "swimming_away": (
             SwimmingAwayEvaluationConfig,
             OriginDistanceEvaluationResult,
-            evaluate_origin_distance,
+            swimming_away_fitness,
             SWIMMING_AWAY_ENVIRONMENT,
         ),
         "walking_x": (
             WalkingEvaluationConfig,
             WalkingEvaluationResult,
-            evaluate_x_axis_walking,
+            walking_x_fitness,
             WALKING_X_ENVIRONMENT,
         ),
         "walking_away": (
             WalkingAwayEvaluationConfig,
             WalkingAwayEvaluationResult,
-            evaluate_walking_away,
+            walking_away_fitness,
             WALKING_AWAY_ENVIRONMENT,
         ),
         "flying_x": (
             FlyingEvaluationConfig,
             FlyingEvaluationResult,
-            evaluate_x_axis_flying,
+            flying_x_fitness,
             FLYING_X_ENVIRONMENT,
         ),
         "flying_away": (
             FlyingAwayEvaluationConfig,
             FlyingAwayEvaluationResult,
-            evaluate_flying_away,
+            flying_away_fitness,
             FLYING_AWAY_ENVIRONMENT,
         ),
     }
 
     assert set(task_names()) == set(expected)
-    for task, (config_type, result_type, evaluator, environment) in expected.items():
+    for task, (config_type, result_type, fitness_callback, environment) in expected.items():
         definition = TASK_REGISTRY[task]
         assert definition.config_type is config_type
         assert definition.result_type is result_type
-        assert definition.evaluator is evaluator
+        assert definition.fitness_callback is fitness_callback
+        assert callable(definition.failed_task_callback)
+        assert definition.rollout_policy.episode in {"controlled", "flying"}
         assert definition.environment is environment
         assert definition.name == task
         assert task_definition_for_config(config_type()) is definition
@@ -441,24 +442,24 @@ def test_self_collision_masks_and_parent_filtering():
 
 def test_both_tasks_return_finite_results():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    swimming = evaluate_x_axis_swimming(
+    swimming = evaluate_task(
         genotype, SwimmingEvaluationConfig(episode_seconds=0.02)
     )
-    walking = evaluate_x_axis_walking(
+    walking = evaluate_task(
         genotype,
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
-    swimming_away = evaluate_origin_distance(
+    swimming_away = evaluate_task(
         genotype, SwimmingAwayEvaluationConfig(episode_seconds=0.02)
     )
-    walking_away = evaluate_walking_away(
+    walking_away = evaluate_task(
         genotype,
         WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
-    flying = evaluate_x_axis_flying(
+    flying = evaluate_task(
         genotype, FlyingEvaluationConfig(episode_seconds=0.02)
     )
-    flying_away = evaluate_flying_away(
+    flying_away = evaluate_task(
         genotype, FlyingAwayEvaluationConfig(episode_seconds=0.02)
     )
     assert not swimming.build_failed
@@ -747,7 +748,7 @@ def test_walking_rejects_creature_above_maximum_height():
         },
     )
 
-    result = evaluate_x_axis_walking(
+    result = evaluate_task(
         genotype,
         WalkingEvaluationConfig(
             episode_seconds=0.02,
@@ -792,10 +793,10 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
-    default_result = evaluate_x_axis_walking(
+    default_result = evaluate_task(
         genotype, WalkingEvaluationConfig(volume_penalty_cutoff=0.0)
     )
-    enabled_result = evaluate_x_axis_walking(
+    enabled_result = evaluate_task(
         genotype,
         WalkingEvaluationConfig(
             upright_weight=evaluation.DEFAULT_UPRIGHT_ERROR_WEIGHT,
@@ -838,7 +839,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
-    result = evaluate_walking_away(
+    result = evaluate_task(
         genotype, WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0)
     )
 
@@ -1012,11 +1013,26 @@ def test_generic_initialization_runs_environment_callback():
     )
 
 
+def test_shared_evaluator_initializes_swimming_tasks():
+    environment = replace(
+        SWIMMING_X_ENVIRONMENT,
+        initialization_callback=_reject_initialization,
+    )
+    result = evaluate_task(
+        load_genotype_from_json("examples/single_root.json"),
+        SwimmingEvaluationConfig(environment=environment),
+    )
+
+    assert result.fitness == -1_000.0
+    assert result.build_failed
+    assert result.failure_reason == "custom initialization rejected model"
+
+
 def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
     from evol_virtual_creature import evaluation
 
     monkeypatch.setattr(evaluation, "_has_floor_penetration", lambda *_args: True)
-    result = evaluate_x_axis_walking(
+    result = evaluate_task(
         load_genotype_from_json("examples/single_root.json"),
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
     )
@@ -1062,7 +1078,7 @@ def test_disallowed_collision_assigns_low_fitness(monkeypatch):
     monkeypatch.setattr(
         evaluation, "_has_nonparent_self_collision", lambda _model, _data: True
     )
-    result = evaluate_x_axis_swimming(
+    result = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
@@ -1148,7 +1164,7 @@ def test_evaluation_rejects_numerical_instability(monkeypatch):
         "mj_step",
         inject_excessive_acceleration,
     )
-    result = evaluate_x_axis_swimming(
+    result = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(episode_seconds=0.02),
     )
@@ -1195,11 +1211,11 @@ def test_creature_volume_sums_generated_body_volumes_only(
 
 def test_volume_penalty_has_cutoff_then_grows_linearly():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    baseline = evaluate_x_axis_swimming(
+    baseline = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=0.0),
     )
-    below_cutoff = evaluate_x_axis_swimming(
+    below_cutoff = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
@@ -1207,7 +1223,7 @@ def test_volume_penalty_has_cutoff_then_grows_linearly():
             volume_penalty_cutoff=0.1,
         ),
     )
-    above_cutoff = evaluate_x_axis_swimming(
+    above_cutoff = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
@@ -1234,7 +1250,7 @@ def test_creature_above_maximum_volume_is_rejected_before_simulation():
         },
     )
 
-    result = evaluate_x_axis_swimming(
+    result = evaluate_task(
         genotype,
         SwimmingEvaluationConfig(episode_seconds=0.02, max_volume=1.0),
     )
@@ -1255,7 +1271,7 @@ def test_body_below_minimum_volume_is_rejected_before_flying_bonus():
         },
     )
 
-    result = evaluate_x_axis_flying(
+    result = evaluate_task(
         genotype,
         FlyingEvaluationConfig(episode_seconds=0.02, min_body_volume=1e-6),
     )
@@ -1276,7 +1292,7 @@ def test_flying_total_volume_below_minimum_is_rejected_before_simulation():
         },
     )
 
-    result = evaluate_x_axis_flying(
+    result = evaluate_task(
         genotype,
         FlyingEvaluationConfig(episode_seconds=0.02),
     )
@@ -1310,11 +1326,11 @@ def _single_motor_genotype(motor_gear):
 
 
 def test_control_energy_scales_with_squared_motor_gear():
-    low_gear = evaluate_x_axis_swimming(
+    low_gear = evaluate_task(
         _single_motor_genotype(10.0),
         SwimmingEvaluationConfig(episode_seconds=0.01),
     )
-    high_gear = evaluate_x_axis_swimming(
+    high_gear = evaluate_task(
         _single_motor_genotype(20.0),
         SwimmingEvaluationConfig(episode_seconds=0.01),
     )
@@ -1378,7 +1394,7 @@ def test_away_configs_reject_old_distance_weight_name():
 
 def test_swimming_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    result = evaluate_origin_distance(
+    result = evaluate_task(
         genotype,
         SwimmingAwayEvaluationConfig(
             episode_seconds=0.02,
@@ -1416,22 +1432,19 @@ def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
         "total_volume": 0.0,
     }
 
-    assert _flying_fitness(config, metrics, "average_origin_speed") == pytest.approx(
+    assert flying_away_episode_fitness(config, metrics) == pytest.approx(
         0.4 - 0.5 - 0.25
     )
 
     metrics["height_loss"] = 0.0
     metrics["ground_touch_penalty"] = 0.0
     metrics["no_ground_touch_bonus"] = config.no_ground_touch_bonus
-    assert _flying_fitness(config, metrics, "average_origin_speed") == pytest.approx(
+    assert flying_away_episode_fitness(config, metrics) == pytest.approx(
         0.4 + config.no_ground_touch_bonus
     )
 
 
-def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
-    from evol_virtual_creature import evaluation
-
-    observed = {}
+def test_x_axis_flying_fitness_uses_forward_speed():
     metrics = {
         "origin_distance": 4.0,
         "average_origin_speed": 4.0,
@@ -1442,9 +1455,6 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
         "first_ground_contact_time": None,
         "ground_touch_penalty": 0.0,
         "no_ground_touch_bonus": 0.0,
-        "controlled_fitness": 2.0,
-        "passive_fitness": 0.5,
-        "fitness_gain": 1.5,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
         "simulated_seconds": 1.0,
@@ -1453,30 +1463,11 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
         "total_volume": 0.0,
     }
 
-    def fake_baseline(_model, _data, _builder, _config, speed_metric):
-        observed["speed_metric"] = speed_metric
-        return metrics, 1.75
-
-    monkeypatch.setattr(
-        evaluation,
-        "_build_model",
-        lambda *_args: (object(), object(), object()),
+    config = FlyingEvaluationConfig(
+        distance_weight=1.0, energy_weight=0.0, height_loss_weight=0.0,
+        angular_speed_weight=0.0, body_count_weight=0.0, volume_weight=0.0,
     )
-    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
-    monkeypatch.setattr(
-        "evol_virtual_creature.evolution_tasks.flying_x.evaluate_flying",
-        lambda _genotype, _config, speed_metric, _result_type: (
-            observed.setdefault("speed_metric", speed_metric),
-            type("Result", (), {"fitness": 1.75})(),
-        )[1],
-    )
-
-    result = evaluate_x_axis_flying(
-        load_genotype_from_json(GENOTYPE_PATH), FlyingEvaluationConfig()
-    )
-
-    assert observed["speed_metric"] == "average_forward_speed"
-    assert result.fitness == pytest.approx(1.75)
+    assert flying_x_episode_fitness(config, metrics) == pytest.approx(2.0)
 
 
 def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
@@ -1518,9 +1509,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
-    result = _evaluate_flying(
-        object(), config, "average_forward_speed", FlyingEvaluationResult
-    )
+    result = evaluate_task(object(), config)
 
     assert result.controlled_fitness == pytest.approx(2.0)
     assert result.passive_fitness == pytest.approx(0.5)
@@ -1530,7 +1519,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
 
 def test_walking_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
-    result = evaluate_walking_away(
+    result = evaluate_task(
         genotype,
         WalkingAwayEvaluationConfig(
             episode_seconds=0.02,

@@ -16,7 +16,7 @@ import random
 from statistics import mean
 from typing import Any
 
-from .evaluation import evaluate_for_task, task_definition_for_config
+from .evaluation import evaluate_task, task_definition_for_config
 from .evolution_tasks.shared import EvaluationConfig
 from .genotype import Genotype
 from .genotype_io import genotype_to_dict, save_genotype_to_json
@@ -55,7 +55,7 @@ def _evaluate_creature(
 ) -> EvaluatedCreature:
     """Evaluate one genotype, returning a failure score if simulation raises."""
     try:
-        result = evaluate_for_task(genotype, config)
+        result = evaluate_task(genotype, config)
         metrics = asdict(result)
         fitness = result.fitness
     except Exception as error:

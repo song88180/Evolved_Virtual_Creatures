@@ -20,7 +20,7 @@ _configure_video_rendering_backend()
 
 from evol_virtual_creature.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
-    evaluate_for_task,
+    evaluate_task,
     task_definition,
     task_names,
 )
@@ -73,7 +73,7 @@ def main():
             if name in supported_fields
         }
     )
-    result = evaluate_for_task(genotype, config)
+    result = evaluate_task(genotype, config)
 
     if result.disqualified:
         print(f"Disqualified: {result.failure_reason}")

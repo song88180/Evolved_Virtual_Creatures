@@ -30,8 +30,8 @@ The code is split by responsibility:
 - `evol_virtual_creature/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
 - `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
 - `evol_virtual_creature/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
-- `evol_virtual_creature/evaluation.py`: shared MuJoCo rollout mechanics and lazy task lookup.
-- `evol_virtual_creature/evolution_tasks/`: task-specific configs, environments, results, evaluators, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and common rollout helpers.
+- `evol_virtual_creature/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.
+- `evol_virtual_creature/evolution_tasks/`: task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
 - `evol_virtual_creature/video.py`: optional evaluation video rendering helpers.
 - `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
 
@@ -467,7 +467,7 @@ The current script is intentionally minimal, but it leaves several natural place
 
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
-- Add or tune fitness functions in the task-specific modules under `evolution_tasks/`. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs. A new task is a single module whose filename is its task name and which contains its config dataclass, result dataclass, evaluator, and `TASK_DEFINITION`; lazy loading then supplies CLI discovery, evaluator dispatch, environment selection, and result presentation metadata without decorator registration side effects.
+- Add or tune fitness functions in the task-specific modules under `evolution_tasks/`. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs. A new task is a single module whose filename is its task name and which contains its config and result dataclasses, fitness and failure callbacks, rollout policy, and `TASK_DEFINITION`; lazy loading then supplies CLI discovery, shared evaluation dispatch, environment selection, and result presentation metadata without registration side effects.
 - Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary

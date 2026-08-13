@@ -3,8 +3,8 @@
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..genotype import Genotype
-from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, TaskDefinition, evaluate_flying
+from .. import evaluation as evaluation_engine
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, RolloutPolicy, TaskDefinition, failure_flags
 
 
 TASK_ENVIRONMENT = replace(
@@ -75,16 +75,59 @@ class FlyingEvaluationResult:
     failure_reason: str | None = None
 
 
-def evaluate_x_axis_flying(genotype: Genotype, config: FlyingEvaluationConfig | None = None):
-    config = config or FlyingEvaluationConfig()
-    return evaluate_flying(genotype, config, "average_forward_speed", FlyingEvaluationResult)
+def _episode_fitness(config, metrics: dict) -> float:
+    return (
+        config.distance_weight * metrics["average_forward_speed"]
+        + metrics["no_ground_touch_bonus"]
+        - config.height_loss_weight * metrics["height_loss"]
+        - metrics["ground_touch_penalty"]
+        - config.energy_weight * metrics["control_energy"]
+        - config.angular_speed_weight * metrics["mean_angular_speed"]
+        - config.body_count_weight * metrics["body_count"]
+        - config.volume_weight * evaluation_engine._excess_volume(
+            metrics["total_volume"], config.volume_penalty_cutoff
+        )
+    )
+
+
+def fitness_callback(config, controlled_metrics: dict, passive_metrics: dict | None):
+    assert passive_metrics is not None
+    controlled_fitness = _episode_fitness(config, controlled_metrics)
+    passive_fitness = _episode_fitness(config, passive_metrics)
+    gain = controlled_fitness - passive_fitness
+    fitness = (
+        gain * config.fitness_gain_fraction
+        + controlled_fitness * (1.0 - config.fitness_gain_fraction)
+    )
+    metrics = dict(
+        controlled_metrics,
+        controlled_fitness=controlled_fitness,
+        passive_fitness=passive_fitness,
+        fitness_gain=gain,
+    )
+    return FlyingEvaluationResult(fitness=fitness, **metrics)
+
+
+def failed_task_callback(config, reason: str):
+    return FlyingEvaluationResult(
+        fitness=config.build_failure_fitness, origin_distance=0.0,
+        average_origin_speed=0.0, forward_distance=0.0,
+        average_forward_speed=0.0, sideways_drift_speed=0.0, height_loss=0.0,
+        first_ground_contact_time=None, ground_touch_penalty=0.0,
+        no_ground_touch_bonus=0.0, controlled_fitness=0.0, passive_fitness=0.0,
+        fitness_gain=0.0, control_energy=0.0, mean_angular_speed=0.0,
+        simulated_seconds=0.0, actuator_count=0, body_count=0, total_volume=0.0,
+        **failure_flags(reason),
+    )
 
 
 TASK_DEFINITION = TaskDefinition(
     name="flying_x",
     config_type=FlyingEvaluationConfig,
     result_type=FlyingEvaluationResult,
-    evaluator=evaluate_x_axis_flying,
+    fitness_callback=fitness_callback,
+    failed_task_callback=failed_task_callback,
+    rollout_policy=RolloutPolicy(episode="flying"),
     environment=TASK_ENVIRONMENT,
     title="X-axis flying_x evaluation",
     result_fields=FLYING_RESULT_FIELDS,

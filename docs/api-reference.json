@@ -769,7 +769,7 @@
   },
   "evol_virtual_creature.evolution_tasks": {
     "Overview": {
-      "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, evaluator, and metadata; evolution_tasks.shared owns the metadata types, registry state, and common task rollout helpers.",
+      "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, fitness and failure callbacks, rollout policy, and metadata; evaluation.evaluate_task owns model construction and rollout orchestration.",
       "Main_Use_Cases": [
         "Evaluate a genotype's task-specific locomotion fitness",
         "Return diagnostics such as distance, drift, energy, angular speed, and body count",
@@ -953,56 +953,16 @@
       }
     },
     "Functions": {
-      "evaluate_x_axis_swimming": {
-        "Signature": "evaluate_x_axis_swimming(genotype: Genotype, config: SwimmingEvaluationConfig | None = None) -> SwimmingEvaluationResult",
-        "Purpose": "Score a genotype by simulating open-loop actuator control and measuring movement in the target direction.",
+      "evaluate_task": {
+        "Signature": "evaluate_task(genotype: Genotype, config: EvaluationConfig) -> task-specific result",
+        "Purpose": "Build, initialize, simulate, and score a genotype using the callbacks and rollout policy registered for the concrete config type.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
-          "config": {"Type": "SwimmingEvaluationConfig | None", "Default": "None", "Description": "Evaluation settings; defaults to SwimmingEvaluationConfig()."}
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Concrete configuration identifying the selected task."}
         },
-        "Returns": {"Type": "SwimmingEvaluationResult", "Description": "Fitness and diagnostic metrics; build failures are represented as failed results."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_x_axis_swimming(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
-      },
-      "evaluate_origin_distance": {
-        "Signature": "evaluate_origin_distance(genotype: Genotype, config: SwimmingAwayEvaluationConfig | None = None) -> OriginDistanceEvaluationResult",
-        "Purpose": "Score swimming_away by measuring average speed away from the starting point.",
-        "Parameters": {},
-        "Returns": {"Type": "OriginDistanceEvaluationResult", "Description": "Fitness and diagnostic metrics."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_origin_distance(genotype, SwimmingAwayEvaluationConfig(episode_seconds=6.0))"
-      },
-      "evaluate_x_axis_walking": {
-        "Signature": "evaluate_x_axis_walking(genotype: Genotype, config: WalkingEvaluationConfig | None = None) -> WalkingEvaluationResult",
-        "Purpose": "Score walking_x using land physics, settling, and positive X-axis movement.",
-        "Parameters": {},
-        "Returns": {"Type": "WalkingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_x_axis_walking(genotype, WalkingEvaluationConfig(episode_seconds=6.0))"
-      },
-      "evaluate_walking_away": {
-        "Signature": "evaluate_walking_away(genotype: Genotype, config: WalkingAwayEvaluationConfig | None = None) -> WalkingAwayEvaluationResult",
-        "Purpose": "Score walking_away using land physics, settling, and average speed away from the starting point.",
-        "Parameters": {},
-        "Returns": {"Type": "WalkingAwayEvaluationResult", "Description": "Fitness and diagnostic metrics."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_walking_away(genotype, WalkingAwayEvaluationConfig(episode_seconds=6.0))"
-      },
-      "evaluate_x_axis_flying": {
-        "Signature": "evaluate_x_axis_flying(genotype: Genotype, config: FlyingEvaluationConfig | None = None) -> FlyingEvaluationResult",
-        "Purpose": "Score flying_x using horizontal positive-X distance divided by 10, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
-        "Parameters": {},
-        "Returns": {"Type": "FlyingEvaluationResult", "Description": "Fitness and diagnostic metrics."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_x_axis_flying(genotype, FlyingEvaluationConfig(episode_seconds=6.0))"
-      },
-      "evaluate_flying_away": {
-        "Signature": "evaluate_flying_away(genotype: Genotype, config: FlyingAwayEvaluationConfig | None = None) -> FlyingAwayEvaluationResult",
-        "Purpose": "Score flying_away using horizontal speed away from origin, center-of-mass height-loss penalty, ground-touch timing penalty, and no-ground-touch bonus.",
-        "Parameters": {},
-        "Returns": {"Type": "FlyingAwayEvaluationResult", "Description": "Fitness and diagnostic metrics."},
-        "Raises": ["ValueError"],
-        "Example": "result = evaluate_flying_away(genotype, FlyingAwayEvaluationConfig(episode_seconds=6.0))"
+        "Returns": {"Type": "task-specific result", "Description": "Fitness and diagnostic metrics; build, initialization, rollout, and non-finite-fitness failures are represented as failed results."},
+        "Raises": ["TypeError", "ValueError"],
+        "Example": "result = evaluate_task(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
       }
     },
     "Internal_Functions": {
