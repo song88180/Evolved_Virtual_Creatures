@@ -8,7 +8,6 @@ import mujoco
 import numpy as np
 
 
-CONTROL_MODES = ("neural", "sine")
 NEURAL_HIDDEN_SIZE = 16
 NEURAL_INPUT_DIMS = {
     "hinge": 12,
