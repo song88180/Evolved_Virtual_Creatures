@@ -1,4 +1,5 @@
 import importlib
+from dataclasses import replace
 import math
 import subprocess
 import sys
@@ -24,11 +25,12 @@ from evol_virtual_creature.evaluation import (
     _run_controlled_episode,
     _creature_volume,
     evaluate_for_task,
-    initialize_flying_model,
-    initialize_walking_model,
+    initialize_model,
     simulation_failure_reason,
 )
 from evol_virtual_creature.evolution_tasks.shared import (
+    DEFAULT_ENVIRONMENT,
+    EnvironmentFamily,
     EvaluationConfig,
     ResultField,
     TASK_REGISTRY,
@@ -67,12 +69,37 @@ from evol_virtual_creature.evolution_tasks.walking_x import (
     WalkingEvaluationResult,
     evaluate_x_axis_walking,
 )
-from evol_virtual_creature.constants import EnvironmentFamily
+from evol_virtual_creature.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.swimming_away import TASK_ENVIRONMENT as SWIMMING_AWAY_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.swimming_x import TASK_ENVIRONMENT as SWIMMING_X_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.walking_away import TASK_ENVIRONMENT as WALKING_AWAY_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.walking_x import TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT
 from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
 
 GENOTYPE_PATH = "examples/example_genotype.json"
+
+
+def _reject_initialization(_model, _data, _config):
+    return "custom initialization rejected model"
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    (
+        ({"timestep": 0.0}, "timestep"),
+        ({"fluid_density": -1.0}, "fluid_density"),
+        ({"fluid_viscosity": -1.0}, "fluid_viscosity"),
+        ({"fluid_coef": (1.0, 2.0)}, "fluid_coef"),
+        ({"body_friction": (1.0, 2.0)}, "body_friction"),
+        ({"initial_floor_clearance": -1.0}, "initial_floor_clearance"),
+    ),
+)
+def test_environment_rejects_invalid_physics_settings(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        replace(DEFAULT_ENVIRONMENT, **kwargs)
 
 
 def test_task_registry_covers_every_task_and_config():
@@ -81,47 +108,47 @@ def test_task_registry_covers_every_task_and_config():
             SwimmingEvaluationConfig,
             SwimmingEvaluationResult,
             evaluate_x_axis_swimming,
-            EnvironmentFamily.SWIMMING,
+            SWIMMING_X_ENVIRONMENT,
         ),
         "swimming_away": (
             SwimmingAwayEvaluationConfig,
             OriginDistanceEvaluationResult,
             evaluate_origin_distance,
-            EnvironmentFamily.SWIMMING,
+            SWIMMING_AWAY_ENVIRONMENT,
         ),
         "walking_x": (
             WalkingEvaluationConfig,
             WalkingEvaluationResult,
             evaluate_x_axis_walking,
-            EnvironmentFamily.WALKING,
+            WALKING_X_ENVIRONMENT,
         ),
         "walking_away": (
             WalkingAwayEvaluationConfig,
             WalkingAwayEvaluationResult,
             evaluate_walking_away,
-            EnvironmentFamily.WALKING,
+            WALKING_AWAY_ENVIRONMENT,
         ),
         "flying_x": (
             FlyingEvaluationConfig,
             FlyingEvaluationResult,
             evaluate_x_axis_flying,
-            EnvironmentFamily.FLYING,
+            FLYING_X_ENVIRONMENT,
         ),
         "flying_away": (
             FlyingAwayEvaluationConfig,
             FlyingAwayEvaluationResult,
             evaluate_flying_away,
-            EnvironmentFamily.FLYING,
+            FLYING_AWAY_ENVIRONMENT,
         ),
     }
 
     assert set(task_names()) == set(expected)
-    for task, (config_type, result_type, evaluator, environment_family) in expected.items():
+    for task, (config_type, result_type, evaluator, environment) in expected.items():
         definition = TASK_REGISTRY[task]
         assert definition.config_type is config_type
         assert definition.result_type is result_type
         assert definition.evaluator is evaluator
-        assert definition.environment_family is environment_family
+        assert definition.environment is environment
         assert definition.name == task
         assert task_definition_for_config(config_type()) is definition
 
@@ -201,25 +228,25 @@ def test_task_physics_settings_are_distinct():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     swimming = ET.fromstring(
         PhenotypeBuilder(
-            genotype, max_node=500, environment_family="swimming"
+            genotype, max_node=500, environment=SWIMMING_X_ENVIRONMENT
         ).build()
     )
     walking = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment_family="walking").build()
+        PhenotypeBuilder(genotype, max_node=500, environment=WALKING_X_ENVIRONMENT).build()
     )
     swimming_away = ET.fromstring(
         PhenotypeBuilder(
-            genotype, max_node=500, environment_family="swimming"
+            genotype, max_node=500, environment=SWIMMING_AWAY_ENVIRONMENT
         ).build()
     )
     walking_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment_family="walking").build()
+        PhenotypeBuilder(genotype, max_node=500, environment=WALKING_AWAY_ENVIRONMENT).build()
     )
     flying = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment_family="flying").build()
+        PhenotypeBuilder(genotype, max_node=500, environment=FLYING_X_ENVIRONMENT).build()
     )
     flying_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment_family="flying").build()
+        PhenotypeBuilder(genotype, max_node=500, environment=FLYING_AWAY_ENVIRONMENT).build()
     )
 
     swimming_option = swimming.find("option")
@@ -283,7 +310,7 @@ def test_task_physics_settings_are_distinct():
 def test_flying_fluid_settings_compile_in_mujoco():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     mjcf = PhenotypeBuilder(
-        genotype, max_node=500, environment_family="flying"
+        genotype, max_node=500, environment=FLYING_X_ENVIRONMENT
     ).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
 
@@ -297,11 +324,11 @@ def test_flying_fluid_settings_can_be_overridden():
         PhenotypeBuilder(
             genotype,
             max_node=500,
-            environment_family="flying",
-            fluid_density=0.9,
-            fluid_viscosity=0.00002,
-            fluid_shape="none",
-            fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+            environment=replace(
+                FLYING_X_ENVIRONMENT, fluid_density=0.9,
+                fluid_viscosity=0.00002, fluid_shape="none",
+                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+            ),
         ).build()
     )
     option = root.find("option")
@@ -355,7 +382,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             max_node=500,
-            environment_family="walking",
+            environment=WALKING_X_ENVIRONMENT,
             self_collision=False,
         ).build()
     )
@@ -377,7 +404,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             max_node=500,
-            environment_family="walking",
+            environment=WALKING_X_ENVIRONMENT,
             self_collision=True,
         ).build()
     )
@@ -395,7 +422,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             max_node=500,
-            environment_family="swimming",
+            environment=SWIMMING_X_ENVIRONMENT,
             self_collision=True,
         ).build()
     )
@@ -761,8 +788,7 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     }
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
-    monkeypatch.setattr(evaluation, "initialize_walking_model", lambda *_args: None)
-    monkeypatch.setattr(evaluation, "settle_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
@@ -808,8 +834,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     }
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
-    monkeypatch.setattr(evaluation, "initialize_walking_model", lambda *_args: None)
-    monkeypatch.setattr(evaluation, "settle_walking_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_controlled_episode", lambda *_args, **_kwargs: metrics)
 
@@ -832,22 +857,17 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     )
     config = FlyingAwayEvaluationConfig(
         episode_seconds=3.0,
-        fluid_density=0.0,
-        fluid_viscosity=0.0,
+        environment=replace(FLYING_AWAY_ENVIRONMENT, fluid_density=0.0, fluid_viscosity=0.0),
     )
     builder = PhenotypeBuilder(
         genotype,
         max_node=config.max_node,
-        environment_family="flying",
-        fluid_density=config.fluid_density,
-        fluid_viscosity=config.fluid_viscosity,
-        fluid_shape=config.fluid_shape,
-        fluid_coef=config.fluid_coef,
+        environment=config.environment,
     )
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
 
-    assert initialize_flying_model(model, data) is None
+    assert initialize_model(model, data, config) is None
     data.qvel[0] = 10.0
 
     metrics = _run_flying_episode(model, data, builder, config)
@@ -930,12 +950,12 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     model = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, environment_family="flying"
+            genotype, max_node=500, environment=FLYING_X_ENVIRONMENT
         ).build()
     )
     data = mujoco.MjData(model)
 
-    assert initialize_flying_model(model, data) is None
+    assert initialize_model(model, data, FlyingEvaluationConfig()) is None
 
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
@@ -957,20 +977,39 @@ def test_walking_initialization_raises_low_creature_above_floor():
     )
     model = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, environment_family="walking"
+            genotype, max_node=500, environment=WALKING_X_ENVIRONMENT
         ).build()
     )
     data = mujoco.MjData(model)
 
-    assert initialize_walking_model(model, data) is None
+    assert initialize_model(model, data, WalkingEvaluationConfig()) is None
 
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
     )
     body_geom_id = _creature_geom_ids(model)[0]
     lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
-    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 0.05)
-    assert all(float(contact.dist) >= 0.0 for contact in data.contact)
+    # Generic initialization applies clearance and then the configured settling pass.
+    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2], abs=2e-4)
+    assert all(float(contact.dist) >= -2e-4 for contact in data.contact)
+
+
+def test_generic_initialization_runs_environment_callback():
+    genotype = build_genotype(
+        root="body",
+        spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
+    )
+    environment = replace(
+        SWIMMING_X_ENVIRONMENT,
+        initialization_callback=_reject_initialization,
+    )
+    config = SwimmingEvaluationConfig(environment=environment)
+    builder = PhenotypeBuilder(genotype, max_node=500, environment=environment)
+    model = mujoco.MjModel.from_xml_string(builder.build())
+
+    assert initialize_model(model, mujoco.MjData(model), config) == (
+        "custom initialization rejected model"
+    )
 
 
 def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
@@ -1423,7 +1462,7 @@ def test_x_axis_flying_fitness_uses_forward_speed(monkeypatch):
         "_build_model",
         lambda *_args: (object(), object(), object()),
     )
-    monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(
         "evol_virtual_creature.evolution_tasks.flying_x.evaluate_flying",
         lambda _genotype, _config, speed_metric, _result_type: (
@@ -1478,7 +1517,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     monkeypatch.setattr(evaluation, "_run_flying_episode", fake_run)
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
-    monkeypatch.setattr(evaluation, "initialize_flying_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     result = _evaluate_flying(
         object(), config, "average_forward_speed", FlyingEvaluationResult
     )

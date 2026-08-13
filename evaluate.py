@@ -1,7 +1,7 @@
 """Evaluate a genotype on a selected locomotion task."""
 
 import argparse
-from dataclasses import fields
+from dataclasses import fields, replace
 import os
 from pathlib import Path
 import sys
@@ -24,8 +24,7 @@ from evol_virtual_creature.evaluation import (
     task_definition,
     task_names,
 )
-from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
-from evol_virtual_creature.constants import EnvironmentFamily
+from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as DEFAULT_FLYING_ENVIRONMENT
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video
 
@@ -54,12 +53,18 @@ def main():
         upright_weight=(
             DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
         ),
-        fluid_density=args.fluid_density,
-        fluid_viscosity=args.fluid_viscosity,
-        fluid_shape=args.fluid_shape,
-        fluid_coef=tuple(args.fluid_coef),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
+    environment = definition.environment
+    if environment.supports_fluid_overrides:
+        environment = replace(
+            environment,
+            fluid_density=args.fluid_density,
+            fluid_viscosity=args.fluid_viscosity,
+            fluid_shape=args.fluid_shape,
+            fluid_coef=tuple(args.fluid_coef),
+        )
+    config_kwargs["environment"] = environment
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{
@@ -373,23 +378,19 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
             setattr(args, name, getattr(task_defaults, name))
 
     definition = task_definition(args.task)
-    flying_defaults = (
-        task_defaults
-        if definition.environment_family is EnvironmentFamily.FLYING
-        else FlyingEvaluationConfig()
+    environment_defaults = (
+        definition.environment
+        if definition.environment.supports_fluid_overrides
+        else DEFAULT_FLYING_ENVIRONMENT
     )
-    for name in (
-        "fluid_density",
-        "fluid_viscosity",
-        "fluid_shape",
-        "fluid_coef",
-        "fitness_gain_fraction",
-    ):
+    for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
         if getattr(args, name) is None:
-            value = getattr(flying_defaults, name)
+            value = getattr(environment_defaults, name)
             if name == "fluid_coef":
                 value = list(value)
             setattr(args, name, value)
+    if args.fitness_gain_fraction is None:
+        args.fitness_gain_fraction = getattr(task_defaults, "fitness_gain_fraction", 0.5)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ The code is split by responsibility:
 - `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
 - `evol_virtual_creature/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
 - `evol_virtual_creature/evaluation.py`: shared MuJoCo rollout mechanics and lazy task lookup.
-- `evol_virtual_creature/evolution_tasks/`: task-specific configs, results, evaluators, and registration metadata; `shared.py` owns the task metadata types, registry state, and common rollout helpers.
+- `evol_virtual_creature/evolution_tasks/`: task-specific configs, environments, results, evaluators, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and common rollout helpers.
 - `evol_virtual_creature/video.py`: optional evaluation video rendering helpers.
 - `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
 

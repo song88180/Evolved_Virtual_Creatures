@@ -15,8 +15,7 @@ from evol_virtual_creature.evaluation import (
     task_definition,
     task_names,
 )
-from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
-from evol_virtual_creature.constants import EnvironmentFamily
+from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as DEFAULT_FLYING_ENVIRONMENT
 from evol_virtual_creature.genes import CONTROL_MODES
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolve import (
@@ -68,12 +67,18 @@ def main() -> None:
         upright_weight=(
             DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
         ),
-        fluid_density=args.fluid_density,
-        fluid_viscosity=args.fluid_viscosity,
-        fluid_shape=args.fluid_shape,
-        fluid_coef=tuple(args.fluid_coef),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
+    environment = definition.environment
+    if environment.supports_fluid_overrides:
+        environment = replace(
+            environment,
+            fluid_density=args.fluid_density,
+            fluid_viscosity=args.fluid_viscosity,
+            fluid_shape=args.fluid_shape,
+            fluid_coef=tuple(args.fluid_coef),
+        )
+    config_kwargs["environment"] = environment
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{
@@ -229,7 +234,7 @@ def _config_for_generation(config, args: argparse.Namespace, generation: int):
     gravity = _gravity_for_generation(
         args.gradual_gravity_change, generation, args.generations
     )
-    return replace(config, gravity=gravity)
+    return replace(config, environment=replace(config.environment, gravity=gravity))
 
 
 def _validate_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:
@@ -563,23 +568,19 @@ def _apply_task_defaults(args: argparse.Namespace) -> None:
             setattr(args, name, getattr(task_defaults, name))
 
     definition = task_definition(args.task)
-    flying_defaults = (
-        task_defaults
-        if definition.environment_family is EnvironmentFamily.FLYING
-        else FlyingEvaluationConfig()
+    environment_defaults = (
+        definition.environment
+        if definition.environment.supports_fluid_overrides
+        else DEFAULT_FLYING_ENVIRONMENT
     )
-    for name in (
-        "fluid_density",
-        "fluid_viscosity",
-        "fluid_shape",
-        "fluid_coef",
-        "fitness_gain_fraction",
-    ):
+    for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
         if getattr(args, name) is None:
-            value = getattr(flying_defaults, name)
+            value = getattr(environment_defaults, name)
             if name == "fluid_coef":
                 value = list(value)
             setattr(args, name, value)
+    if args.fitness_gain_fraction is None:
+        args.fitness_gain_fraction = getattr(task_defaults, "fitness_gain_fraction", 0.5)
 
 
 def _validate_args(args: argparse.Namespace) -> None:
@@ -624,8 +625,7 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--fitness-gain-fraction must be between 0 and 1")
     if (
         args.gradual_gravity_change is not None
-        and task_definition(args.task).environment_family
-        is not EnvironmentFamily.FLYING
+        and not task_definition(args.task).environment.supports_scheduled_gravity
     ):
         raise ValueError("--gradual-gravity-change is only supported for flying tasks")
     if args.fluid_viscosity < 0.0:

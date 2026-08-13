@@ -8,15 +8,12 @@ import mujoco
 from .evaluation import (
     DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
-    initialize_flying_model,
-    initialize_walking_model,
-    settle_walking_model,
+    initialize_model,
     simulation_failure_reason,
     task_definition_for_config,
 )
 from .evolution_tasks.shared import EvaluationConfig
 from .evolution_tasks.swimming_x import SwimmingEvaluationConfig
-from .constants import EnvironmentFamily
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
@@ -123,14 +120,10 @@ def save_x_axis_video(
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment_family=task.environment_family,
+            environment=config.environment,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
-            fluid_density=getattr(config, "fluid_density", None),
-            fluid_viscosity=getattr(config, "fluid_viscosity", None),
-            fluid_shape=getattr(config, "fluid_shape", None),
-            fluid_coef=getattr(config, "fluid_coef", None),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
@@ -157,18 +150,9 @@ def save_x_axis_video(
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
-    if task.environment_family is EnvironmentFamily.WALKING:
-        failure = initialize_walking_model(model, data)
-        if failure is not None:
-            raise RuntimeError(f"Cannot record video: {failure}")
-        failure = settle_walking_model(model, data, config)
-        if failure is not None:
-            raise RuntimeError(f"Cannot record video: {failure}")
-        data.time = 0.0
-    elif task.environment_family is EnvironmentFamily.FLYING:
-        failure = initialize_flying_model(model, data)
-        if failure is not None:
-            raise RuntimeError(f"Cannot record video: {failure}")
+    failure = initialize_model(model, data, config)
+    if failure is not None:
+        raise RuntimeError(f"Cannot record video: {failure}")
 
     # Match the scored rollout's initialization before the controller observes
     # derived state such as body transforms and joint-related quantities.  A

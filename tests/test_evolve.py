@@ -1,5 +1,6 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import replace
 import random
 import sys
 import xml.etree.ElementTree as ET
@@ -13,6 +14,7 @@ from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
 from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
+from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
 from evol_virtual_creature.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
 from evol_virtual_creature.evolution_tasks.swimming_x import SwimmingEvaluationConfig
 from evol_virtual_creature.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
@@ -279,8 +281,8 @@ def test_generation_config_applies_gradual_flying_gravity():
         generations=4,
     )
     generation_config = evolve_cli._config_for_generation(config, args, 2)
-    assert generation_config.gravity == pytest.approx(-5.0)
-    assert config.gravity == pytest.approx(-9.81)
+    assert generation_config.environment.gravity == pytest.approx(-5.0)
+    assert config.environment.gravity == pytest.approx(-9.81)
 
 
 def test_evolve_accepts_flying_fluid_options(monkeypatch):
@@ -331,13 +333,18 @@ def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
         fluid_shape = "none"
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
         fitness_gain_fraction = 0.7
+        environment = FLYING_ENVIRONMENT
 
     monkeypatch.setattr(
         module,
         "task_definition",
         lambda _task: argparse.Namespace(
             config_type=TaskDefaults,
-            environment_family=evaluate.EnvironmentFamily.FLYING,
+            environment=replace(
+                FLYING_ENVIRONMENT, fluid_density=0.8,
+                fluid_viscosity=0.00003, fluid_shape="none",
+                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+            ),
         ),
     )
     monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
@@ -373,13 +380,18 @@ def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
         fluid_shape = "none"
         fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
         fitness_gain_fraction = 0.7
+        environment = FLYING_ENVIRONMENT
 
     monkeypatch.setattr(
         module,
         "task_definition",
         lambda _task: argparse.Namespace(
             config_type=TaskDefaults,
-            environment_family=evaluate.EnvironmentFamily.FLYING,
+            environment=replace(
+                FLYING_ENVIRONMENT, fluid_density=0.8,
+                fluid_viscosity=0.00003, fluid_shape="none",
+                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -690,7 +702,10 @@ def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
-        FlyingEvaluationConfig(episode_seconds=0.02, gravity=-3.5),
+        FlyingEvaluationConfig(
+            episode_seconds=0.02,
+            environment=replace(FLYING_ENVIRONMENT, gravity=-3.5),
+        ),
     )
     option = ET.fromstring(path.read_text()).find("option")
     assert option is not None

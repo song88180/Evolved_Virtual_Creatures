@@ -1,15 +1,24 @@
 """Distance-from-origin walking task."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..constants import EnvironmentFamily
 from ..genotype import Genotype
-from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, TaskDefinition, evaluate_walking
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, WALKING_RESULT_FIELDS, EnvironmentFamily, TaskDefinition, evaluate_walking
+
+
+TASK_ENVIRONMENT = replace(
+    DEFAULT_ENVIRONMENT, name="walking_away", gravity=-9.81,
+    fluid_density=None, fluid_viscosity=None, body_friction=(1.0, 0.005, 0.0001),
+    creature_contype=2, creature_conaffinity=1, self_collision_conaffinity=3,
+    floor_contype=1, floor_conaffinity=2, initial_floor_clearance=0.05,
+)
 
 
 @dataclass(frozen=True)
 class WalkingAwayEvaluationConfig:
+    environment: EnvironmentFamily = TASK_ENVIRONMENT
+    initial_floor_contact_policy: str = "penetration"
     episode_seconds: float = 10.0
     settle_seconds: float = 1.0
     max_node: int = 500
@@ -65,7 +74,7 @@ TASK_DEFINITION = TaskDefinition(
     config_type=WalkingAwayEvaluationConfig,
     result_type=WalkingAwayEvaluationResult,
     evaluator=evaluate_walking_away,
-    environment_family=EnvironmentFamily.WALKING,
+    environment=TASK_ENVIRONMENT,
     title="Distance-from-origin walking_away evaluation",
     result_fields=WALKING_RESULT_FIELDS,
     order=40,

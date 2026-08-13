@@ -4,7 +4,8 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
-from .constants import EnvironmentFamily, FACE_NORMALS
+from .constants import FACE_NORMALS
+from .evolution_tasks.shared import DEFAULT_ENVIRONMENT, EnvironmentFamily
 from .control import (
     BALL_NEURAL_AXES,
     ActuatorController,
@@ -24,14 +25,6 @@ PLANE_REFLECTIONS = {
 }
 IDENTITY_REFLECTION = (1.0, 1.0, 1.0)
 DEFAULT_ARTICULATED_ROOT_AXIS = (0.0, 1.0, 0.0)
-DEFAULT_FLYING_FLUID_DENSITY = 1.225
-DEFAULT_FLYING_FLUID_VISCOSITY = 1.8e-5
-DEFAULT_FLYING_FLUID_SHAPE = "ellipsoid"
-DEFAULT_FLYING_FLUID_COEF = (0.5, 0.25, 1.5, 1.0, 1.0)
-DEFAULT_FLYING_GRAVITY = -9.81
-
-
-
 # -----------------------------
 # 2. Genotype -> MJCF phenotype
 # -----------------------------
@@ -41,46 +34,15 @@ class PhenotypeBuilder:
         self,
         genotype: Genotype,
         max_node: int,
-        environment_family: EnvironmentFamily | str | None = None,
+        environment: EnvironmentFamily = DEFAULT_ENVIRONMENT,
         self_collision: bool = False,
-        fluid_density: float | None = None,
-        fluid_viscosity: float | None = None,
-        fluid_shape: str | None = None,
-        fluid_coef: Sequence[float] | None = None,
-        gravity: float | None = None,
     ):
         if max_node < 1:
             raise ValueError("max_node must be at least 1")
-        normalized_environment = (
-            EnvironmentFamily(environment_family)
-            if environment_family is not None
-            else None
-        )
-        if normalized_environment is None:
-            normalized_environment = EnvironmentFamily.SWIMMING
-
         self.genotype = genotype
         self.max_node = max_node
-        self.environment_family = normalized_environment
+        self.environment = environment
         self.self_collision = self_collision
-        self.fluid_density = (
-            DEFAULT_FLYING_FLUID_DENSITY
-            if fluid_density is None
-            else float(fluid_density)
-        )
-        self.fluid_viscosity = (
-            DEFAULT_FLYING_FLUID_VISCOSITY
-            if fluid_viscosity is None
-            else float(fluid_viscosity)
-        )
-        self.gravity = DEFAULT_FLYING_GRAVITY if gravity is None else float(gravity)
-        self.fluid_shape = fluid_shape or DEFAULT_FLYING_FLUID_SHAPE
-        self.fluid_coef = tuple(
-            DEFAULT_FLYING_FLUID_COEF if fluid_coef is None else fluid_coef
-        )
-        if len(self.fluid_coef) != 5:
-            raise ValueError("fluid_coef must contain exactly five values")
-        self.fluid_coef = tuple(float(value) for value in self.fluid_coef)
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
@@ -116,7 +78,7 @@ class PhenotypeBuilder:
         root_body = self.create_body(
             worldbody,
             root_node,
-            "0 0 0.6",
+            vec_to_str(self.environment.initial_root_position),
             quat=matrix_to_quat(euler_degrees_to_matrix(root_node.orientation)),
         )
 
@@ -145,19 +107,10 @@ class PhenotypeBuilder:
         compiler.set("angle", "degree")
 
         option = ET.SubElement(self.mujoco_xml, "option")
-        if self.environment_family is EnvironmentFamily.SWIMMING:
-            option.set("gravity", "0 0 0")
-            option.set("density", "1000")
-            option.set("viscosity", "0.001")
-        elif self.environment_family is EnvironmentFamily.FLYING:
-            option.set("gravity", f"0 0 {self.gravity}")
-            option.set("density", str(self.fluid_density))
-            option.set("viscosity", str(self.fluid_viscosity))
-        else:
-            option.set("gravity", "0 0 -9.81")
-            option.set("density", "0")
-            option.set("viscosity", "0")
-        option.set("timestep", "0.01")
+        option.set("gravity", f"0 0 {self.environment.gravity:g}")
+        option.set("density", f"{self.environment.fluid_density or 0:g}")
+        option.set("viscosity", f"{self.environment.fluid_viscosity or 0:g}")
+        option.set("timestep", str(self.environment.timestep))
 
         self.add_assets()
         self.add_defaults()
@@ -191,21 +144,20 @@ class PhenotypeBuilder:
 
         geom_default = ET.SubElement(default, "geom")
         geom_default.set("type", "box")
-        geom_default.set("density", "500")
-        if self.environment_family is EnvironmentFamily.FLYING:
-            geom_default.set("fluidshape", self.fluid_shape)
-            geom_default.set("fluidcoef", vec_to_str(self.fluid_coef))
-        if self.environment_family is EnvironmentFamily.SWIMMING:
-            geom_default.set("friction", "1.0 0.5 0.5")
-            collision_mask = "2" if self.self_collision else "0"
-            geom_default.set("contype", collision_mask)
-            geom_default.set("conaffinity", collision_mask)
-        else:
-            geom_default.set("friction", "1 0.005 0.0001")
-            geom_default.set("contype", "2")
-            geom_default.set(
-                "conaffinity", "3" if self.self_collision else "1"
-            )
+        geom_default.set("density", str(self.environment.body_density))
+        geom_default.set("friction", vec_to_str(self.environment.body_friction))
+        if self.environment.fluid_shape is not None:
+            geom_default.set("fluidshape", self.environment.fluid_shape)
+        if self.environment.fluid_coef is not None:
+            geom_default.set("fluidcoef", vec_to_str(self.environment.fluid_coef))
+        geom_default.set("contype", str(
+            self.environment.self_collision_contype if self.self_collision
+            else self.environment.creature_contype
+        ))
+        geom_default.set("conaffinity", str(
+            self.environment.self_collision_conaffinity if self.self_collision
+            else self.environment.creature_conaffinity
+        ))
 
         joint_default = ET.SubElement(default, "joint")
         joint_default.set("limited", "true")
@@ -219,18 +171,11 @@ class PhenotypeBuilder:
         floor = ET.SubElement(worldbody, "geom")
         floor.set("name", "floor")
         floor.set("type", "plane")
-        floor.set("size", "5 5 0.1")
-        floor.set("pos", "0 0 -0.05")
+        floor.set("size", vec_to_str(self.environment.floor_size))
+        floor.set("pos", vec_to_str(self.environment.floor_position))
         floor.set("material", "floor_material")
-        if self.environment_family in {
-            EnvironmentFamily.WALKING,
-            EnvironmentFamily.FLYING,
-        }:
-            floor.set("contype", "1")
-            floor.set("conaffinity", "2")
-        else:
-            floor.set("contype", "0")
-            floor.set("conaffinity", "0")
+        floor.set("contype", str(self.environment.floor_contype))
+        floor.set("conaffinity", str(self.environment.floor_conaffinity))
 
         light = ET.SubElement(worldbody, "light")
         light.set("pos", "0 0 3")

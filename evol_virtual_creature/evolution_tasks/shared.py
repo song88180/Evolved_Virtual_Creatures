@@ -4,10 +4,72 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Protocol, Sequence
 
-from ..constants import EnvironmentFamily
 from ..genotype import Genotype
+
+
+@dataclass(frozen=True)
+class EnvironmentFamily:
+    """Declarative MuJoCo physics and initial placement for one task."""
+
+    name: str = "swimming"
+    timestep: float = 0.01
+    gravity: float = 0.0
+    fluid_density: float | None = 1000.0
+    fluid_viscosity: float | None = 0.001
+    fluid_shape: str | None = None
+    fluid_coef: Sequence[float] | None = None
+    body_density: float = 500.0
+    body_friction: Sequence[float] = (1.0, 0.5, 0.5)
+    creature_contype: int = 0
+    creature_conaffinity: int = 0
+    self_collision_contype: int = 2
+    self_collision_conaffinity: int = 2
+    floor_position: Sequence[float] = (0.0, 0.0, -0.05)
+    floor_size: Sequence[float] = (5.0, 5.0, 0.1)
+    floor_contype: int = 0
+    floor_conaffinity: int = 0
+    initial_root_position: Sequence[float] = (0.0, 0.0, 0.6)
+    initial_floor_clearance: float | None = None
+    supports_fluid_overrides: bool = False
+    supports_scheduled_gravity: bool = False
+    initialization_callback: Callable | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.isidentifier():
+            raise ValueError("environment name must be a non-empty identifier")
+        if self.timestep <= 0.0:
+            raise ValueError("environment timestep must be positive")
+        if self.fluid_density is not None and self.fluid_density < 0.0:
+            raise ValueError("fluid_density must be non-negative")
+        if self.fluid_viscosity is not None and self.fluid_viscosity < 0.0:
+            raise ValueError("fluid_viscosity must be non-negative")
+        if self.fluid_coef is not None and len(self.fluid_coef) != 5:
+            raise ValueError("fluid_coef must contain exactly five values")
+        if len(self.body_friction) != 3:
+            raise ValueError("body_friction must contain exactly three values")
+        if any(value < 0.0 for value in self.body_friction):
+            raise ValueError("body_friction values must be non-negative")
+        if len(self.floor_position) != 3 or len(self.floor_size) != 3:
+            raise ValueError("floor position and size must contain three values")
+        if len(self.initial_root_position) != 3:
+            raise ValueError("initial_root_position must contain three values")
+        if self.initial_floor_clearance is not None and self.initial_floor_clearance < 0:
+            raise ValueError("initial_floor_clearance must be non-negative")
+        collision_bits = (
+            self.creature_contype,
+            self.creature_conaffinity,
+            self.self_collision_contype,
+            self.self_collision_conaffinity,
+            self.floor_contype,
+            self.floor_conaffinity,
+        )
+        if any(value < 0 for value in collision_bits):
+            raise ValueError("collision bits must be non-negative")
+
+
+DEFAULT_ENVIRONMENT = EnvironmentFamily()
 
 
 class EvaluationConfig(Protocol):
@@ -22,6 +84,11 @@ class EvaluationConfig(Protocol):
     max_abs_velocity: float
     max_abs_acceleration: float
     max_volume: float
+    environment: EnvironmentFamily
+    settle_seconds: float
+    max_creature_height: float
+    min_center_height_fraction: float
+    initial_floor_contact_policy: str
 
 
 @dataclass(frozen=True)
@@ -42,7 +109,7 @@ class TaskDefinition:
     config_type: type
     result_type: type
     evaluator: Callable
-    environment_family: EnvironmentFamily
+    environment: EnvironmentFamily
     title: str
     result_fields: tuple[ResultField, ...]
     order: int
@@ -82,19 +149,9 @@ def evaluate_walking(
     if isinstance(built, str):
         return failed_walking(config, built, result_type)
     model, data, builder = built
-    for initialize in (
-        evaluation_engine.initialize_walking_model,
-        evaluation_engine._walking_height_failure_reason,
-        evaluation_engine.settle_walking_model,
-    ):
-        failure = (
-            initialize(model, data)
-            if initialize is evaluation_engine.initialize_walking_model
-            else initialize(model, data, config)
-        )
-        if failure is not None:
-            return failed_walking(config, failure, result_type)
-    data.time = 0.0
+    failure = evaluation_engine.initialize_model(model, data, config)
+    if failure is not None:
+        return failed_walking(config, failure, result_type)
     metrics = evaluation_engine._run_controlled_episode(
         model,
         data,
@@ -134,7 +191,7 @@ def evaluate_flying(genotype: Genotype, config, speed_metric: str, result_type: 
     if isinstance(built, str):
         return failed_flying(config, built, result_type)
     model, data, builder = built
-    failure = evaluation_engine.initialize_flying_model(model, data)
+    failure = evaluation_engine.initialize_model(model, data, config)
     if failure is not None:
         return failed_flying(config, failure, result_type)
     controlled = evaluation_engine._run_flying_episode(

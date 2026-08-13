@@ -539,11 +539,11 @@
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
         "Constructor": {
-          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, environment_family: EnvironmentFamily | str | None = null, self_collision: bool = false)",
+          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, environment: EnvironmentFamily = DEFAULT_ENVIRONMENT, self_collision: bool = false)",
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
             "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},
-            "environment_family": {"Type": "EnvironmentFamily | str | None", "Default": "None", "Description": "Physical environment family; defaults to swimming."},
+            "environment": {"Type": "EnvironmentFamily", "Default": "DEFAULT_ENVIRONMENT", "Description": "Declarative MuJoCo physics and initial-placement settings."},
             "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable non-parent creature self-collision while retaining MuJoCo parent filtering."}
           },
           "Raises": ["ValueError"]
@@ -551,7 +551,7 @@
         "Attributes": {
           "genotype": {"Type": "Genotype", "Description": "Genotype being expanded."},
           "max_node": {"Type": "int", "Description": "Generated body budget."},
-          "environment_family": {"Type": "EnvironmentFamily", "Description": "Normalized physical environment used for MJCF construction."},
+          "environment": {"Type": "EnvironmentFamily", "Description": "Declarative physical environment used for MJCF construction."},
           "self_collision": {"Type": "bool", "Description": "Whether non-parent creature bodies can collide."},
           "body_counter": {"Type": "int", "Description": "Counter used for unique body names."},
           "joint_counter": {"Type": "int", "Description": "Counter used for unique joint names."},

@@ -31,8 +31,6 @@ WALKING_CENTER_HEIGHT_DROP_REASON = (
     "Creature center of mass dropped below the walking height threshold."
 )
 MAXIMUM_CREATURE_HEIGHT_REASON = "Creature height exceeds the maximum allowed height."
-_WALKING_FLOOR_CLEARANCE = 0.05
-_FLYING_FLOOR_CLEARANCE = 5.0
 DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 
 
@@ -85,6 +83,10 @@ def load_task_definition(task: str) -> task_shared.TaskDefinition:
     if definition.name != task:
         raise ValueError(
             f"Task module {task!r} declares name {definition.name!r}"
+        )
+    if definition.config_type().environment != definition.environment:
+        raise ValueError(
+            f"Task {task!r} config default environment does not match TASK_DEFINITION"
         )
     return _cache_task_definition(definition)
 
@@ -154,70 +156,50 @@ def _copy_simulation_state(
     return copied
 
 
-def initialize_walking_model(
+def initialize_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
+    config: task_shared.EvaluationConfig,
 ) -> str | None:
-    """Place a walking creature above the floor and reject penetration."""
+    """Apply declarative placement, validation, callback, and settling."""
     mujoco.mj_forward(model, data)
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
     )
-    if floor_id < 0:
-        return None
-
-    free_joint_ids = np.flatnonzero(
-        model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
-    )
-    if free_joint_ids.size == 0:
-        return "Walking creature has no free root joint."
-    root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
-    floor_z = float(data.geom_xpos[floor_id, 2])
-    lowest_z = min(
-        _geom_lowest_world_z(model, data, geom_id)
-        for geom_id in range(model.ngeom)
-        if model.geom_bodyid[geom_id] != 0
-    )
-    required_shift = floor_z + _WALKING_FLOOR_CLEARANCE - lowest_z
-    if required_shift > 0.0:
-        data.qpos[root_qpos_adr + 2] += required_shift
-    mujoco.mj_forward(model, data)
-    if _has_floor_penetration(model, data, floor_id):
+    clearance = config.environment.initial_floor_clearance
+    if floor_id >= 0 and clearance is not None:
+        free_joint_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
+        if free_joint_ids.size == 0:
+            return f"{config.environment.name} creature has no free root joint."
+        root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
+        creature_geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] != 0]
+        floor_z = float(data.geom_xpos[floor_id, 2])
+        lowest_z = min(_geom_lowest_world_z(model, data, i) for i in creature_geoms)
+        required_shift = floor_z + clearance - lowest_z
+        if required_shift > 0.0:
+            data.qpos[root_qpos_adr + 2] += required_shift
+        mujoco.mj_forward(model, data)
+    callback = config.environment.initialization_callback
+    if callback is not None:
+        failure = callback(model, data, config)
+        if failure is not None:
+            return failure
+        mujoco.mj_forward(model, data)
+    contact_policy = getattr(config, "initial_floor_contact_policy", "allow")
+    if contact_policy not in {"allow", "penetration", "contact"}:
+        raise ValueError(f"Unknown initial floor contact policy: {contact_policy!r}")
+    if floor_id >= 0 and (
+        (contact_policy == "penetration" and _has_floor_penetration(model, data, floor_id))
+        or (contact_policy == "contact" and _has_floor_contact(model, data, floor_id))
+    ):
         return INITIAL_FLOOR_OVERLAP_REASON
-    return None
-
-
-def initialize_flying_model(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-) -> str | None:
-    """Place a flying creature above the floor before scoring starts."""
-    mujoco.mj_forward(model, data)
-    floor_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
-    )
-    if floor_id < 0:
-        return None
-
-    free_joint_ids = np.flatnonzero(
-        model.jnt_type == mujoco.mjtJoint.mjJNT_FREE
-    )
-    if free_joint_ids.size == 0:
-        return "Flying creature has no free root joint."
-    root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
-    floor_z = float(data.geom_xpos[floor_id, 2])
-    lowest_z = min(
-        _geom_lowest_world_z(model, data, geom_id)
-        for geom_id in range(model.ngeom)
-        if model.geom_bodyid[geom_id] != 0
-    )
-    required_shift = floor_z + _FLYING_FLOOR_CLEARANCE - lowest_z
-    if required_shift > 0.0:
-        data.qpos[root_qpos_adr + 2] += required_shift
-    mujoco.mj_forward(model, data)
-    if _has_floor_contact(model, data, floor_id):
-        return INITIAL_FLOOR_OVERLAP_REASON
-    return None
+    height_failure = _walking_height_failure_reason(model, data, config)
+    if height_failure is not None:
+        return height_failure
+    failure = settle_model(model, data, config)
+    if failure is None:
+        data.time = 0.0
+    return failure
 
 
 def _walking_height_failure_reason(
@@ -312,13 +294,13 @@ def _has_floor_penetration(
     return False
 
 
-def settle_walking_model(
+def settle_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     config: task_shared.EvaluationConfig,
 ) -> str | None:
     """Let a walking creature fall onto the floor before controls and scoring."""
-    settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
+    settle_steps = max(0, math.ceil(getattr(config, "settle_seconds", 0.0) / model.opt.timestep))
     for _ in range(settle_steps):
         previous_time = float(data.time)
         mujoco.mj_step(model, data)
@@ -339,15 +321,10 @@ def _build_model(genotype: Genotype, config: task_shared.EvaluationConfig):
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment_family=definition.environment_family,
+            environment=config.environment,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
-            fluid_density=getattr(config, "fluid_density", None),
-            fluid_viscosity=getattr(config, "fluid_viscosity", None),
-            fluid_shape=getattr(config, "fluid_shape", None),
-            fluid_coef=getattr(config, "fluid_coef", None),
-            gravity=getattr(config, "gravity", None),
         )
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:

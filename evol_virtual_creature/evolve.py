@@ -110,15 +110,10 @@ def _write_best_xml(
         mjcf = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment_family=task_definition_for_config(config).environment_family,
+            environment=config.environment,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
-            fluid_density=getattr(config, "fluid_density", None),
-            fluid_viscosity=getattr(config, "fluid_viscosity", None),
-            fluid_shape=getattr(config, "fluid_shape", None),
-            fluid_coef=getattr(config, "fluid_coef", None),
-            gravity=getattr(config, "gravity", None),
         ).build()
     except PhenotypeBuildAbort:
         return

@@ -1,17 +1,24 @@
 """X-axis swimming task."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from typing import Sequence
 
 from .. import evaluation as evaluation_engine
-from ..constants import EnvironmentFamily
 from ..genotype import Genotype
-from .shared import DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, SWIMMING_RESULT_FIELDS, TaskDefinition, failed_swimming
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_MIN_BODY_VOLUME, DEFAULT_MIN_TOTAL_VOLUME, SWIMMING_RESULT_FIELDS, EnvironmentFamily, TaskDefinition, failed_swimming
+
+
+TASK_ENVIRONMENT = replace(DEFAULT_ENVIRONMENT, name="swimming_x")
 
 
 @dataclass(frozen=True)
 class SwimmingEvaluationConfig:
+    environment: EnvironmentFamily = TASK_ENVIRONMENT
+    settle_seconds: float = 0.0
+    max_creature_height: float = 0.0
+    min_center_height_fraction: float = 0.0
+    initial_floor_contact_policy: str = "allow"
     episode_seconds: float = 10.0
     max_node: int = 500
     self_collision: bool = False
@@ -84,7 +91,7 @@ TASK_DEFINITION = TaskDefinition(
     config_type=SwimmingEvaluationConfig,
     result_type=SwimmingEvaluationResult,
     evaluator=evaluate_x_axis_swimming,
-    environment_family=EnvironmentFamily.SWIMMING,
+    environment=TASK_ENVIRONMENT,
     title="X-axis swimming_x evaluation",
     result_fields=SWIMMING_RESULT_FIELDS,
     order=10,

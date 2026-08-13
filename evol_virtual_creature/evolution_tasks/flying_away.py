@@ -1,22 +1,31 @@
 """Distance-from-origin flying task."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..constants import EnvironmentFamily
 from ..genotype import Genotype
-from ..phenotype import DEFAULT_FLYING_FLUID_COEF, DEFAULT_FLYING_FLUID_DENSITY, DEFAULT_FLYING_FLUID_SHAPE, DEFAULT_FLYING_FLUID_VISCOSITY, DEFAULT_FLYING_GRAVITY
-from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, TaskDefinition, evaluate_flying
+from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, DEFAULT_MIN_BODY_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, TaskDefinition, evaluate_flying
+
+
+TASK_ENVIRONMENT = replace(
+    DEFAULT_ENVIRONMENT, name="flying_away", gravity=-9.81, fluid_density=1.225,
+    fluid_viscosity=1.8e-5, fluid_shape="ellipsoid",
+    fluid_coef=(0.5, 0.25, 1.5, 1.0, 1.0),
+    body_friction=(1.0, 0.005, 0.0001), creature_contype=2,
+    creature_conaffinity=1, self_collision_conaffinity=3,
+    floor_contype=1, floor_conaffinity=2, initial_floor_clearance=5.0,
+    supports_fluid_overrides=True, supports_scheduled_gravity=True,
+)
 
 
 @dataclass(frozen=True)
 class FlyingAwayEvaluationConfig:
+    environment: EnvironmentFamily = TASK_ENVIRONMENT
+    settle_seconds: float = 0.0
+    max_creature_height: float = 0.0
+    min_center_height_fraction: float = 0.0
+    initial_floor_contact_policy: str = "contact"
     episode_seconds: float = 10.0
-    fluid_density: float = DEFAULT_FLYING_FLUID_DENSITY
-    fluid_viscosity: float = DEFAULT_FLYING_FLUID_VISCOSITY
-    fluid_shape: str = DEFAULT_FLYING_FLUID_SHAPE
-    fluid_coef: Sequence[float] = DEFAULT_FLYING_FLUID_COEF
-    gravity: float = DEFAULT_FLYING_GRAVITY
     max_node: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
@@ -76,7 +85,7 @@ TASK_DEFINITION = TaskDefinition(
     config_type=FlyingAwayEvaluationConfig,
     result_type=FlyingAwayEvaluationResult,
     evaluator=evaluate_flying_away,
-    environment_family=EnvironmentFamily.FLYING,
+    environment=TASK_ENVIRONMENT,
     title="Distance-from-origin flying_away evaluation",
     result_fields=FLYING_RESULT_FIELDS,
     order=60,
