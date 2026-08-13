@@ -225,6 +225,7 @@ def test_evaluation_and_shared_import_cleanly_in_either_order(imports):
         "assert not hasattr(evaluation, 'ResultField'); "
         "assert not hasattr(evaluation, 'TaskDefinition'); "
         "assert not hasattr(evaluation, 'TASK_REGISTRY'); "
+        "assert not hasattr(evaluation, 'DISALLOWED_COLLISION_REASON'); "
         "assert shared.EvaluationConfig; assert shared.ResultField; "
         "assert shared.TaskDefinition; assert shared.TASK_REGISTRY == {}"
     )

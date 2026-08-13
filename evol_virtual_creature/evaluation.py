@@ -10,7 +10,6 @@ import numpy as np
 
 from .genotype import Genotype
 from .evolution_tasks import shared as task_shared
-from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
@@ -354,7 +353,7 @@ def settle_model(
             config.disallow_collision
             and _has_nonparent_self_collision(model, data)
         ):
-            return DISALLOWED_COLLISION_REASON
+            return task_shared.DISALLOWED_COLLISION_REASON
         failure = simulation_failure_reason(data, previous_time, config)
         if failure is not None:
             return f"{failure} while settling."
@@ -441,7 +440,7 @@ def _run_episode(
             config.disallow_collision
             and _has_nonparent_self_collision(model, data)
         ):
-            return DISALLOWED_COLLISION_REASON
+            return task_shared.DISALLOWED_COLLISION_REASON
         if (
             floor_id >= 0
             and first_ground_contact_time is None

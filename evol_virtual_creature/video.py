@@ -6,13 +6,12 @@ from pathlib import Path
 import mujoco
 
 from .evaluation import (
-    DISALLOWED_COLLISION_REASON,
     _has_nonparent_self_collision,
     initialize_model,
     simulation_failure_reason,
     task_definition_for_config,
 )
-from .evolution_tasks.shared import EvaluationConfig
+from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON, EvaluationConfig
 from .evolution_tasks.swimming_x import SwimmingEvaluationConfig
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
