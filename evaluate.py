@@ -1,7 +1,6 @@
 """Evaluate a genotype on a selected locomotion task."""
 
 import argparse
-from dataclasses import fields, replace
 import os
 from pathlib import Path
 import sys
@@ -24,7 +23,6 @@ from evol_virtual_creature.evaluation import (
     task_definition,
     task_names,
 )
-from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as DEFAULT_FLYING_ENVIRONMENT
 from evol_virtual_creature.genotype_io import load_genotype_from_json
 from evol_virtual_creature.video import save_x_axis_video
 
@@ -35,44 +33,10 @@ _DEFAULT_VIDEO_SENTINEL = Path("__task_default_video__")
 
 def main():
     args = parse_args()
+    definition = task_definition(args.task).args_override(args)
+    _validate_effective_definition(definition)
     genotype = load_genotype_from_json(args.genotype)
-    definition = task_definition(args.task)
-    environment = definition.environment
-    if environment.supports_fluid_overrides:
-        environment = replace(
-            environment,
-            fluid_density=args.fluid_density,
-            fluid_viscosity=args.fluid_viscosity,
-            fluid_shape=args.fluid_shape,
-            fluid_coef=tuple(args.fluid_coef),
-        )
-    config_type = definition.config_type
-    config_kwargs = {
-        "episode_seconds": args.duration,
-        "body_count_weight": args.body_count_weight,
-        "volume_weight": args.volume_weight,
-        "volume_penalty_cutoff": args.volume_penalty_cutoff,
-        "min_body_volume": args.min_body_volume,
-        "min_total_volume": args.min_total_volume,
-        "max_volume": args.max_volume,
-        "self_collision": args.self_collision,
-        "disallow_collision": args.disallow_collision,
-    }
-    config_kwargs.update(
-        upright_weight=(
-            DEFAULT_UPRIGHT_ERROR_WEIGHT if args.upright_error else 0.0
-        ),
-        fitness_gain_fraction=args.fitness_gain_fraction,
-    )
-    supported_fields = {field.name for field in fields(config_type)}
-    config = config_type(
-        **{
-            name: value
-            for name, value in config_kwargs.items()
-            if name in supported_fields
-        }
-    )
-    result = evaluate_task(genotype, definition, config, environment)
+    result = evaluate_task(genotype, definition)
 
     if result.disqualified:
         print(f"Disqualified: {result.failure_reason}")
@@ -116,8 +80,6 @@ def main():
                 genotype=genotype,
                 output_path=video_path,
                 definition=definition,
-                config=config,
-                environment=environment,
                 fps=args.fps,
                 width=args.width,
                 height=args.height,
@@ -220,21 +182,21 @@ def parse_args() -> argparse.Namespace:
         "--fluid-density",
         type=float,
         default=None,
-        help="Fluid density for flying tasks in kg/m^3. (default: task default)",
+        help="Fluid density in kg/m^3. (default: task environment default)",
     )
     parser.add_argument(
         "--fluid-viscosity",
         type=float,
         default=None,
-        help="Fluid viscosity for flying tasks in Pa*s. (default: task default)",
+        help="Fluid viscosity in Pa*s. (default: task environment default)",
     )
     parser.add_argument(
         "--fluid-shape",
         choices=("none", "ellipsoid"),
         default=None,
         help=(
-            "MuJoCo fluid shape approximation for flying creature geoms. "
-            "(default: task default)"
+            "MuJoCo fluid shape approximation for creature geoms. "
+            "(default: task environment default)"
         ),
     )
     parser.add_argument(
@@ -253,8 +215,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar=("BLUNT", "SLENDER", "ANGULAR", "KUTTA", "MAGNUS"),
         help=(
-            "Five MuJoCo fluid coefficients used by flying creature geoms. "
-            "(default: task default)"
+            "Five MuJoCo fluid coefficients used by creature geoms. "
+            "(default: task environment default)"
         ),
     )
     parser.add_argument(
@@ -332,26 +294,32 @@ def parse_args() -> argparse.Namespace:
         help="Use a shadow-casting spotlight instead of a directional light.",
     )
     args = parser.parse_args()
-    _apply_task_defaults(args)
     if args.duration <= 0.0:
         parser.error("--duration must be greater than zero")
-    if args.volume_penalty_cutoff < 0.0:
+    if args.volume_penalty_cutoff is not None and args.volume_penalty_cutoff < 0.0:
         parser.error("--volume-penalty-cutoff must be non-negative")
-    if args.max_volume <= args.volume_penalty_cutoff:
+    if (
+        args.max_volume is not None
+        and args.volume_penalty_cutoff is not None
+        and args.max_volume <= args.volume_penalty_cutoff
+    ):
         parser.error("--max-volume must be greater than --volume-penalty-cutoff")
-    if args.min_body_volume < 0.0:
+    if args.min_body_volume is not None and args.min_body_volume < 0.0:
         parser.error("--min-body-volume must be non-negative")
-    if args.min_total_volume < 0.0:
+    if args.min_total_volume is not None and args.min_total_volume < 0.0:
         parser.error("--min-total-volume must be non-negative")
-    if args.volume_weight < 0.0:
+    if args.volume_weight is not None and args.volume_weight < 0.0:
         parser.error("--volume-weight must be non-negative")
-    if args.body_count_weight < 0.0:
+    if args.body_count_weight is not None and args.body_count_weight < 0.0:
         parser.error("--body-count-weight must be non-negative")
-    if args.fluid_density < 0.0:
+    if args.fluid_density is not None and args.fluid_density < 0.0:
         parser.error("--fluid-density must be non-negative")
-    if not 0.0 <= args.fitness_gain_fraction <= 1.0:
+    if (
+        args.fitness_gain_fraction is not None
+        and not 0.0 <= args.fitness_gain_fraction <= 1.0
+    ):
         parser.error("--fitness-gain-fraction must be between 0 and 1")
-    if args.fluid_viscosity < 0.0:
+    if args.fluid_viscosity is not None and args.fluid_viscosity < 0.0:
         parser.error("--fluid-viscosity must be non-negative")
     if args.fps < 1:
         parser.error("--fps must be at least 1")
@@ -364,34 +332,11 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def _apply_task_defaults(args: argparse.Namespace) -> None:
-    """Fill task-dependent CLI defaults after ``--task`` has been parsed."""
-    task_defaults = task_definition(args.task).config_type()
-    for name in (
-        "body_count_weight",
-        "volume_weight",
-        "volume_penalty_cutoff",
-        "min_body_volume",
-        "min_total_volume",
-        "max_volume",
-    ):
-        if getattr(args, name) is None:
-            setattr(args, name, getattr(task_defaults, name))
-
-    definition = task_definition(args.task)
-    environment_defaults = (
-        definition.environment
-        if definition.environment.supports_fluid_overrides
-        else DEFAULT_FLYING_ENVIRONMENT
-    )
-    for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
-        if getattr(args, name) is None:
-            value = getattr(environment_defaults, name)
-            if name == "fluid_coef":
-                value = list(value)
-            setattr(args, name, value)
-    if args.fitness_gain_fraction is None:
-        args.fitness_gain_fraction = getattr(task_defaults, "fitness_gain_fraction", 0.5)
+def _validate_effective_definition(definition) -> None:
+    """Validate relationships that depend on task-specific defaults."""
+    config = definition.config
+    if config.max_volume <= config.volume_penalty_cutoff:
+        raise ValueError("--max-volume must be greater than --volume-penalty-cutoff")
 
 
 if __name__ == "__main__":

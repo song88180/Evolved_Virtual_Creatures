@@ -198,8 +198,8 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
 def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
     observed = []
 
-    def record_config(_genotype, _definition, config, _environment):
-        observed.append(config.upright_weight)
+    def record_config(_genotype, definition):
+        observed.append(definition.config.upright_weight)
         return type(
             "Result",
             (),
@@ -323,48 +323,63 @@ def test_evolve_accepts_flying_fluid_options(monkeypatch):
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])
 
 
-def test_cli_uses_task_defaults_when_options_are_omitted(monkeypatch, module):
-    class TaskDefaults:
-        body_count_weight = 0.012
-        volume_weight = 0.034
-        volume_penalty_cutoff = 0.056
-        min_body_volume = 0.000078
-        min_total_volume = 0.00012
-        max_volume = 0.9
-        fluid_density = 0.8
-        fluid_viscosity = 0.00003
-        fluid_shape = "none"
-        fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
-        fitness_gain_fraction = 0.7
-        environment = FLYING_ENVIRONMENT
-
-    monkeypatch.setattr(
-        module,
-        "task_definition",
-        lambda _task: argparse.Namespace(
-            config_type=TaskDefaults,
-            environment=replace(
-                FLYING_ENVIRONMENT, fluid_density=0.8,
-                fluid_viscosity=0.00003, fluid_shape="none",
-                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
-            ),
-        ),
-    )
+def test_cli_leaves_task_dependent_options_unset(monkeypatch, module):
     monkeypatch.setattr(sys, "argv", [module.__file__, "--task", "flying_x"])
 
     args = module.parse_args()
 
-    assert args.body_count_weight == pytest.approx(0.012)
-    assert args.volume_weight == pytest.approx(0.034)
-    assert args.volume_penalty_cutoff == pytest.approx(0.056)
-    assert args.min_body_volume == pytest.approx(0.000078)
-    assert args.min_total_volume == pytest.approx(0.00012)
-    assert args.max_volume == pytest.approx(0.9)
-    assert args.fluid_density == pytest.approx(0.8)
-    assert args.fluid_viscosity == pytest.approx(0.00003)
-    assert args.fluid_shape == "none"
-    assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
-    assert args.fitness_gain_fraction == pytest.approx(0.7)
+    assert args.body_count_weight is None
+    assert args.volume_weight is None
+    assert args.volume_penalty_cutoff is None
+    assert args.min_body_volume is None
+    assert args.min_total_volume is None
+    assert args.max_volume is None
+    assert args.fluid_density is None
+    assert args.fluid_viscosity is None
+    assert args.fluid_shape is None
+    assert args.fluid_coef is None
+    assert args.fitness_gain_fraction is None
+
+
+@pytest.mark.parametrize(
+    "task", ["swimming_x", "walking_x", "flying_x"]
+)
+def test_task_definition_allows_explicit_fluid_overrides_for_every_environment(task):
+    definition = task_definition(task)
+    defaults = definition._default_environment
+    args = argparse.Namespace(
+        fluid_density=0.8,
+        fluid_viscosity=0.00003,
+        fluid_shape="none",
+        fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+    )
+
+    returned = definition.args_override(args)
+
+    assert returned is definition
+    assert definition.environment.fluid_density == pytest.approx(0.8)
+    assert definition.environment.fluid_viscosity == pytest.approx(0.00003)
+    assert definition.environment.fluid_shape == "none"
+    assert definition.environment.fluid_coef == pytest.approx(
+        (0.1, 0.2, 0.3, 0.4, 0.5)
+    )
+    definition.args_override(argparse.Namespace())
+    assert definition.environment is not defaults
+    assert definition.environment == defaults
+
+
+def test_task_definition_config_overrides_reset_to_task_defaults():
+    definition = task_definition("swimming_x")
+    defaults = SwimmingEvaluationConfig()
+
+    definition.args_override(
+        argparse.Namespace(duration=3.0, body_count_weight=0.25)
+    )
+    assert definition.config.episode_seconds == pytest.approx(3.0)
+    assert definition.config.body_count_weight == pytest.approx(0.25)
+
+    definition.args_override(argparse.Namespace())
+    assert definition.config == defaults
 
 
 @pytest.mark.parametrize("module", [evaluate, evolve_cli])

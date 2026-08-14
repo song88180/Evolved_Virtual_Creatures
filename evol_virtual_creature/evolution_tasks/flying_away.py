@@ -11,7 +11,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(
     body_friction=(1.0, 0.005, 0.0001), creature_contype=2,
     creature_conaffinity=1, self_collision_conaffinity=3,
     floor_contype=1, floor_conaffinity=2, initial_floor_clearance=5.0,
-    supports_fluid_overrides=True, supports_scheduled_gravity=True,
+    supports_scheduled_gravity=True,
 )
 
 

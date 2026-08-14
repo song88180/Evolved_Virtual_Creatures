@@ -43,18 +43,19 @@ class MutantRecord:
 def _evaluate_population(
     population: list[Genotype],
     definition: TaskDefinition,
-    config: EvaluationConfig,
-    executor: ProcessPoolExecutor,
-    environment: EnvironmentFamily | None = None,
+    config_or_executor: EvaluationConfig | ProcessPoolExecutor,
+    executor: ProcessPoolExecutor | None = None,
 ) -> list[EvaluatedCreature]:
     """Simulate and score every genotype concurrently, preserving input order."""
+    if executor is None:
+        executor = config_or_executor
+    else:
+        definition.config = config_or_executor
     return list(
         executor.map(
             _evaluate_creature,
             population,
             repeat(definition),
-            repeat(config),
-            repeat(environment),
         )
     )
 
@@ -62,17 +63,15 @@ def _evaluate_population(
 def _evaluate_creature(
     genotype: Genotype,
     definition: TaskDefinition,
-    config: EvaluationConfig,
-    environment: EnvironmentFamily | None = None,
 ) -> EvaluatedCreature:
     """Evaluate one genotype, returning a failure score if simulation raises."""
     try:
-        result = evaluate_task(genotype, definition, config, environment)
+        result = evaluate_task(genotype, definition)
         metrics = asdict(result)
         fitness = result.fitness
     except Exception as error:
         metrics = {
-            "fitness": config.build_failure_fitness,
+            "fitness": definition.config.build_failure_fitness,
             "forward_distance": 0.0,
             "average_forward_speed": 0.0,
             "sideways_drift_speed": 0.0,
@@ -87,7 +86,7 @@ def _evaluate_creature(
             "disqualified": False,
             "failure_reason": str(error),
         }
-        fitness = config.build_failure_fitness
+        fitness = definition.config.build_failure_fitness
     return EvaluatedCreature(genotype=genotype, fitness=fitness, metrics=metrics)
 
 
@@ -97,11 +96,12 @@ def _save_generation_best(
     generation_best: EvaluatedCreature,
     best_so_far: EvaluatedCreature,
     definition: TaskDefinition,
-    config: EvaluationConfig,
+    config: EvaluationConfig | None = None,
     save_generation_history: bool = True,
-    environment: EnvironmentFamily | None = None,
 ) -> None:
     """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
+    if config is not None:
+        definition.config = config
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
     save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
     write_json(run_dir / "best_metrics.json", best_so_far.metrics)
@@ -109,8 +109,6 @@ def _save_generation_best(
         run_dir / "best_creature.xml",
         best_so_far.genotype,
         definition,
-        config,
-        environment,
     )
 
     if save_generation_history:
@@ -126,17 +124,22 @@ def _write_best_xml(
     path: Path,
     genotype: Genotype,
     definition: TaskDefinition,
-    config: EvaluationConfig,
+    config: EvaluationConfig | None = None,
     environment: EnvironmentFamily | None = None,
 ) -> None:
     """Write the best creature's MJCF to disk, skipping output if the build aborts."""
+    if config is not None:
+        definition.config = config
+    if environment is not None:
+        definition.environment = environment
     try:
         mjcf = PhenotypeBuilder(
             genotype,
-            max_node=config.max_node,
-            environment=(definition.environment if environment is None else environment),
+            max_node=definition.config.max_node,
+            environment=definition.environment,
             self_collision=(
-                config.self_collision or config.disallow_collision
+                definition.config.self_collision
+                or definition.config.disallow_collision
             ),
         ).build()
     except PhenotypeBuildAbort:

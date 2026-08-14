@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from dataclasses import dataclass, field, fields, replace
+from typing import Any, Callable, Sequence
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,6 @@ class EnvironmentFamily:
     floor_conaffinity: int = 0
     initial_root_position: Sequence[float] = (0.0, 0.0, 0.6)
     initial_floor_clearance: float | None = None
-    supports_fluid_overrides: bool = False
     supports_scheduled_gravity: bool = False
     initialization_callback: Callable | None = None
 
@@ -132,7 +131,7 @@ class RolloutPolicy:
     horizontal_origin_distance: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass
 class TaskDefinition:
     """Complete public definition exported by one task module."""
 
@@ -146,6 +145,61 @@ class TaskDefinition:
     title: str
     result_fields: tuple[ResultField, ...]
     order: int
+    config: EvaluationConfig | None = None
+    _default_environment: EnvironmentFamily = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._default_environment = self.environment
+        if self.config is None:
+            self.config = self.config_type()
+        elif not isinstance(self.config, self.config_type):
+            raise TypeError(
+                f"Task {self.name!r} requires {self.config_type.__name__}, "
+                f"not {type(self.config).__name__}"
+            )
+
+    def args_override(self, args: Any) -> TaskDefinition:
+        """Reset task defaults, then apply explicit CLI environment and config values."""
+        self.args_override_environment(args)
+        self.args_override_config(args)
+        return self
+
+    def args_override_environment(self, args: Any) -> EnvironmentFamily:
+        """Apply only explicitly supplied environment arguments."""
+        overrides = {}
+        for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
+            value = getattr(args, name, None)
+            if value is not None:
+                overrides[name] = tuple(value) if name == "fluid_coef" else value
+        self.environment = replace(self._default_environment, **overrides)
+        return self.environment
+
+    def args_override_config(self, args: Any) -> EvaluationConfig:
+        """Build a fresh task config and apply supported explicit CLI arguments."""
+        config = self.config_type()
+        supported = {item.name for item in fields(config)}
+        candidates = {
+            "episode_seconds": getattr(args, "duration", None),
+            "max_node": getattr(args, "max_node", None),
+            "body_count_weight": getattr(args, "body_count_weight", None),
+            "volume_weight": getattr(args, "volume_weight", None),
+            "volume_penalty_cutoff": getattr(args, "volume_penalty_cutoff", None),
+            "min_body_volume": getattr(args, "min_body_volume", None),
+            "min_total_volume": getattr(args, "min_total_volume", None),
+            "max_volume": getattr(args, "max_volume", None),
+            "self_collision": getattr(args, "self_collision", None),
+            "disallow_collision": getattr(args, "disallow_collision", None),
+            "fitness_gain_fraction": getattr(args, "fitness_gain_fraction", None),
+        }
+        if getattr(args, "upright_error", False):
+            candidates["upright_weight"] = DEFAULT_UPRIGHT_ERROR_WEIGHT
+        overrides = {
+            name: value
+            for name, value in candidates.items()
+            if name in supported and value is not None
+        }
+        self.config = replace(config, **overrides)
+        return self.config
 
 
 TASK_REGISTRY: dict[str, TaskDefinition] = {}
@@ -155,6 +209,7 @@ _BUILTIN_TASKS_LOADED = False
 DEFAULT_MIN_BODY_VOLUME = 1e-6
 DEFAULT_MIN_TOTAL_VOLUME = 0.0
 DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
+DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 
 SWIMMING_RESULT_FIELDS = (ResultField("Vertical drift speed", "vertical_drift_speed"),)

@@ -30,7 +30,7 @@ WALKING_CENTER_HEIGHT_DROP_REASON = (
     "Creature center of mass dropped below the walking height threshold."
 )
 MAXIMUM_CREATURE_HEIGHT_REASON = "Creature height exceeds the maximum allowed height."
-DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
+DEFAULT_UPRIGHT_ERROR_WEIGHT = task_shared.DEFAULT_UPRIGHT_ERROR_WEIGHT
 
 
 def _cache_task_definition(
@@ -95,10 +95,15 @@ def task_definition(task: str) -> task_shared.TaskDefinition:
 def evaluate_task(
     genotype: Genotype,
     definition: task_shared.TaskDefinition,
-    config: task_shared.EvaluationConfig,
+    config: task_shared.EvaluationConfig | None = None,
     environment: task_shared.EnvironmentFamily | None = None,
 ):
     """Build, simulate, and score a genotype using its registered task callbacks."""
+    if config is not None:
+        definition.config = config
+    if environment is not None:
+        definition.environment = environment
+    config = definition.config
     if not isinstance(config, definition.config_type):
         raise TypeError(
             f"Task {definition.name!r} requires {definition.config_type.__name__}, "
@@ -108,7 +113,7 @@ def evaluate_task(
     def failed(reason: str):
         return definition.failed_task_callback(config, reason)
 
-    environment = definition.environment if environment is None else environment
+    environment = definition.environment
     built = _build_model(genotype, config, environment)
     if isinstance(built, str):
         return failed(built)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -12,8 +13,6 @@ from .evaluation import (
 )
 from .evolution_tasks.shared import (
     DISALLOWED_COLLISION_REASON,
-    EnvironmentFamily,
-    EvaluationConfig,
     TaskDefinition,
 )
 from .evolution_tasks.swimming_x import (
@@ -103,7 +102,6 @@ def save_x_axis_video(
     genotype: Genotype,
     output_path: Path,
     definition: TaskDefinition,
-    config: EvaluationConfig,
     fps: int,
     width: int,
     height: int,
@@ -112,10 +110,10 @@ def save_x_axis_video(
     shadowsize: int = 4096,
     spotlight: bool = False,
     camera_circle_around: bool = False,
-    environment: EnvironmentFamily | None = None,
 ):
     """Render a selected swimming, walking, or flying task episode to MP4."""
-    environment = definition.environment if environment is None else environment
+    config = definition.config
+    environment = definition.environment
     try:
         import imageio.v3 as iio
     except ImportError as error:
@@ -245,8 +243,7 @@ def save_x_axis_swimming_video(
     return save_x_axis_video(
         genotype,
         output_path,
-        SWIMMING_X_TASK,
-        config,
+        replace(SWIMMING_X_TASK, config=config),
         fps,
         width,
         height,
