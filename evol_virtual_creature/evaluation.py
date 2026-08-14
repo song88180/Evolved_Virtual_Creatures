@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from importlib import import_module
 import math
 from pkgutil import iter_modules
@@ -83,10 +84,6 @@ def load_task_definition(task: str) -> task_shared.TaskDefinition:
         raise ValueError(
             f"Task module {task!r} declares name {definition.name!r}"
         )
-    if definition.config_type().environment != definition.environment:
-        raise ValueError(
-            f"Task {task!r} config default environment does not match TASK_DEFINITION"
-        )
     return _cache_task_definition(definition)
 
 
@@ -112,6 +109,25 @@ def task_definition_for_config(
     if definition is None:
         raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
     return definition
+
+
+def environment_for_config(
+    config: task_shared.EvaluationConfig,
+) -> task_shared.EnvironmentFamily:
+    """Return the task environment with per-evaluation physics overrides applied."""
+    environment = task_definition_for_config(config).environment
+    overrides = {
+        name: getattr(config, name)
+        for name in (
+            "gravity",
+            "fluid_density",
+            "fluid_viscosity",
+            "fluid_shape",
+            "fluid_coef",
+        )
+        if getattr(config, name) is not None
+    }
+    return replace(environment, **overrides) if overrides else environment
 
 
 def evaluate_task(genotype: Genotype, config: task_shared.EvaluationConfig):
@@ -207,15 +223,16 @@ def initialize_model(
     config: task_shared.EvaluationConfig,
 ) -> str | None:
     """Apply declarative placement, validation, callback, and settling."""
+    environment = environment_for_config(config)
     mujoco.mj_forward(model, data)
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
     )
-    clearance = config.environment.initial_floor_clearance
+    clearance = environment.initial_floor_clearance
     if floor_id >= 0 and clearance is not None:
         free_joint_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
         if free_joint_ids.size == 0:
-            return f"{config.environment.name} creature has no free root joint."
+            return f"{environment.name} creature has no free root joint."
         root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
         creature_geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] != 0]
         floor_z = float(data.geom_xpos[floor_id, 2])
@@ -224,7 +241,7 @@ def initialize_model(
         if required_shift > 0.0:
             data.qpos[root_qpos_adr + 2] += required_shift
         mujoco.mj_forward(model, data)
-    callback = config.environment.initialization_callback
+    callback = environment.initialization_callback
     if callback is not None:
         failure = callback(model, data, config)
         if failure is not None:
@@ -362,11 +379,10 @@ def settle_model(
 
 def _build_model(genotype: Genotype, config: task_shared.EvaluationConfig):
     try:
-        definition = task_definition_for_config(config)
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=config.environment,
+            environment=environment_for_config(config),
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

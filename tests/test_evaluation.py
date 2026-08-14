@@ -24,6 +24,7 @@ from evol_virtual_creature.evaluation import (
     _has_nonparent_self_collision,
     _run_episode,
     _creature_volume,
+    environment_for_config,
     evaluate_task,
     initialize_model,
     simulation_failure_reason,
@@ -266,6 +267,8 @@ def test_away_tasks_have_task_specific_result_types():
 )
 def test_task_configs_reuse_shared_evaluation_config(config_type):
     assert issubclass(config_type, EvaluationConfig)
+    assert not hasattr(config_type(), "environment")
+    assert task_definition_for_config(config_type()).environment is not None
 
 
 @pytest.mark.parametrize(
@@ -918,12 +921,13 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     )
     config = FlyingAwayEvaluationConfig(
         episode_seconds=3.0,
-        environment=replace(FLYING_AWAY_ENVIRONMENT, fluid_density=0.0, fluid_viscosity=0.0),
+        fluid_density=0.0,
+        fluid_viscosity=0.0,
     )
     builder = PhenotypeBuilder(
         genotype,
         max_node=config.max_node,
-        environment=config.environment,
+        environment=environment_for_config(config),
     )
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
@@ -1063,7 +1067,7 @@ def test_walking_initialization_raises_low_creature_above_floor():
     assert all(float(contact.dist) >= -2e-4 for contact in data.contact)
 
 
-def test_generic_initialization_runs_environment_callback():
+def test_generic_initialization_runs_environment_callback(monkeypatch):
     genotype = build_genotype(
         root="body",
         spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
@@ -1072,7 +1076,14 @@ def test_generic_initialization_runs_environment_callback():
         SWIMMING_X_ENVIRONMENT,
         initialization_callback=_reject_initialization,
     )
-    config = SwimmingEvaluationConfig(environment=environment)
+    definition = task_definition_for_config(SwimmingEvaluationConfig())
+    custom_definition = replace(definition, environment=environment)
+    monkeypatch.setitem(TASK_REGISTRY, definition.name, custom_definition)
+    from evol_virtual_creature.evolution_tasks import shared
+    monkeypatch.setitem(
+        shared._TASKS_BY_CONFIG_TYPE, SwimmingEvaluationConfig, custom_definition
+    )
+    config = SwimmingEvaluationConfig()
     builder = PhenotypeBuilder(genotype, max_node=500, environment=environment)
     model = mujoco.MjModel.from_xml_string(builder.build())
 
@@ -1081,14 +1092,21 @@ def test_generic_initialization_runs_environment_callback():
     )
 
 
-def test_shared_evaluator_initializes_swimming_tasks():
+def test_shared_evaluator_initializes_swimming_tasks(monkeypatch):
     environment = replace(
         SWIMMING_X_ENVIRONMENT,
         initialization_callback=_reject_initialization,
     )
+    definition = task_definition_for_config(SwimmingEvaluationConfig())
+    custom_definition = replace(definition, environment=environment)
+    monkeypatch.setitem(TASK_REGISTRY, definition.name, custom_definition)
+    from evol_virtual_creature.evolution_tasks import shared
+    monkeypatch.setitem(
+        shared._TASKS_BY_CONFIG_TYPE, SwimmingEvaluationConfig, custom_definition
+    )
     result = evaluate_task(
         load_genotype_from_json("examples/single_root.json"),
-        SwimmingEvaluationConfig(environment=environment),
+        SwimmingEvaluationConfig(),
     )
 
     assert result.fitness == -1_000.0

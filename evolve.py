@@ -69,16 +69,13 @@ def main() -> None:
         ),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
-    environment = definition.environment
-    if environment.supports_fluid_overrides:
-        environment = replace(
-            environment,
+    if definition.environment.supports_fluid_overrides:
+        config_kwargs.update(
             fluid_density=args.fluid_density,
             fluid_viscosity=args.fluid_viscosity,
             fluid_shape=args.fluid_shape,
             fluid_coef=tuple(args.fluid_coef),
         )
-    config_kwargs["environment"] = environment
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{
@@ -234,7 +231,7 @@ def _config_for_generation(config, args: argparse.Namespace, generation: int):
     gravity = _gravity_for_generation(
         args.gradual_gravity_change, generation, args.generations
     )
-    return replace(config, environment=replace(config.environment, gravity=gravity))
+    return replace(config, gravity=gravity)
 
 
 def _validate_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:

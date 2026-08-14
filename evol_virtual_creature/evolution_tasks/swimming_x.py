@@ -9,7 +9,6 @@ TASK_ENVIRONMENT = EnvironmentFamily(name="swimming_x")
 
 @dataclass(frozen=True)
 class SwimmingEvaluationConfig(EvaluationConfig):
-    environment: EnvironmentFamily = TASK_ENVIRONMENT
     forward_speed_weight: float = 1.0
     energy_weight: float = 1e-6
     sideways_drift_weight: float = 0.1

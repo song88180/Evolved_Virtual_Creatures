@@ -7,6 +7,7 @@ import mujoco
 
 from .evaluation import (
     _has_nonparent_self_collision,
+    environment_for_config,
     initialize_model,
     simulation_failure_reason,
     task_definition_for_config,
@@ -119,7 +120,7 @@ def save_x_axis_video(
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=config.environment,
+            environment=environment_for_config(config),
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

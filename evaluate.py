@@ -1,7 +1,7 @@
 """Evaluate a genotype on a selected locomotion task."""
 
 import argparse
-from dataclasses import fields, replace
+from dataclasses import fields
 import os
 from pathlib import Path
 import sys
@@ -55,16 +55,13 @@ def main():
         ),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
-    environment = definition.environment
-    if environment.supports_fluid_overrides:
-        environment = replace(
-            environment,
+    if definition.environment.supports_fluid_overrides:
+        config_kwargs.update(
             fluid_density=args.fluid_density,
             fluid_viscosity=args.fluid_viscosity,
             fluid_shape=args.fluid_shape,
             fluid_coef=tuple(args.fluid_coef),
         )
-    config_kwargs["environment"] = environment
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{

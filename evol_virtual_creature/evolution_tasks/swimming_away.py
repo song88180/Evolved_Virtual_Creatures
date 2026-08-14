@@ -9,7 +9,6 @@ TASK_ENVIRONMENT = EnvironmentFamily(name="swimming_away")
 
 @dataclass(frozen=True)
 class SwimmingAwayEvaluationConfig(EvaluationConfig):
-    environment: EnvironmentFamily = TASK_ENVIRONMENT
     speed_weight: float = 1.0
     energy_weight: float = 1e-6
     angular_speed_weight: float = 0.01

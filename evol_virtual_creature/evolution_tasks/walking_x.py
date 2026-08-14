@@ -14,7 +14,6 @@ TASK_ENVIRONMENT = EnvironmentFamily(
 
 @dataclass(frozen=True)
 class WalkingEvaluationConfig(EvaluationConfig):
-    environment: EnvironmentFamily = TASK_ENVIRONMENT
     initial_floor_contact_policy: str = "penetration"
     settle_seconds: float = 1.0
     forward_speed_weight: float = 1.0

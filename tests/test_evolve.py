@@ -10,6 +10,7 @@ import pytest
 import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
+from evol_virtual_creature.evaluation import environment_for_config
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
@@ -281,8 +282,8 @@ def test_generation_config_applies_gradual_flying_gravity():
         generations=4,
     )
     generation_config = evolve_cli._config_for_generation(config, args, 2)
-    assert generation_config.environment.gravity == pytest.approx(-5.0)
-    assert config.environment.gravity == pytest.approx(-9.81)
+    assert environment_for_config(generation_config).gravity == pytest.approx(-5.0)
+    assert environment_for_config(config).gravity == pytest.approx(-9.81)
 
 
 def test_evolve_accepts_flying_fluid_options(monkeypatch):
@@ -704,7 +705,7 @@ def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
         genotype,
         FlyingEvaluationConfig(
             episode_seconds=0.02,
-            environment=replace(FLYING_ENVIRONMENT, gravity=-3.5),
+            gravity=-3.5,
         ),
     )
     option = ET.fromstring(path.read_text()).find("option")
