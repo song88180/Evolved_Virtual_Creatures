@@ -219,7 +219,7 @@ def initialize_model(
     if floor_id >= 0 and clearance is not None:
         free_joint_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
         if free_joint_ids.size == 0:
-            return f"{environment.name} creature has no free root joint."
+            return f"{definition.name} creature has no free root joint."
         root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
         creature_geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] != 0]
         floor_z = float(data.geom_xpos[floor_id, 2])
