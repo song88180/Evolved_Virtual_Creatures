@@ -1,11 +1,11 @@
 """Distance-from-origin flying task."""
 
-from dataclasses import dataclass, replace
-from .shared import DEFAULT_ENVIRONMENT, DEFAULT_FLYING_MIN_TOTAL_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
+from dataclasses import dataclass
+from .shared import DEFAULT_FLYING_MIN_TOTAL_VOLUME, FLYING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
 
-TASK_ENVIRONMENT = replace(
-    DEFAULT_ENVIRONMENT, name="flying_away", gravity=-9.81, fluid_density=1.225,
+TASK_ENVIRONMENT = EnvironmentFamily(
+    name="flying_away", gravity=-9.81, fluid_density=1.225,
     fluid_viscosity=1.8e-5, fluid_shape="ellipsoid",
     fluid_coef=(0.5, 0.25, 1.5, 1.0, 1.0),
     body_friction=(1.0, 0.005, 0.0001), creature_contype=2,

@@ -1,11 +1,11 @@
 """Distance-from-origin walking task."""
 
-from dataclasses import dataclass, replace
-from .shared import DEFAULT_ENVIRONMENT, WALKING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
+from dataclasses import dataclass
+from .shared import WALKING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
 
-TASK_ENVIRONMENT = replace(
-    DEFAULT_ENVIRONMENT, name="walking_away", gravity=-9.81,
+TASK_ENVIRONMENT = EnvironmentFamily(
+    name="walking_away", gravity=-9.81,
     fluid_density=None, fluid_viscosity=None, body_friction=(1.0, 0.005, 0.0001),
     creature_contype=2, creature_conaffinity=1, self_collision_conaffinity=3,
     floor_contype=1, floor_conaffinity=2, initial_floor_clearance=0.05,

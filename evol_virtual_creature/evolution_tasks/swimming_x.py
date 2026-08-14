@@ -1,10 +1,10 @@
 """X-axis swimming task."""
 
-from dataclasses import dataclass, replace
-from .shared import DEFAULT_ENVIRONMENT, SWIMMING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
+from dataclasses import dataclass
+from .shared import SWIMMING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
 
-TASK_ENVIRONMENT = replace(DEFAULT_ENVIRONMENT, name="swimming_x")
+TASK_ENVIRONMENT = EnvironmentFamily(name="swimming_x")
 
 
 @dataclass(frozen=True)
