@@ -10,7 +10,7 @@ import pytest
 import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
-from evol_virtual_creature.evaluation import environment_for_config
+from evol_virtual_creature.evaluation import environment_for_config, task_definition
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
@@ -198,7 +198,7 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
 def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
     observed = []
 
-    def record_config(_genotype, config):
+    def record_config(_genotype, _definition, config):
         observed.append(config.upright_weight)
         return type(
             "Result",
@@ -282,8 +282,9 @@ def test_generation_config_applies_gradual_flying_gravity():
         generations=4,
     )
     generation_config = evolve_cli._config_for_generation(config, args, 2)
-    assert environment_for_config(generation_config).gravity == pytest.approx(-5.0)
-    assert environment_for_config(config).gravity == pytest.approx(-9.81)
+    definition = task_definition("flying_x")
+    assert environment_for_config(definition, generation_config).gravity == pytest.approx(-5.0)
+    assert environment_for_config(definition, config).gravity == pytest.approx(-9.81)
 
 
 def test_evolve_accepts_flying_fluid_options(monkeypatch):
@@ -611,23 +612,25 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "config",
+    "task, config",
     [
-        SwimmingEvaluationConfig(episode_seconds=0.02),
-        WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
-        SwimmingAwayEvaluationConfig(episode_seconds=0.02),
-        WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
-        FlyingEvaluationConfig(episode_seconds=0.02),
-        FlyingAwayEvaluationConfig(episode_seconds=0.02),
+        ("swimming_x", SwimmingEvaluationConfig(episode_seconds=0.02)),
+        ("walking_x", WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0)),
+        ("swimming_away", SwimmingAwayEvaluationConfig(episode_seconds=0.02)),
+        ("walking_away", WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0)),
+        ("flying_x", FlyingEvaluationConfig(episode_seconds=0.02)),
+        ("flying_away", FlyingAwayEvaluationConfig(episode_seconds=0.02)),
     ],
 )
 
 
-def test_evaluate_population_runs_in_processes_and_preserves_order(config):
+def test_evaluate_population_runs_in_processes_and_preserves_order(task, config):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     population = [genotype, genotype]
     with ProcessPoolExecutor(max_workers=2) as executor:
-        evaluated = evolve_lib._evaluate_population(population, config, executor)
+        evaluated = evolve_lib._evaluate_population(
+            population, task_definition(task), config, executor
+        )
     assert len(evaluated) == len(population)
     assert evaluated[0].fitness == evaluated[1].fitness
 
@@ -638,6 +641,7 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("walking_x"),
         WalkingEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     option = ET.fromstring(path.read_text()).find("option")
@@ -655,6 +659,7 @@ def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("swimming_away"),
         SwimmingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
@@ -677,6 +682,7 @@ def test_saved_best_xml_preserves_flying_physics(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("flying_x"),
         FlyingEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
@@ -703,6 +709,7 @@ def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("flying_x"),
         FlyingEvaluationConfig(
             episode_seconds=0.02,
             gravity=-3.5,
@@ -719,6 +726,7 @@ def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("walking_away"),
         WalkingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
@@ -749,6 +757,7 @@ def test_save_generation_best_can_skip_generation_history(tmp_path):
         generation=3,
         generation_best=creature,
         best_so_far=creature,
+        definition=task_definition("swimming_x"),
         config=SwimmingEvaluationConfig(episode_seconds=0.02),
         save_generation_history=False,
     )
@@ -771,6 +780,7 @@ def test_save_generation_best_records_history_by_default(tmp_path):
         generation=3,
         generation_best=creature,
         best_so_far=creature,
+        definition=task_definition("swimming_x"),
         config=SwimmingEvaluationConfig(episode_seconds=0.02),
     )
 
@@ -1019,6 +1029,7 @@ def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
     evolve_lib._write_best_xml(
         path,
         genotype,
+        task_definition("swimming_x"),
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
             self_collision=False,

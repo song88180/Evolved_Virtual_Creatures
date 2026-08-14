@@ -154,7 +154,6 @@ class TaskDefinition:
 
 
 TASK_REGISTRY: dict[str, TaskDefinition] = {}
-_TASKS_BY_CONFIG_TYPE: dict[type, TaskDefinition] = {}
 _BUILTIN_TASKS_LOADED = False
 
 

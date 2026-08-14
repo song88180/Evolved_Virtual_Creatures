@@ -70,7 +70,7 @@ def main():
             if name in supported_fields
         }
     )
-    result = evaluate_task(genotype, config)
+    result = evaluate_task(genotype, definition, config)
 
     if result.disqualified:
         print(f"Disqualified: {result.failure_reason}")
@@ -113,6 +113,7 @@ def main():
             save_x_axis_video(
                 genotype=genotype,
                 output_path=video_path,
+                definition=definition,
                 config=config,
                 fps=args.fps,
                 width=args.width,

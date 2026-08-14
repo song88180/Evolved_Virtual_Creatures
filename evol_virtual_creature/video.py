@@ -10,10 +10,16 @@ from .evaluation import (
     environment_for_config,
     initialize_model,
     simulation_failure_reason,
-    task_definition_for_config,
 )
-from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON, EvaluationConfig
-from .evolution_tasks.swimming_x import SwimmingEvaluationConfig
+from .evolution_tasks.shared import (
+    DISALLOWED_COLLISION_REASON,
+    EvaluationConfig,
+    TaskDefinition,
+)
+from .evolution_tasks.swimming_x import (
+    SwimmingEvaluationConfig,
+    TASK_DEFINITION as SWIMMING_X_TASK,
+)
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
@@ -96,6 +102,7 @@ def _prevent_floor_shadow_casting(
 def save_x_axis_video(
     genotype: Genotype,
     output_path: Path,
+    definition: TaskDefinition,
     config: EvaluationConfig,
     fps: int,
     width: int,
@@ -115,12 +122,11 @@ def save_x_axis_video(
             "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
         ) from error
 
-    task = task_definition_for_config(config)
     try:
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=environment_for_config(config),
+            environment=environment_for_config(definition, config),
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
@@ -150,7 +156,7 @@ def save_x_axis_video(
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
-    failure = initialize_model(model, data, config)
+    failure = initialize_model(model, data, definition, config)
     if failure is not None:
         raise RuntimeError(f"Cannot record video: {failure}")
 
@@ -237,6 +243,7 @@ def save_x_axis_swimming_video(
     return save_x_axis_video(
         genotype,
         output_path,
+        SWIMMING_X_TASK,
         config,
         fps,
         width,

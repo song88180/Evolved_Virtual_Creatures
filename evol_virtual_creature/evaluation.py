@@ -40,14 +40,7 @@ def _cache_task_definition(
     existing = task_shared.TASK_REGISTRY.get(definition.name)
     if existing is not None and existing is not definition:
         raise ValueError(f"Task name {definition.name!r} is already loaded")
-    config_definition = task_shared._TASKS_BY_CONFIG_TYPE.get(definition.config_type)
-    if config_definition is not None and config_definition is not definition:
-        raise ValueError(
-            f"Config type {definition.config_type.__name__} is already used by "
-            f"task {config_definition.name!r}"
-        )
     task_shared.TASK_REGISTRY[definition.name] = definition
-    task_shared._TASKS_BY_CONFIG_TYPE[definition.config_type] = definition
     return definition
 
 
@@ -100,22 +93,12 @@ def task_definition(task: str) -> task_shared.TaskDefinition:
     return load_task_definition(task)
 
 
-def task_definition_for_config(
-    config: task_shared.EvaluationConfig,
-) -> task_shared.TaskDefinition:
-    """Return canonical task metadata for a concrete config instance."""
-    _load_builtin_tasks()
-    definition = task_shared._TASKS_BY_CONFIG_TYPE.get(type(config))
-    if definition is None:
-        raise TypeError(f"Unsupported evaluation config type: {type(config).__name__}")
-    return definition
-
-
 def environment_for_config(
+    definition: task_shared.TaskDefinition,
     config: task_shared.EvaluationConfig,
 ) -> task_shared.EnvironmentFamily:
     """Return the task environment with per-evaluation physics overrides applied."""
-    environment = task_definition_for_config(config).environment
+    environment = definition.environment
     overrides = {
         name: getattr(config, name)
         for name in (
@@ -130,18 +113,26 @@ def environment_for_config(
     return replace(environment, **overrides) if overrides else environment
 
 
-def evaluate_task(genotype: Genotype, config: task_shared.EvaluationConfig):
+def evaluate_task(
+    genotype: Genotype,
+    definition: task_shared.TaskDefinition,
+    config: task_shared.EvaluationConfig,
+):
     """Build, simulate, and score a genotype using its registered task callbacks."""
-    definition = task_definition_for_config(config)
+    if not isinstance(config, definition.config_type):
+        raise TypeError(
+            f"Task {definition.name!r} requires {definition.config_type.__name__}, "
+            f"not {type(config).__name__}"
+        )
 
     def failed(reason: str):
         return definition.failed_task_callback(config, reason)
 
-    built = _build_model(genotype, config)
+    built = _build_model(genotype, definition, config)
     if isinstance(built, str):
         return failed(built)
     model, data, builder = built
-    failure = initialize_model(model, data, config)
+    failure = initialize_model(model, data, definition, config)
     if failure is not None:
         return failed(failure)
 
@@ -181,11 +172,6 @@ def evaluate_task(genotype: Genotype, config: task_shared.EvaluationConfig):
     return result
 
 
-def task_for_config(config: task_shared.EvaluationConfig) -> str:
-    """Return the canonical task name for a concrete config instance."""
-    return task_definition_for_config(config).name
-
-
 def task_names() -> tuple[str, ...]:
     """Return registered task names in presentation order."""
     _load_builtin_tasks()
@@ -220,10 +206,11 @@ def _copy_simulation_state(
 def initialize_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
+    definition: task_shared.TaskDefinition,
     config: task_shared.EvaluationConfig,
 ) -> str | None:
     """Apply declarative placement, validation, callback, and settling."""
-    environment = environment_for_config(config)
+    environment = environment_for_config(definition, config)
     mujoco.mj_forward(model, data)
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
@@ -377,12 +364,16 @@ def settle_model(
     return None
 
 
-def _build_model(genotype: Genotype, config: task_shared.EvaluationConfig):
+def _build_model(
+    genotype: Genotype,
+    definition: task_shared.TaskDefinition,
+    config: task_shared.EvaluationConfig,
+):
     try:
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=environment_for_config(config),
+            environment=environment_for_config(definition, config),
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

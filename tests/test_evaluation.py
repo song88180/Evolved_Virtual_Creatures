@@ -19,7 +19,6 @@ from evol_virtual_creature.evaluation import (
     WALKING_CENTER_HEIGHT_DROP_REASON,
     load_task_definition,
     task_definition,
-    task_definition_for_config,
     task_names,
     _has_nonparent_self_collision,
     _run_episode,
@@ -41,33 +40,39 @@ from evol_virtual_creature.evolution_tasks.shared import (
 from evol_virtual_creature.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
     FlyingAwayEvaluationResult,
+    TASK_DEFINITION as FLYING_AWAY_TASK,
     _episode_fitness as flying_away_episode_fitness,
     fitness_callback as flying_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.flying_x import (
     FlyingEvaluationConfig,
     FlyingEvaluationResult,
+    TASK_DEFINITION as FLYING_X_TASK,
     _episode_fitness as flying_x_episode_fitness,
     fitness_callback as flying_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
     SwimmingAwayEvaluationConfig,
+    TASK_DEFINITION as SWIMMING_AWAY_TASK,
     fitness_callback as swimming_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.swimming_x import (
     SwimmingEvaluationConfig,
     SwimmingEvaluationResult,
+    TASK_DEFINITION as SWIMMING_X_TASK,
     fitness_callback as swimming_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.walking_away import (
     WalkingAwayEvaluationConfig,
     WalkingAwayEvaluationResult,
+    TASK_DEFINITION as WALKING_AWAY_TASK,
     fitness_callback as walking_away_fitness,
 )
 from evol_virtual_creature.evolution_tasks.walking_x import (
     WalkingEvaluationConfig,
     WalkingEvaluationResult,
+    TASK_DEFINITION as WALKING_X_TASK,
     fitness_callback as walking_x_fitness,
 )
 from evol_virtual_creature.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
@@ -154,7 +159,6 @@ def test_task_registry_covers_every_task_and_config():
         assert isinstance(definition.rollout_policy.track_floor_contact, bool)
         assert definition.environment is environment
         assert definition.name == task
-        assert task_definition_for_config(config_type()) is definition
 
     with pytest.raises(KeyError):
         task_definition("unknown_task")
@@ -268,7 +272,7 @@ def test_away_tasks_have_task_specific_result_types():
 def test_task_configs_reuse_shared_evaluation_config(config_type):
     assert issubclass(config_type, EvaluationConfig)
     assert not hasattr(config_type(), "environment")
-    assert task_definition_for_config(config_type()).environment is not None
+    assert task_definition(config_type.__module__.rsplit(".", 1)[-1]).environment is not None
 
 
 @pytest.mark.parametrize(
@@ -504,24 +508,28 @@ def test_self_collision_masks_and_parent_filtering():
 def test_both_tasks_return_finite_results():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     swimming = evaluate_task(
-        genotype, SwimmingEvaluationConfig(episode_seconds=0.02)
+        genotype, SWIMMING_X_TASK, SwimmingEvaluationConfig(episode_seconds=0.02)
     )
     walking = evaluate_task(
         genotype,
+        WALKING_X_TASK,
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
     swimming_away = evaluate_task(
-        genotype, SwimmingAwayEvaluationConfig(episode_seconds=0.02)
+        genotype,
+        SWIMMING_AWAY_TASK,
+        SwimmingAwayEvaluationConfig(episode_seconds=0.02),
     )
     walking_away = evaluate_task(
         genotype,
+        WALKING_AWAY_TASK,
         WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.02),
     )
     flying = evaluate_task(
-        genotype, FlyingEvaluationConfig(episode_seconds=0.02)
+        genotype, FLYING_X_TASK, FlyingEvaluationConfig(episode_seconds=0.02)
     )
     flying_away = evaluate_task(
-        genotype, FlyingAwayEvaluationConfig(episode_seconds=0.02)
+        genotype, FLYING_AWAY_TASK, FlyingAwayEvaluationConfig(episode_seconds=0.02)
     )
     assert not swimming.build_failed
     assert not walking.build_failed
@@ -574,7 +582,7 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
         data,
         Builder(),
         config,
-        policy=evaluation.task_definition_for_config(config).rollout_policy,
+        policy=WALKING_AWAY_TASK.rollout_policy,
     )
 
     data = mujoco.MjData(model)
@@ -697,9 +705,7 @@ def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
         mujoco.MjData(model),
         Builder(),
         WalkingAwayEvaluationConfig(episode_seconds=1.0),
-        policy=evaluation.task_definition_for_config(
-            WalkingAwayEvaluationConfig()
-        ).rollout_policy,
+        policy=WALKING_AWAY_TASK.rollout_policy,
     )
     spatial_metrics = _run_episode(
         model,
@@ -813,6 +819,7 @@ def test_walking_rejects_creature_above_maximum_height():
 
     result = evaluate_task(
         genotype,
+        WALKING_X_TASK,
         WalkingEvaluationConfig(
             episode_seconds=0.02,
             settle_seconds=0.0,
@@ -857,10 +864,13 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
     default_result = evaluate_task(
-        genotype, WalkingEvaluationConfig(volume_penalty_cutoff=0.0)
+        genotype,
+        WALKING_X_TASK,
+        WalkingEvaluationConfig(volume_penalty_cutoff=0.0),
     )
     enabled_result = evaluate_task(
         genotype,
+        WALKING_X_TASK,
         WalkingEvaluationConfig(
             upright_weight=evaluation.DEFAULT_UPRIGHT_ERROR_WEIGHT,
             volume_penalty_cutoff=0.0,
@@ -903,7 +913,9 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
     result = evaluate_task(
-        genotype, WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0)
+        genotype,
+        WALKING_AWAY_TASK,
+        WalkingAwayEvaluationConfig(volume_penalty_cutoff=0.0),
     )
 
     assert result.fitness == pytest.approx(2.0)
@@ -927,12 +939,12 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     builder = PhenotypeBuilder(
         genotype,
         max_node=config.max_node,
-        environment=environment_for_config(config),
+        environment=environment_for_config(FLYING_AWAY_TASK, config),
     )
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
 
-    assert initialize_model(model, data, config) is None
+    assert initialize_model(model, data, FLYING_AWAY_TASK, config) is None
     data.qvel[0] = 10.0
 
     metrics = _run_episode(
@@ -940,7 +952,7 @@ def test_flying_speed_is_measured_before_first_ground_contact():
         data,
         builder,
         config,
-        evaluation.task_definition_for_config(config).rollout_policy,
+        FLYING_AWAY_TASK.rollout_policy,
     )
 
     assert not isinstance(metrics, str)
@@ -1000,7 +1012,7 @@ def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
         mujoco.MjData(model),
         Builder(),
         config,
-        evaluation.task_definition_for_config(config).rollout_policy,
+        FLYING_AWAY_TASK.rollout_policy,
     )
 
     assert not isinstance(metrics, str)
@@ -1028,7 +1040,9 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     data = mujoco.MjData(model)
 
-    assert initialize_model(model, data, FlyingEvaluationConfig()) is None
+    assert initialize_model(
+        model, data, FLYING_X_TASK, FlyingEvaluationConfig()
+    ) is None
 
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
@@ -1055,7 +1069,9 @@ def test_walking_initialization_raises_low_creature_above_floor():
     )
     data = mujoco.MjData(model)
 
-    assert initialize_model(model, data, WalkingEvaluationConfig()) is None
+    assert initialize_model(
+        model, data, WALKING_X_TASK, WalkingEvaluationConfig()
+    ) is None
 
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
@@ -1067,7 +1083,7 @@ def test_walking_initialization_raises_low_creature_above_floor():
     assert all(float(contact.dist) >= -2e-4 for contact in data.contact)
 
 
-def test_generic_initialization_runs_environment_callback(monkeypatch):
+def test_generic_initialization_runs_environment_callback():
     genotype = build_genotype(
         root="body",
         spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
@@ -1076,36 +1092,25 @@ def test_generic_initialization_runs_environment_callback(monkeypatch):
         SWIMMING_X_ENVIRONMENT,
         initialization_callback=_reject_initialization,
     )
-    definition = task_definition_for_config(SwimmingEvaluationConfig())
-    custom_definition = replace(definition, environment=environment)
-    monkeypatch.setitem(TASK_REGISTRY, definition.name, custom_definition)
-    from evol_virtual_creature.evolution_tasks import shared
-    monkeypatch.setitem(
-        shared._TASKS_BY_CONFIG_TYPE, SwimmingEvaluationConfig, custom_definition
-    )
+    custom_definition = replace(SWIMMING_X_TASK, environment=environment)
     config = SwimmingEvaluationConfig()
     builder = PhenotypeBuilder(genotype, max_node=500, environment=environment)
     model = mujoco.MjModel.from_xml_string(builder.build())
 
-    assert initialize_model(model, mujoco.MjData(model), config) == (
+    assert initialize_model(model, mujoco.MjData(model), custom_definition, config) == (
         "custom initialization rejected model"
     )
 
 
-def test_shared_evaluator_initializes_swimming_tasks(monkeypatch):
+def test_shared_evaluator_initializes_swimming_tasks():
     environment = replace(
         SWIMMING_X_ENVIRONMENT,
         initialization_callback=_reject_initialization,
     )
-    definition = task_definition_for_config(SwimmingEvaluationConfig())
-    custom_definition = replace(definition, environment=environment)
-    monkeypatch.setitem(TASK_REGISTRY, definition.name, custom_definition)
-    from evol_virtual_creature.evolution_tasks import shared
-    monkeypatch.setitem(
-        shared._TASKS_BY_CONFIG_TYPE, SwimmingEvaluationConfig, custom_definition
-    )
+    custom_definition = replace(SWIMMING_X_TASK, environment=environment)
     result = evaluate_task(
         load_genotype_from_json("examples/single_root.json"),
+        custom_definition,
         SwimmingEvaluationConfig(),
     )
 
@@ -1120,6 +1125,7 @@ def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
     monkeypatch.setattr(evaluation, "_has_floor_penetration", lambda *_args: True)
     result = evaluate_task(
         load_genotype_from_json("examples/single_root.json"),
+        WALKING_X_TASK,
         WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
     )
 
@@ -1166,6 +1172,7 @@ def test_disallowed_collision_assigns_low_fitness(monkeypatch):
     )
     result = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
             disallow_collision=True,
@@ -1252,6 +1259,7 @@ def test_evaluation_rejects_numerical_instability(monkeypatch):
     )
     result = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(episode_seconds=0.02),
     )
 
@@ -1299,10 +1307,12 @@ def test_volume_penalty_has_cutoff_then_grows_linearly():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     baseline = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(episode_seconds=0.02, volume_weight=0.0),
     )
     below_cutoff = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
             volume_weight=1.0,
@@ -1311,6 +1321,7 @@ def test_volume_penalty_has_cutoff_then_grows_linearly():
     )
     above_cutoff = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(
             episode_seconds=0.02,
             volume_weight=1.0,
@@ -1338,6 +1349,7 @@ def test_creature_above_maximum_volume_is_rejected_before_simulation():
 
     result = evaluate_task(
         genotype,
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(episode_seconds=0.02, max_volume=1.0),
     )
 
@@ -1359,6 +1371,7 @@ def test_body_below_minimum_volume_is_rejected_before_flying_bonus():
 
     result = evaluate_task(
         genotype,
+        FLYING_X_TASK,
         FlyingEvaluationConfig(episode_seconds=0.02, min_body_volume=1e-6),
     )
 
@@ -1380,6 +1393,7 @@ def test_flying_total_volume_below_minimum_is_rejected_before_simulation():
 
     result = evaluate_task(
         genotype,
+        FLYING_X_TASK,
         FlyingEvaluationConfig(episode_seconds=0.02),
     )
 
@@ -1414,10 +1428,12 @@ def _single_motor_genotype(motor_gear):
 def test_control_energy_scales_with_squared_motor_gear():
     low_gear = evaluate_task(
         _single_motor_genotype(10.0),
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(episode_seconds=0.01),
     )
     high_gear = evaluate_task(
         _single_motor_genotype(20.0),
+        SWIMMING_X_TASK,
         SwimmingEvaluationConfig(episode_seconds=0.01),
     )
 
@@ -1482,6 +1498,7 @@ def test_swimming_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_task(
         genotype,
+        SWIMMING_AWAY_TASK,
         SwimmingAwayEvaluationConfig(
             episode_seconds=0.02,
             energy_weight=0.0,
@@ -1597,7 +1614,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
-    result = evaluate_task(object(), config)
+    result = evaluate_task(object(), FLYING_X_TASK, config)
 
     assert result.controlled_fitness == pytest.approx(2.0)
     assert result.passive_fitness == pytest.approx(0.5)
@@ -1609,6 +1626,7 @@ def test_walking_away_fitness_maximizes_average_origin_speed():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     result = evaluate_task(
         genotype,
+        WALKING_AWAY_TASK,
         WalkingAwayEvaluationConfig(
             episode_seconds=0.02,
             settle_seconds=0.02,

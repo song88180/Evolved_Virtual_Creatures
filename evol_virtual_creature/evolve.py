@@ -19,9 +19,8 @@ from typing import Any
 from .evaluation import (
     environment_for_config,
     evaluate_task,
-    task_definition_for_config,
 )
-from .evolution_tasks.shared import EvaluationConfig
+from .evolution_tasks.shared import EvaluationConfig, TaskDefinition
 from .genotype import Genotype
 from .genotype_io import genotype_to_dict, save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort
@@ -46,20 +45,29 @@ class MutantRecord:
 
 def _evaluate_population(
     population: list[Genotype],
+    definition: TaskDefinition,
     config: EvaluationConfig,
     executor: ProcessPoolExecutor,
 ) -> list[EvaluatedCreature]:
     """Simulate and score every genotype concurrently, preserving input order."""
-    return list(executor.map(_evaluate_creature, population, repeat(config)))
+    return list(
+        executor.map(
+            _evaluate_creature,
+            population,
+            repeat(definition),
+            repeat(config),
+        )
+    )
 
 
 def _evaluate_creature(
     genotype: Genotype,
+    definition: TaskDefinition,
     config: EvaluationConfig,
 ) -> EvaluatedCreature:
     """Evaluate one genotype, returning a failure score if simulation raises."""
     try:
-        result = evaluate_task(genotype, config)
+        result = evaluate_task(genotype, definition, config)
         metrics = asdict(result)
         fitness = result.fitness
     except Exception as error:
@@ -88,6 +96,7 @@ def _save_generation_best(
     generation: int,
     generation_best: EvaluatedCreature,
     best_so_far: EvaluatedCreature,
+    definition: TaskDefinition,
     config: EvaluationConfig,
     save_generation_history: bool = True,
 ) -> None:
@@ -95,7 +104,12 @@ def _save_generation_best(
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
     save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
     write_json(run_dir / "best_metrics.json", best_so_far.metrics)
-    _write_best_xml(run_dir / "best_creature.xml", best_so_far.genotype, config)
+    _write_best_xml(
+        run_dir / "best_creature.xml",
+        best_so_far.genotype,
+        definition,
+        config,
+    )
 
     if save_generation_history:
         generation_dir = run_dir / "generation_bests"
@@ -107,14 +121,17 @@ def _save_generation_best(
 
 
 def _write_best_xml(
-    path: Path, genotype: Genotype, config: EvaluationConfig
+    path: Path,
+    genotype: Genotype,
+    definition: TaskDefinition,
+    config: EvaluationConfig,
 ) -> None:
     """Write the best creature's MJCF to disk, skipping output if the build aborts."""
     try:
         mjcf = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=environment_for_config(config),
+            environment=environment_for_config(definition, config),
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

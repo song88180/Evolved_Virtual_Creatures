@@ -954,15 +954,16 @@
     },
     "Functions": {
       "evaluate_task": {
-        "Signature": "evaluate_task(genotype: Genotype, config: EvaluationConfig) -> task-specific result",
-        "Purpose": "Build, initialize, simulate, and score a genotype using the callbacks and rollout policy registered for the concrete config type.",
+        "Signature": "evaluate_task(genotype: Genotype, definition: TaskDefinition, config: EvaluationConfig) -> task-specific result",
+        "Purpose": "Build, initialize, simulate, and score a genotype using the explicitly selected task definition.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
-          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Concrete configuration identifying the selected task."}
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task callbacks, rollout policy, environment, and metadata."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Evaluation parameters created with definition.config_type."}
         },
         "Returns": {"Type": "task-specific result", "Description": "Fitness and diagnostic metrics; build, initialization, rollout, and non-finite-fitness failures are represented as failed results."},
         "Raises": ["TypeError", "ValueError"],
-        "Example": "result = evaluate_task(genotype, SwimmingEvaluationConfig(episode_seconds=6.0))"
+        "Example": "definition = task_definition(\"swimming_x\"); result = evaluate_task(genotype, definition, definition.config_type(episode_seconds=6.0))"
       }
     },
     "Internal_Functions": {
@@ -995,11 +996,12 @@
     "Classes": {},
     "Functions": {
       "save_x_axis_video": {
-        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false) -> None",
+        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, definition: TaskDefinition, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false) -> None",
         "Purpose": "Render a selected-task episode to MP4 using MuJoCo's offscreen renderer and imageio.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
           "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task definition."},
           "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Selected-task simulation settings and max_node budget."},
           "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
           "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
@@ -1011,7 +1013,7 @@
         },
         "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
         "Raises": ["RuntimeError", "OSError"],
-        "Example": "save_x_axis_video(genotype, Path(\"locomotion.mp4\"), config, fps=30, width=1280, height=720)"
+        "Example": "save_x_axis_video(genotype, Path(\"locomotion.mp4\"), definition, config, fps=30, width=1280, height=720)"
       },
       "actuator_ids_for_controllers": {
         "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",

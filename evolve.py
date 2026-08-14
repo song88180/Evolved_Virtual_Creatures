@@ -114,7 +114,12 @@ def main() -> None:
     ):
         for generation in range(args.generations + 1):
             generation_config = _config_for_generation(config, args, generation)
-            evaluated = _evaluate_population(population, generation_config, executor)
+            evaluated = _evaluate_population(
+                population,
+                definition,
+                generation_config,
+                executor,
+            )
             if args.record_mutant_type:
                 evaluated_with_records = list(zip(evaluated, mutant_records))
                 evaluated_with_records.sort(
@@ -141,6 +146,7 @@ def main() -> None:
                 generation,
                 best,
                 best_so_far,
+                definition,
                 generation_config,
                 save_generation_history=_should_save_generation_history(
                     generation,
