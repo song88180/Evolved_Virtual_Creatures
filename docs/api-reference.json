@@ -954,12 +954,13 @@
     },
     "Functions": {
       "evaluate_task": {
-        "Signature": "evaluate_task(genotype: Genotype, definition: TaskDefinition, config: EvaluationConfig) -> task-specific result",
-        "Purpose": "Build, initialize, simulate, and score a genotype using the explicitly selected task definition.",
+        "Signature": "evaluate_task(genotype: Genotype, definition: TaskDefinition, config: EvaluationConfig, environment: EnvironmentFamily | None = None) -> task-specific result",
+        "Purpose": "Build, initialize, simulate, and score a genotype using the selected task definition and an optional explicit environment.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
           "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task callbacks, rollout policy, environment, and metadata."},
-          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Evaluation parameters created with definition.config_type."}
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Evaluation parameters created with definition.config_type."},
+          "environment": {"Type": "EnvironmentFamily | None", "Default": "None", "Description": "Effective physics environment. None uses definition.environment."}
         },
         "Returns": {"Type": "task-specific result", "Description": "Fitness and diagnostic metrics; build, initialization, rollout, and non-finite-fitness failures are represented as failed results."},
         "Raises": ["TypeError", "ValueError"],
@@ -996,7 +997,7 @@
     "Classes": {},
     "Functions": {
       "save_x_axis_video": {
-        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, definition: TaskDefinition, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false) -> None",
+        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, definition: TaskDefinition, config: EvaluationConfig, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false, camera_circle_around: bool = false, environment: EnvironmentFamily | None = None) -> None",
         "Purpose": "Render a selected-task episode to MP4 using MuJoCo's offscreen renderer and imageio.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
@@ -1009,7 +1010,9 @@
           "track_root": {"Type": "bool", "Default": "false", "Description": "Track the creature root with the video camera."},
           "speed": {"Type": "float", "Default": "1.0", "Description": "Video playback speed multiplier."},
           "shadowsize": {"Type": "int", "Default": "4096", "Description": "Shadow-map texture width and height in pixels."},
-          "spotlight": {"Type": "bool", "Default": "false", "Description": "Use a shadow-casting spotlight instead of a directional light."}
+          "spotlight": {"Type": "bool", "Default": "false", "Description": "Use a shadow-casting spotlight instead of a directional light."},
+          "camera_circle_around": {"Type": "bool", "Default": "false", "Description": "Circle the camera around the creature during the episode."},
+          "environment": {"Type": "EnvironmentFamily | None", "Default": "None", "Description": "Effective physics environment. None uses definition.environment."}
         },
         "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
         "Raises": ["RuntimeError", "OSError"],

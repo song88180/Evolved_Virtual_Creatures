@@ -16,6 +16,7 @@ from evol_virtual_creature.evaluation import (
     task_names,
 )
 from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as DEFAULT_FLYING_ENVIRONMENT
+from evol_virtual_creature.evolution_tasks.shared import EnvironmentFamily
 from evol_virtual_creature.genes import CONTROL_MODES
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolve import (
@@ -50,6 +51,15 @@ def main() -> None:
     seed_genotype = load_genotype_from_json(args.genotype)
     _validate_genotype_control_mode(seed_genotype, args.control_mode)
     definition = task_definition(args.task)
+    environment = definition.environment
+    if environment.supports_fluid_overrides:
+        environment = replace(
+            environment,
+            fluid_density=args.fluid_density,
+            fluid_viscosity=args.fluid_viscosity,
+            fluid_shape=args.fluid_shape,
+            fluid_coef=tuple(args.fluid_coef),
+        )
     config_type = definition.config_type
     config_kwargs = {
         "episode_seconds": args.duration,
@@ -69,13 +79,6 @@ def main() -> None:
         ),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
-    if definition.environment.supports_fluid_overrides:
-        config_kwargs.update(
-            fluid_density=args.fluid_density,
-            fluid_viscosity=args.fluid_viscosity,
-            fluid_shape=args.fluid_shape,
-            fluid_coef=tuple(args.fluid_coef),
-        )
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{
@@ -113,12 +116,15 @@ def main() -> None:
         metrics_path.open("w") as metrics_file,
     ):
         for generation in range(args.generations + 1):
-            generation_config = _config_for_generation(config, args, generation)
+            generation_environment = _environment_for_generation(
+                environment, args, generation
+            )
             evaluated = _evaluate_population(
                 population,
                 definition,
-                generation_config,
+                config,
                 executor,
+                generation_environment,
             )
             if args.record_mutant_type:
                 evaluated_with_records = list(zip(evaluated, mutant_records))
@@ -147,12 +153,13 @@ def main() -> None:
                 best,
                 best_so_far,
                 definition,
-                generation_config,
+                config,
                 save_generation_history=_should_save_generation_history(
                     generation,
                     args.save_genotype_every_n,
                     latest_best_only=args.latest_best_only,
                 ),
+                environment=generation_environment,
             )
 
             print(_format_generation_progress(generation, best, summary))
@@ -230,14 +237,18 @@ def _gravity_for_generation(
     return start_gravity + (end_gravity - start_gravity) * fraction
 
 
-def _config_for_generation(config, args: argparse.Namespace, generation: int):
-    """Return evaluation config with any generation-dependent settings."""
+def _environment_for_generation(
+    environment: EnvironmentFamily,
+    args: argparse.Namespace,
+    generation: int,
+) -> EnvironmentFamily:
+    """Return the environment with any generation-dependent settings."""
     if args.gradual_gravity_change is None:
-        return config
+        return environment
     gravity = _gravity_for_generation(
         args.gradual_gravity_change, generation, args.generations
     )
-    return replace(config, gravity=gravity)
+    return replace(environment, gravity=gravity)
 
 
 def _validate_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:

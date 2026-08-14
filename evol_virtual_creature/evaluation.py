@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from importlib import import_module
 import math
 from pkgutil import iter_modules
@@ -93,30 +92,11 @@ def task_definition(task: str) -> task_shared.TaskDefinition:
     return load_task_definition(task)
 
 
-def environment_for_config(
-    definition: task_shared.TaskDefinition,
-    config: task_shared.EvaluationConfig,
-) -> task_shared.EnvironmentFamily:
-    """Return the task environment with per-evaluation physics overrides applied."""
-    environment = definition.environment
-    overrides = {
-        name: getattr(config, name)
-        for name in (
-            "gravity",
-            "fluid_density",
-            "fluid_viscosity",
-            "fluid_shape",
-            "fluid_coef",
-        )
-        if getattr(config, name) is not None
-    }
-    return replace(environment, **overrides) if overrides else environment
-
-
 def evaluate_task(
     genotype: Genotype,
     definition: task_shared.TaskDefinition,
     config: task_shared.EvaluationConfig,
+    environment: task_shared.EnvironmentFamily | None = None,
 ):
     """Build, simulate, and score a genotype using its registered task callbacks."""
     if not isinstance(config, definition.config_type):
@@ -128,11 +108,12 @@ def evaluate_task(
     def failed(reason: str):
         return definition.failed_task_callback(config, reason)
 
-    built = _build_model(genotype, definition, config)
+    environment = definition.environment if environment is None else environment
+    built = _build_model(genotype, config, environment)
     if isinstance(built, str):
         return failed(built)
     model, data, builder = built
-    failure = initialize_model(model, data, definition, config)
+    failure = initialize_model(model, data, config, environment)
     if failure is not None:
         return failed(failure)
 
@@ -206,11 +187,10 @@ def _copy_simulation_state(
 def initialize_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
-    definition: task_shared.TaskDefinition,
     config: task_shared.EvaluationConfig,
+    environment: task_shared.EnvironmentFamily,
 ) -> str | None:
     """Apply declarative placement, validation, callback, and settling."""
-    environment = environment_for_config(definition, config)
     mujoco.mj_forward(model, data)
     floor_id = mujoco.mj_name2id(
         model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
@@ -366,14 +346,14 @@ def settle_model(
 
 def _build_model(
     genotype: Genotype,
-    definition: task_shared.TaskDefinition,
     config: task_shared.EvaluationConfig,
+    environment: task_shared.EnvironmentFamily,
 ):
     try:
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=environment_for_config(definition, config),
+            environment=environment,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),

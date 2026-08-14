@@ -10,7 +10,7 @@ import pytest
 import evaluate
 import evolve as evolve_cli
 from evol_virtual_creature import evolve as evolve_lib
-from evol_virtual_creature.evaluation import environment_for_config, task_definition
+from evol_virtual_creature.evaluation import task_definition
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
@@ -198,7 +198,7 @@ def test_evolve_accepts_walking_and_thread_override(monkeypatch):
 def test_evaluate_forwards_upright_weight_only_when_enabled(monkeypatch):
     observed = []
 
-    def record_config(_genotype, _definition, config):
+    def record_config(_genotype, _definition, config, _environment):
         observed.append(config.upright_weight)
         return type(
             "Result",
@@ -275,16 +275,17 @@ def test_gradual_gravity_change_interpolates_across_generations():
     assert evolve_cli._gravity_for_generation((-1.0, -9.0), 4, 4) == pytest.approx(-9.0)
 
 
-def test_generation_config_applies_gradual_flying_gravity():
-    config = FlyingEvaluationConfig()
+def test_generation_environment_applies_gradual_flying_gravity():
     args = argparse.Namespace(
         gradual_gravity_change=(-1.0, -9.0),
         generations=4,
     )
-    generation_config = evolve_cli._config_for_generation(config, args, 2)
     definition = task_definition("flying_x")
-    assert environment_for_config(definition, generation_config).gravity == pytest.approx(-5.0)
-    assert environment_for_config(definition, config).gravity == pytest.approx(-9.81)
+    generation_environment = evolve_cli._environment_for_generation(
+        definition.environment, args, 2
+    )
+    assert generation_environment.gravity == pytest.approx(-5.0)
+    assert definition.environment.gravity == pytest.approx(-9.81)
 
 
 def test_evolve_accepts_flying_fluid_options(monkeypatch):
@@ -710,10 +711,8 @@ def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
         path,
         genotype,
         task_definition("flying_x"),
-        FlyingEvaluationConfig(
-            episode_seconds=0.02,
-            gravity=-3.5,
-        ),
+        FlyingEvaluationConfig(episode_seconds=0.02),
+        replace(FLYING_ENVIRONMENT, gravity=-3.5),
     )
     option = ET.fromstring(path.read_text()).find("option")
     assert option is not None

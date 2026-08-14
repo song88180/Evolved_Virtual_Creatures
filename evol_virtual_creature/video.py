@@ -7,12 +7,12 @@ import mujoco
 
 from .evaluation import (
     _has_nonparent_self_collision,
-    environment_for_config,
     initialize_model,
     simulation_failure_reason,
 )
 from .evolution_tasks.shared import (
     DISALLOWED_COLLISION_REASON,
+    EnvironmentFamily,
     EvaluationConfig,
     TaskDefinition,
 )
@@ -112,8 +112,10 @@ def save_x_axis_video(
     shadowsize: int = 4096,
     spotlight: bool = False,
     camera_circle_around: bool = False,
+    environment: EnvironmentFamily | None = None,
 ):
     """Render a selected swimming, walking, or flying task episode to MP4."""
+    environment = definition.environment if environment is None else environment
     try:
         import imageio.v3 as iio
     except ImportError as error:
@@ -126,7 +128,7 @@ def save_x_axis_video(
         builder = PhenotypeBuilder(
             genotype,
             max_node=config.max_node,
-            environment=environment_for_config(definition, config),
+            environment=environment,
             self_collision=(
                 config.self_collision or config.disallow_collision
             ),
@@ -156,7 +158,7 @@ def save_x_axis_video(
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
     model.vis.global_.offheight = max(model.vis.global_.offheight, height)
     data = mujoco.MjData(model)
-    failure = initialize_model(model, data, definition, config)
+    failure = initialize_model(model, data, config, environment)
     if failure is not None:
         raise RuntimeError(f"Cannot record video: {failure}")
 

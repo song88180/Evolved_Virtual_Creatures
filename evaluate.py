@@ -1,7 +1,7 @@
 """Evaluate a genotype on a selected locomotion task."""
 
 import argparse
-from dataclasses import fields
+from dataclasses import fields, replace
 import os
 from pathlib import Path
 import sys
@@ -37,6 +37,15 @@ def main():
     args = parse_args()
     genotype = load_genotype_from_json(args.genotype)
     definition = task_definition(args.task)
+    environment = definition.environment
+    if environment.supports_fluid_overrides:
+        environment = replace(
+            environment,
+            fluid_density=args.fluid_density,
+            fluid_viscosity=args.fluid_viscosity,
+            fluid_shape=args.fluid_shape,
+            fluid_coef=tuple(args.fluid_coef),
+        )
     config_type = definition.config_type
     config_kwargs = {
         "episode_seconds": args.duration,
@@ -55,13 +64,6 @@ def main():
         ),
         fitness_gain_fraction=args.fitness_gain_fraction,
     )
-    if definition.environment.supports_fluid_overrides:
-        config_kwargs.update(
-            fluid_density=args.fluid_density,
-            fluid_viscosity=args.fluid_viscosity,
-            fluid_shape=args.fluid_shape,
-            fluid_coef=tuple(args.fluid_coef),
-        )
     supported_fields = {field.name for field in fields(config_type)}
     config = config_type(
         **{
@@ -70,7 +72,7 @@ def main():
             if name in supported_fields
         }
     )
-    result = evaluate_task(genotype, definition, config)
+    result = evaluate_task(genotype, definition, config, environment)
 
     if result.disqualified:
         print(f"Disqualified: {result.failure_reason}")
@@ -115,6 +117,7 @@ def main():
                 output_path=video_path,
                 definition=definition,
                 config=config,
+                environment=environment,
                 fps=args.fps,
                 width=args.width,
                 height=args.height,

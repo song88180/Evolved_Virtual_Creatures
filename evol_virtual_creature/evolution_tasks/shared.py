@@ -73,11 +73,6 @@ DEFAULT_ENVIRONMENT = EnvironmentFamily()
 class EvaluationConfig:
     """Common simulation, safety, and complexity settings for every task."""
 
-    gravity: float | None = None
-    fluid_density: float | None = None
-    fluid_viscosity: float | None = None
-    fluid_shape: str | None = None
-    fluid_coef: Sequence[float] | None = None
     settle_seconds: float = 0.0
     max_creature_height: float = 0.0
     min_center_height_fraction: float = 0.0

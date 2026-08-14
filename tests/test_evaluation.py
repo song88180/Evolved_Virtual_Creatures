@@ -23,7 +23,6 @@ from evol_virtual_creature.evaluation import (
     _has_nonparent_self_collision,
     _run_episode,
     _creature_volume,
-    environment_for_config,
     evaluate_task,
     initialize_model,
     simulation_failure_reason,
@@ -931,20 +930,21 @@ def test_flying_speed_is_measured_before_first_ground_contact():
             }
         },
     )
-    config = FlyingAwayEvaluationConfig(
-        episode_seconds=3.0,
+    config = FlyingAwayEvaluationConfig(episode_seconds=3.0)
+    environment = replace(
+        FLYING_AWAY_TASK.environment,
         fluid_density=0.0,
         fluid_viscosity=0.0,
     )
     builder = PhenotypeBuilder(
         genotype,
         max_node=config.max_node,
-        environment=environment_for_config(FLYING_AWAY_TASK, config),
+        environment=environment,
     )
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
 
-    assert initialize_model(model, data, FLYING_AWAY_TASK, config) is None
+    assert initialize_model(model, data, config, environment) is None
     data.qvel[0] = 10.0
 
     metrics = _run_episode(
@@ -1041,7 +1041,7 @@ def test_flying_initialization_raises_low_creature_above_floor():
     data = mujoco.MjData(model)
 
     assert initialize_model(
-        model, data, FLYING_X_TASK, FlyingEvaluationConfig()
+        model, data, FlyingEvaluationConfig(), FLYING_X_ENVIRONMENT
     ) is None
 
     floor_id = mujoco.mj_name2id(
@@ -1070,7 +1070,7 @@ def test_walking_initialization_raises_low_creature_above_floor():
     data = mujoco.MjData(model)
 
     assert initialize_model(
-        model, data, WALKING_X_TASK, WalkingEvaluationConfig()
+        model, data, WalkingEvaluationConfig(), WALKING_X_ENVIRONMENT
     ) is None
 
     floor_id = mujoco.mj_name2id(
@@ -1097,7 +1097,7 @@ def test_generic_initialization_runs_environment_callback():
     builder = PhenotypeBuilder(genotype, max_node=500, environment=environment)
     model = mujoco.MjModel.from_xml_string(builder.build())
 
-    assert initialize_model(model, mujoco.MjData(model), custom_definition, config) == (
+    assert initialize_model(model, mujoco.MjData(model), config, environment) == (
         "custom initialization rejected model"
     )
 
