@@ -56,22 +56,11 @@ python evaluate.py --help
 
 ## Usage
 
-The available locomotion tasks are:
-
-| Task | Objective |
-| --- | --- |
-| `swimming_x` | Swim in the positive x direction. |
-| `swimming_away` | Swim away from the starting point. |
-| `walking_x` | Walk in the positive x direction. |
-| `walking_away` | Walk away from the starting point. |
-| `flying_x` | Fly in the positive x direction. |
-| `flying_away` | Fly away from the starting point. |
-
-Run commands from the repository root.
-
 ### Evolving creatures
 
 `evolve.py` creates an initial population from a seed genotype, mutates and evaluates the population, selects fitter creatures, and repeats this process for the requested number of generations.
+
+`--control-mode` selects one controller family for the entire evolutionary run. `neural` uses an evolved two-layer neural network that reacts to simulation observations, while `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase. The selected mode must match the seed genotype's top-level `control_mode`; evolution does not convert a seed between controller families. If the option is omitted, it defaults to `neural`.
 
 Its main inputs are:
 
@@ -79,35 +68,30 @@ Its main inputs are:
 | --- | --- |
 | `--task` | Locomotion task used to calculate fitness. Defaults to `swimming_x`. |
 | `--genotype` | Seed genotype JSON file. Defaults to `examples/example_genotype.json`. |
-| `--control-mode` | Controller family, either `neural` or `sine`. It must match the seed genotype. |
+| `--control-mode` | Controller family for the run: observation-driven `neural` or open-loop `sine`. Must match the seed genotype; defaults to `neural`. |
 | `--population-size` | Number of creatures evaluated in each generation. |
 | `--generations` | Number of evolutionary generations after generation zero. |
+| `--elite-count` | Number of highest-fitness creatures copied unchanged into the next generation. Defaults to `5`. |
+| `--tournament-size` | Number of candidates sampled for each parent-selection tournament; larger values increase selection pressure toward fitter creatures. Defaults to `4`. |
+| `--max-mutations` | Maximum number of genotype mutations applied to each non-elite child; must be at least `--min-mutations`. Defaults to `5`. |
 | `--threads` | Number of worker processes used for population evaluation. |
 | `--output-dir` | Destination for run artifacts. By default, a timestamped directory is created under `runs/`. |
 
-For a small swimming run:
+For a small swimming run with the default neural controller:
 
 ```bash
 python evolve.py \
   --task swimming_x \
-  --genotype examples/example_genotype.json \
+  --genotype examples/single_root.json \
   --population-size 10 \
+  --elite-count 1 \
+  --tournament-size 20 \
+  --max-mutations 5 \
   --generations 5 \
   --threads 2 \
+  --latest-best-only \
   --output-dir runs/readme_swimming_example \
-  --seed 42
-```
-
-For evolution with the open-loop sine controller:
-
-```bash
-python evolve.py \
-  --task swimming_away \
-  --control-mode sine \
-  --genotype examples/single_root_sine.json \
-  --population-size 20 \
-  --generations 20 \
-  --latest-best-only
+  --seed 2
 ```
 
 Evolution prints a progress line for every generation. The output directory contains:
@@ -127,15 +111,6 @@ Use `python evolve.py --help` to see mutation, selection, environment, collision
 ### Evaluating a creature
 
 `evaluate.py` builds and simulates one genotype on a selected task. It prints fitness together with movement, energy, angular-speed, body-count, actuator-count, and volume measurements. Invalid builds or disqualified creatures instead report their failure reason and assigned fitness.
-
-Evaluate the bundled example:
-
-```bash
-python evaluate.py \
-  --task swimming_x \
-  --genotype examples/example_genotype.json \
-  --duration 10
-```
 
 Evaluate the winner of the example evolution run:
 
@@ -160,6 +135,19 @@ python evaluate.py \
 ```
 
 The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the repository root. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `python evaluate.py --help`.
+
+The available locomotion tasks are:
+
+| Task | Objective |
+| --- | --- |
+| `swimming_x` | Swim in the positive x direction. |
+| `swimming_away` | Swim away from the starting point. |
+| `walking_x` | Walk in the positive x direction. |
+| `walking_away` | Walk away from the starting point. |
+| `flying_x` | Fly in the positive x direction. |
+| `flying_away` | Fly away from the starting point. |
+
+Run commands from the repository root.
 
 ### Generating a phenotype
 
@@ -203,7 +191,32 @@ A node gene supports these principal fields:
 | `child_connections` | Ordered list of connection names to expand from this node. |
 | `orientation` | Euler orientation in degrees; used as the root's initial orientation. |
 
-A connection gene identifies its `child` node and controls attachment through `parent_face`, `surface_uv`, `child_surface_uv`, and `orientation`. It can reflect a complete child subtree with `symmetry`, resize repeated descendants with `scale`, and restrict an attachment to the end of a recursive chain with `terminal_only`. Joint axis, motor settings, and sine or neural controller parameters also live on connection genes.
+A connection gene supports these principal fields:
+
+| Field | Description |
+| --- | --- |
+| `child` | Name of the node gene attached by this connection. |
+| `axis` | Three-component joint axis in the child body's local frame. |
+| `parent_face` | Parent attachment face: `+x`, `-x`, `+y`, `-y`, `+z`, or `-z`. |
+| `surface_uv` | Two coordinates from `-1` to `1` that position the attachment on the parent face. |
+| `child_surface_uv` | Two coordinates from `-1` to `1` that select the attachment point on the child surface. |
+| `orientation` | Child Euler orientation in degrees relative to the attachment frame. |
+| `symmetry` | Optional combination of `xy`, `xz`, and `yz` reflection planes for duplicating the child subtree. |
+| `scale` | Positive size multiplier applied to the child and its descendants. |
+| `terminal_only` | If `true`, expands this connection only at the end of a recursive chain. |
+| `motor_enabled` | Whether an articulated child joint receives an actuator. |
+| `motor_gear` | MuJoCo actuator gear value. |
+| `ctrlrange` | Minimum and maximum actuator control values. |
+| `control_amp` | Amplitude used by the sine controller. |
+| `control_freq` | Sine-frequency multiplier applied to `global_control_freq`. |
+| `control_phase` | Base phase used by the sine controller. |
+| `control_phase_depth_scale` | Phase offset added for each recursive depth level. |
+| `control_phase_order_scale` | Phase offset added according to sibling expansion order. |
+| `neural_w1` | First-layer weight matrix for the neural controller. |
+| `neural_b1` | First-layer bias vector for the neural controller. |
+| `neural_w2` | Output-layer weight matrix for the neural controller. |
+| `neural_b2` | Output-layer bias vector for the neural controller. |
+| `neural_output_axes` | Local actuator axes corresponding to neural-network outputs. |
 
 This abbreviated genotype creates a body followed by a recursive chain of segments:
 
