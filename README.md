@@ -4,6 +4,8 @@
 
 This project represents virtual creatures as compact, mutable graphs and expands them into MuJoCo models for simulation. A population-based evolutionary loop searches for body plans and controllers that perform locomotion tasks such as moving along the x-axis or traveling away from the starting point.
 
+Check this [video](https://www.youtube.com/watch?v=vstG57H8ZOY) here!
+
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
