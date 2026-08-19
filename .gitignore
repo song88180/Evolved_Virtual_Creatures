@@ -13,3 +13,6 @@ MUJOCO_LOG.TXT
 AGENTS.md
 ALIFE_runs/
 ALIFE/
+.ipynb_checkpoints/
+examples/single_root_sine.json
+report.md
