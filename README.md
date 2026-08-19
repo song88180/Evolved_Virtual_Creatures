@@ -134,7 +134,9 @@ python evaluate.py \
   --height 544
 ```
 
-The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the repository root. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `python evaluate.py --help`.
+The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the repository root. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `python evaluate.py --help`. Run commands from the repository root.
+
+### Evolution tasks
 
 The available locomotion tasks are:
 
@@ -147,7 +149,7 @@ The available locomotion tasks are:
 | `flying_x` | Fly in the positive x direction. |
 | `flying_away` | Fly away from the starting point. |
 
-Run commands from the repository root.
+You can customize new tasks by adding task-specifying .py files in [`evol_virtual_creature/evolution_tasks/`](evol_virtual_creature/evolution_tasks)
 
 ### Generating a phenotype
 
@@ -257,7 +259,7 @@ This abbreviated genotype creates a body followed by a recursive chain of segmen
 }
 ```
 
-See [`examples/example_genotype.json`](examples/example_genotype.json) for a complete neural-controller example and [`examples/single_root_sine.json`](examples/single_root_sine.json) for a sine-controller seed.
+See [`examples/example_genotype_neural.json`](examples/example_genotype_neural.json) for a complete neural-controller example.
 
 ### Phenotype MJCF XML
 
