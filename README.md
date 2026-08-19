@@ -1,32 +1,19 @@
 # Evolved Virtual Creatures
 
-<div align="center">
-  <h3>Evolve simulated creatures for swimming, walking, and flying in MuJoCo.</h3>
-</div>
+### Evolve 3D virtual creatures for swimming, walking, and flying in MuJoCo.
 
 This project represents virtual creatures as compact, mutable graphs and expands them into MuJoCo models for simulation. A population-based evolutionary loop searches for body plans and controllers that perform locomotion tasks such as moving along the x-axis or traveling away from the starting point.
 
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li><a href="#getting-started">Getting Started</a></li>
-    <li>
-      <a href="#usage">Usage</a>
-      <ol>
-        <li><a href="#evolving-creatures">Evolving creatures</a></li>
-        <li><a href="#evaluating-a-creature">Evaluating a creature</a></li>
-        <li><a href="#generating-a-phenotype">Generating a phenotype</a></li>
-      </ol>
-    </li>
-    <li>
-      <a href="#file-formats">File Formats</a>
-      <ol>
-        <li><a href="#genotype-json">Genotype JSON</a></li>
-        <li><a href="#phenotype-mjcf-xml">Phenotype MJCF XML</a></li>
-      </ol>
-    </li>
-  </ol>
-</details>
+## Table of Contents
+
+1. [Getting Started](#getting-started)
+2. [Usage](#usage)
+   1. [Evolving creatures](#evolving-creatures)
+   2. [Evaluating a creature](#evaluating-a-creature)
+   3. [Generating a phenotype](#generating-a-phenotype)
+3. [File Formats](#file-formats)
+   1. [Genotype JSON](#genotype-json)
+   2. [Phenotype MJCF XML](#phenotype-mjcf-xml)
 
 ## Getting Started
 
