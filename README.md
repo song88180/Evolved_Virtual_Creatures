@@ -62,7 +62,7 @@ python evaluate.py --help
 
 `evolve.py` creates an initial population from a seed genotype, mutates and evaluates the population, selects fitter creatures, and repeats this process for the requested number of generations.
 
-`--control-mode` selects one controller family for the entire evolutionary run. `neural` uses an evolved two-layer neural network that reacts to simulation observations, while `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase. The selected mode must match the seed genotype's top-level `control_mode`; evolution does not convert a seed between controller families. If the option is omitted, it defaults to `neural`.
+The controller family for the run comes from the seed genotype's top-level `control_mode`. `neural` uses an evolved two-layer neural network that reacts to simulation observations, while `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase. If `--control-mode` is given and differs from the seed's mode, the run stops with an error. Add `--override-control-mode` to convert the seed instead: the old controller's parameters are discarded and the new controller starts motionless (zero neural weights, or zero sine amplitude).
 
 Its main inputs are:
 
@@ -70,7 +70,8 @@ Its main inputs are:
 | --- | --- |
 | `--task` | Locomotion task used to calculate fitness. Defaults to `swimming_x`. |
 | `--genotype` | Seed genotype JSON file. Defaults to `examples/example_genotype.json`. |
-| `--control-mode` | Controller family for the run: observation-driven `neural` or open-loop `sine`. Must match the seed genotype; defaults to `neural`. |
+| `--control-mode` | Optional controller family for the run: observation-driven `neural` or open-loop `sine`. Defaults to the seed genotype's `control_mode`; a mismatch is an error unless `--override-control-mode` is set. |
+| `--override-control-mode` | Convert the seed genotype to `--control-mode` when the two differ. Requires `--control-mode`. |
 | `--population-size` | Number of creatures evaluated in each generation. |
 | `--generations` | Number of evolutionary generations after generation zero. |
 | `--elite-count` | Number of highest-fitness creatures copied unchanged into the next generation. Defaults to `5`. |
@@ -177,7 +178,7 @@ The top-level fields are:
 | Field | Description |
 | --- | --- |
 | `root` | Name of the node where phenotype expansion begins. |
-| `control_mode` | Global controller family: `neural` or `sine`. Defaults to `neural`. |
+| `control_mode` | Required global controller family: `neural` or `sine`. |
 | `global_control_freq` | Positive base controller frequency. Defaults to `1.0`. |
 | `nodes` | Name-keyed map of active node genes. |
 | `connections` | Name-keyed map of active connection genes. |

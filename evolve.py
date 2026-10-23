@@ -26,6 +26,7 @@ from evol_virtual_creature.evolve import (
     write_json,
 )
 from evol_virtual_creature.genotype_io import (
+    convert_control_mode,
     load_genotype_from_json,
 )
 
@@ -44,7 +45,9 @@ def main() -> None:
     write_json(run_dir / "config.json", vars(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
-    _validate_genotype_control_mode(seed_genotype, args.control_mode)
+    seed_genotype = _resolve_seed_control_mode(
+        seed_genotype, args.control_mode, args.override_control_mode
+    )
     definition = task_definition(args.task).args_override(args)
     _validate_effective_definition(definition)
     base_environment = definition.environment
@@ -209,14 +212,31 @@ def _environment_for_generation(
     return replace(environment, gravity=gravity)
 
 
-def _validate_genotype_control_mode(genotype: Genotype, control_mode: str) -> None:
-    """Reject evolution runs that mix genotype and CLI controller modes."""
-    if genotype.control_mode != control_mode:
+def _resolve_seed_control_mode(
+    genotype: Genotype,
+    control_mode: str | None,
+    override: bool,
+) -> Genotype:
+    """Return the seed genotype in the requested controller mode.
+
+    A missing or matching ``control_mode`` keeps the genotype as loaded. A
+    mismatch is an error unless ``override`` asks for the seed to be converted.
+    """
+    if control_mode is None or genotype.control_mode == control_mode:
+        return genotype
+    if not override:
         raise ValueError(
-            "genotype control_mode "
-            f"{genotype.control_mode!r} does not match --control-mode "
-            f"{control_mode!r}"
+            f"genotype control_mode {genotype.control_mode!r} does not match "
+            f"--control-mode {control_mode!r}; add --override-control-mode to "
+            f"convert the seed to {control_mode!r} (its "
+            f"{genotype.control_mode} controller parameters are discarded and "
+            f"the {control_mode} controller starts from zero)"
         )
+    print(
+        f"Converting seed genotype control_mode from {genotype.control_mode!r} "
+        f"to {control_mode!r}."
+    )
+    return convert_control_mode(genotype, control_mode)
 
 
 def _should_save_generation_history(
@@ -262,8 +282,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--control-mode",
         choices=CONTROL_MODES,
-        default="neural",
-        help="Controller mode used for evolved connection genes.",
+        default=None,
+        help=(
+            "Controller mode for the run. (default: the seed genotype's "
+            "control_mode)"
+        ),
+    )
+    parser.add_argument(
+        "--override-control-mode",
+        action="store_true",
+        help=(
+            "Convert the seed genotype to --control-mode when it differs, "
+            "discarding the old controller parameters."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -526,6 +557,8 @@ def parse_args() -> argparse.Namespace:
 
 def _validate_args(args: argparse.Namespace) -> None:
     """Raise ValueError when CLI arguments are inconsistent."""
+    if args.override_control_mode and args.control_mode is None:
+        raise ValueError("--override-control-mode requires --control-mode")
     if args.population_size < 1:
         raise ValueError("--population-size must be at least 1")
     if args.threads < 1:

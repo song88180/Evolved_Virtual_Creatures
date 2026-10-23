@@ -13,6 +13,7 @@ from evol_virtual_creature import evolve as evolve_lib
 from evol_virtual_creature.evaluation import task_definition
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
 from evol_virtual_creature.genotype import Genotype
+from evol_virtual_creature.genotype_io import build_genotype
 from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
 from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
 from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
@@ -86,9 +87,11 @@ def test_evaluate_accepts_upright_error(monkeypatch):
     assert evaluate.parse_args().upright_error
 
 
-def test_evolve_defaults_to_neural_control_mode(monkeypatch):
+def test_evolve_control_mode_defaults_to_genotype(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["evolve.py"])
-    assert evolve_cli.parse_args().control_mode == "neural"
+    args = evolve_cli.parse_args()
+    assert args.control_mode is None
+    assert args.override_control_mode is False
 
 
 def test_evolve_accepts_sine_control_mode(monkeypatch):
@@ -96,25 +99,61 @@ def test_evolve_accepts_sine_control_mode(monkeypatch):
     assert evolve_cli.parse_args().control_mode == "sine"
 
 
-def test_validate_genotype_control_mode_accepts_match():
-    genotype = Genotype(
+def test_evolve_override_control_mode_requires_control_mode(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--override-control-mode"])
+    with pytest.raises(ValueError, match="requires --control-mode"):
+        evolve_cli.parse_args()
+
+
+def _sine_seed_genotype():
+    return build_genotype(
         root="body",
-        nodes={"body": NodeGene(name="body", size=(0.2, 0.2, 0.2))},
+        nodes={
+            "body": {
+                "size": (0.2, 0.2, 0.2),
+                "joint_type": "free",
+                "child_connections": ["body_to_limb"],
+            },
+            "limb": {"size": (0.1, 0.1, 0.1)},
+        },
+        connections={
+            "body_to_limb": {
+                "child": "limb",
+                "axis": (0.0, 1.0, 0.0),
+                "control_amp": 0.4,
+                "control_freq": 7,
+                "control_phase": 1.2,
+            }
+        },
+        global_control_freq=2.5,
         control_mode="sine",
     )
 
-    evolve_cli._validate_genotype_control_mode(genotype, "sine")
+
+def test_resolve_seed_control_mode_keeps_genotype_without_cli_mode():
+    genotype = _sine_seed_genotype()
+    assert evolve_cli._resolve_seed_control_mode(genotype, None, False) is genotype
 
 
-def test_validate_genotype_control_mode_rejects_mismatch():
-    genotype = Genotype(
-        root="body",
-        nodes={"body": NodeGene(name="body", size=(0.2, 0.2, 0.2))},
-        control_mode="sine",
-    )
+def test_resolve_seed_control_mode_accepts_match():
+    genotype = _sine_seed_genotype()
+    assert evolve_cli._resolve_seed_control_mode(genotype, "sine", False) is genotype
 
-    with pytest.raises(ValueError, match="does not match --control-mode"):
-        evolve_cli._validate_genotype_control_mode(genotype, "neural")
+
+def test_resolve_seed_control_mode_rejects_mismatch_without_override():
+    with pytest.raises(ValueError, match="add --override-control-mode"):
+        evolve_cli._resolve_seed_control_mode(_sine_seed_genotype(), "neural", False)
+
+
+def test_resolve_seed_control_mode_converts_with_override():
+    genotype = _sine_seed_genotype()
+    converted = evolve_cli._resolve_seed_control_mode(genotype, "neural", True)
+
+    assert converted.control_mode == "neural"
+    assert genotype.control_mode == "sine"
+    connection = converted.connections["body_to_limb"]
+    assert connection.control_amp == 0.0
+    assert connection.neural_b2 == (0.0,)
 
 
 def test_evolve_accepts_upright_error(monkeypatch):

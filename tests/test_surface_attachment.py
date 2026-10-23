@@ -14,6 +14,7 @@ from evol_virtual_creature.genes import (
 from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.genotype_io import (
     build_genotype,
+    convert_control_mode,
     load_genotype_from_json,
     save_genotype_to_json,
 )
@@ -28,6 +29,7 @@ def _vector(element, attribute):
 def test_loading_duplicate_active_and_archived_node_names_fails(tmp_path):
     genotype_path = tmp_path / "duplicate_names.json"
     genotype_path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -168,6 +170,7 @@ def test_legacy_embedded_connections_are_rejected(tmp_path):
 def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
     genotype_path = tmp_path / "identity_orientation.json"
     genotype_path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -224,6 +227,7 @@ def test_orientation_round_trips_through_json(tmp_path):
 def test_named_connection_can_be_shared_by_different_nodes(tmp_path):
     path = tmp_path / "shared.json"
     path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -361,6 +365,7 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
                 "joint_type": "hinge",
             },
         },
+        "control_mode": "neural",
         "connections": {"body_to_limb": {"child": "limb", "axis": [0, 1, 0]}},
     }))
 
@@ -428,6 +433,7 @@ def test_missing_global_control_frequency_loads_default(tmp_path):
     genotype_path = tmp_path / "missing_global_freq.json"
     genotype_path.write_text(
         json.dumps({
+            "control_mode": "neural",
             "root": "body",
             "nodes": {
                 "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
@@ -499,6 +505,7 @@ def test_missing_shape_loads_as_box(tmp_path):
     genotype_path = tmp_path / "missing_shape.json"
     genotype_path.write_text(
         json.dumps({
+            "control_mode": "neural",
             "root": "body",
             "nodes": {
                 "body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"},
@@ -558,6 +565,7 @@ def test_body_shapes_emit_expected_mujoco_geom_and_compile(
 def test_missing_joint_type_uses_node_gene_default(tmp_path):
     genotype_path = tmp_path / "fixed_default.json"
     genotype_path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -1032,6 +1040,7 @@ def test_symmetric_rotated_children_attach_at_child_surface():
 def test_out_of_bounds_json_sizes_warn_and_load_unchanged(tmp_path):
     genotype_path = tmp_path / "out_of_bounds.json"
     genotype_path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -1051,6 +1060,7 @@ def test_out_of_bounds_json_sizes_warn_and_load_unchanged(tmp_path):
 def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
     genotype_path = tmp_path / "boundary_sizes.json"
     genotype_path.write_text(json.dumps({
+        "control_mode": "neural",
         "root": "body",
         "nodes": {
             "body": {
@@ -1067,3 +1077,88 @@ def test_body_size_bounds_are_inclusive_when_loading_json(tmp_path):
 
     assert not warnings_record
     assert genotype.nodes["body"].size == (0.01, 0.5, 1.0)
+
+
+def test_missing_control_mode_is_rejected(tmp_path):
+    genotype_path = tmp_path / "unlabeled.json"
+    genotype_path.write_text(json.dumps({
+        "root": "body",
+        "nodes": {"body": {"size": [0.2, 0.2, 0.2], "joint_type": "free"}},
+        "connections": {},
+    }))
+
+    with pytest.raises(ValueError, match="top-level 'control_mode'"):
+        load_genotype_from_json(genotype_path)
+
+
+def _two_mode_genotype(control_mode):
+    return build_genotype(
+        root="body",
+        nodes={
+            "body": {
+                "size": (0.2, 0.2, 0.2),
+                "joint_type": "free",
+                "child_connections": ["body_to_limb", "body_to_ball"],
+            },
+            "limb": {"size": (0.1, 0.1, 0.1)},
+            "ball": {"size": (0.1, 0.1, 0.1), "joint_type": "ball"},
+        },
+        connections={
+            "body_to_limb": {
+                "child": "limb",
+                "axis": (0.0, 1.0, 0.0),
+                "control_amp": 0.4,
+                "control_freq": 7,
+                "control_phase": 1.2,
+            },
+            "body_to_ball": {"child": "ball", "axis": (0.0, 1.0, 0.0)},
+        },
+        global_control_freq=2.5,
+        control_mode=control_mode,
+    )
+
+
+def test_convert_sine_to_neural_zeroes_controllers():
+    original = _two_mode_genotype("sine")
+
+    converted = convert_control_mode(original, "neural")
+
+    assert converted.control_mode == "neural"
+    assert converted.global_control_freq == 1.0
+    hinge = converted.connections["body_to_limb"]
+    assert (hinge.control_amp, hinge.control_freq, hinge.control_phase) == (0.0, 10, 0.0)
+    assert len(hinge.neural_w1) == 16 and len(hinge.neural_b2) == 1
+    assert all(value == 0.0 for row in hinge.neural_w1 for value in row)
+    assert hinge.neural_output_axes == ((0.0, 1.0, 0.0),)
+    ball = converted.connections["body_to_ball"]
+    assert len(ball.neural_b2) == 3 and len(ball.neural_output_axes) == 3
+    # The input genotype is left untouched.
+    assert original.control_mode == "sine"
+    assert original.connections["body_to_limb"].control_amp == 0.4
+    assert original.connections["body_to_limb"].neural_w1 == ()
+
+
+def test_convert_neural_to_sine_clears_neural_and_zeroes_amplitude():
+    original = _two_mode_genotype("neural")
+
+    converted = convert_control_mode(original, "sine")
+
+    assert converted.control_mode == "sine"
+    assert converted.global_control_freq == 1.0
+    for connection in converted.connections.values():
+        assert connection.control_amp == 0.0
+        assert connection.neural_w1 == ()
+        assert connection.neural_b2 == ()
+        assert connection.neural_output_axes == ()
+    assert original.connections["body_to_limb"].neural_w1 != ()
+    assert PhenotypeBuilder(converted, max_node=10).build()
+
+
+def test_convert_to_same_control_mode_keeps_parameters():
+    original = _two_mode_genotype("sine")
+
+    converted = convert_control_mode(original, "sine")
+
+    assert converted is not original
+    assert converted.connections["body_to_limb"].control_amp == 0.4
+    assert converted.global_control_freq == 2.5

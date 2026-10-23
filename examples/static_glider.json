@@ -1,4 +1,5 @@
 {
+  "control_mode": "neural",
   "root": "body",
   "nodes": {
     "body": {

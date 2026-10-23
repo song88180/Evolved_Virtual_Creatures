@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict
 import json
 from pathlib import Path
@@ -19,6 +20,24 @@ from .genotype import Genotype
 
 
 GeneSpec = Mapping[str, Mapping[str, Any]]
+
+# Values given to inactive or newly activated sine fields on conversion, so a
+# converted creature starts motionless.
+INERT_SINE_CONTROL = {
+    "control_amp": 0.0,
+    "control_freq": 10,
+    "control_phase": 0.0,
+    "control_phase_depth_scale": 0.0,
+    "control_phase_order_scale": 0.0,
+}
+INERT_GLOBAL_CONTROL_FREQ = 1.0
+NEURAL_FIELDS = (
+    "neural_w1",
+    "neural_b1",
+    "neural_w2",
+    "neural_b2",
+    "neural_output_axes",
+)
 
 
 def build_genotype(
@@ -112,7 +131,12 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
 
     _warn_for_out_of_bounds_sizes(data.get("nodes", {}).items())
     _warn_for_out_of_bounds_sizes(data.get("archived_nodes", {}).items())
-    control_mode = _validated_control_mode(data.get("control_mode", "neural"))
+    if "control_mode" not in data:
+        valid = ", ".join(CONTROL_MODES)
+        raise ValueError(
+            f"Genotype JSON must contain a top-level 'control_mode' (one of {valid})"
+        )
+    control_mode = _validated_control_mode(data["control_mode"])
 
     nodes = {
         name: NodeGene(name=name, **dict(spec))
@@ -145,6 +169,38 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         archived_connections=connection_map(data.get("archived_connections", {})),
     )
     return genotype
+
+
+def convert_control_mode(genotype: Genotype, control_mode: str) -> Genotype:
+    """Return a copy of ``genotype`` switched to ``control_mode``.
+
+    Sine parameters are reset to inert values (zero amplitude). Neural
+    parameters are cleared, or zero-initialized when converting to neural, so the
+    converted creature starts motionless. Active and archived connections are both
+    converted; the input genotype is not modified.
+    """
+    control_mode = _validated_control_mode(control_mode)
+    converted = copy.deepcopy(genotype)
+    if converted.control_mode == control_mode:
+        return converted
+    converted.control_mode = control_mode
+    converted.global_control_freq = INERT_GLOBAL_CONTROL_FREQ
+    all_nodes = {**converted.archived_nodes, **converted.nodes}
+    for connections in (converted.connections, converted.archived_connections):
+        for connection in connections.values():
+            for field_name, value in INERT_SINE_CONTROL.items():
+                setattr(connection, field_name, value)
+            neural = {}
+            if control_mode == "neural":
+                child = all_nodes.get(connection.child)
+                neural = _with_neural_defaults(
+                    {"axis": connection.axis},
+                    child.joint_type if child is not None else "hinge",
+                    control_mode,
+                )
+            for field_name in NEURAL_FIELDS:
+                setattr(connection, field_name, neural.get(field_name, ()))
+    return converted
 
 
 def save_genotype_to_json(genotype: Genotype, path: str | Path) -> None:
