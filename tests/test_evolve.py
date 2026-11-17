@@ -1,6 +1,6 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, dataclass, replace
 import random
 import sys
 import xml.etree.ElementTree as ET
@@ -22,6 +22,27 @@ from evol_virtual_creature.evolution_tasks.swimming_x import SwimmingEvaluationC
 from evol_virtual_creature.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
 from evol_virtual_creature.evolution_tasks.walking_x import WalkingEvaluationConfig
 import generate_model
+
+
+@dataclass(frozen=True)
+class FakeEvaluationResult:
+    """Minimal stand-in for a task result with the fields evolution reads."""
+
+    fitness: float
+    body_count: int = 0
+    total_volume: float = 0.0
+    control_energy: float = 0.0
+    build_failed: bool = False
+    disqualified: bool = False
+    failure_reason: str | None = None
+
+
+def _creature(genotype, fitness, changed_by_mutation=False, **result_fields):
+    return evolve_lib.EvaluatedCreature(
+        genotype,
+        FakeEvaluationResult(fitness=fitness, **result_fields),
+        changed_by_mutation=changed_by_mutation,
+    )
 
 
 def test_default_thread_count_uses_half_available_affinity(monkeypatch):
@@ -799,11 +820,7 @@ def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
 
 def test_save_generation_best_can_skip_generation_history(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(
-        genotype=genotype,
-        fitness=1.0,
-        metrics={"fitness": 1.0},
-    )
+    creature = _creature(genotype, 1.0)
 
     evolve_lib._save_generation_best(
         tmp_path,
@@ -822,11 +839,7 @@ def test_save_generation_best_can_skip_generation_history(tmp_path):
 
 def test_save_generation_best_records_history_by_default(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(
-        genotype=genotype,
-        fitness=1.0,
-        metrics={"fitness": 1.0},
-    )
+    creature = _creature(genotype, 1.0)
 
     evolve_lib._save_generation_best(
         tmp_path,
@@ -844,14 +857,8 @@ def test_save_generation_best_records_history_by_default(tmp_path):
 
 def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(
-        genotype=genotype,
-        fitness=2.5,
-        metrics={
-            "body_count": 7,
-            "total_volume": 0.125,
-            "control_energy": 3.75,
-        },
+    creature = _creature(
+        genotype, 2.5, body_count=7, total_volume=0.125, control_energy=3.75
     )
     summary = {
         "best_gene_count": 11,
@@ -872,14 +879,8 @@ def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean
 
 def test_generation_progress_reports_mutant_type_counts_when_present():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(
-        genotype=genotype,
-        fitness=2.5,
-        metrics={
-            "body_count": 7,
-            "total_volume": 0.125,
-            "control_energy": 3.75,
-        },
+    creature = _creature(
+        genotype, 2.5, body_count=7, total_volume=0.125, control_energy=3.75
     )
     summary = {
         "best_gene_count": 11,
@@ -898,11 +899,7 @@ def test_generation_progress_reports_mutant_type_counts_when_present():
 
 def test_generation_summary_counts_disqualifications_and_active_genes():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(
-        genotype=genotype,
-        fitness=-1_000.0,
-        metrics={"disqualified": True, "body_count": 1},
-    )
+    creature = _creature(genotype, -1_000.0, disqualified=True, body_count=1)
     summary = evolve_lib.generation_summary(0, [creature], creature)
     expected_genes = len(genotype.nodes) + sum(
         len(node.child_connections)
@@ -916,7 +913,7 @@ def test_generation_summary_counts_disqualifications_and_active_genes():
 
 def test_generation_summary_omits_mutant_type_counts_by_default():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={})
+    creature = _creature(genotype, 1.0)
 
     summary = evolve_lib.generation_summary(0, [creature], creature)
 
@@ -928,37 +925,86 @@ def test_generation_summary_omits_mutant_type_counts_by_default():
 def test_generation_summary_counts_mutant_types_against_previous_best():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [
-        evolve_lib.EvaluatedCreature(genotype, fitness=2.0, metrics={}),
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.5, metrics={}),
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
-        evolve_lib.EvaluatedCreature(
-            genotype, fitness=3.0, metrics={"build_failed": True}
-        ),
-        evolve_lib.EvaluatedCreature(
-            genotype, fitness=3.0, metrics={"disqualified": True}
-        ),
-        evolve_lib.EvaluatedCreature(genotype, fitness=5.0, metrics={}),
-    ]
-    records = [
-        evolve_lib.MutantRecord(previous_best_fitness=1.5),
-        evolve_lib.MutantRecord(previous_best_fitness=1.5),
-        evolve_lib.MutantRecord(previous_best_fitness=1.5),
-        evolve_lib.MutantRecord(previous_best_fitness=1.5),
-        evolve_lib.MutantRecord(previous_best_fitness=1.5),
-        None,
+        _creature(genotype, 2.0, changed_by_mutation=True),
+        _creature(genotype, 1.5, changed_by_mutation=True),
+        _creature(genotype, 1.0, changed_by_mutation=True),
+        _creature(genotype, 3.0, changed_by_mutation=True, build_failed=True),
+        _creature(genotype, 3.0, changed_by_mutation=True, disqualified=True),
+        _creature(genotype, 5.0),
     ]
 
-    summary = evolve_lib.generation_summary(1, evaluated, evaluated[0], records)
+    summary = evolve_lib.generation_summary(
+        1,
+        evaluated,
+        evaluated[0],
+        record_mutant_types=True,
+        mutant_baseline_fitness=1.5,
+    )
 
     assert summary["fitter_mutants"] == 1
     assert summary["neutral_mutants"] == 1
     assert summary["less_fit_mutants"] == 3
 
 
-def test_next_population_with_mutant_records_marks_only_changed_children(monkeypatch):
+def test_generation_summary_reports_zero_mutant_counts_for_initial_generation():
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    evaluated = [_creature(genotype, 1.0), _creature(genotype, 0.5)]
+
+    summary = evolve_lib.generation_summary(
+        0, evaluated, evaluated[0], record_mutant_types=True
+    )
+
+    assert summary["fitter_mutants"] == 0
+    assert summary["neutral_mutants"] == 0
+    assert summary["less_fit_mutants"] == 0
+
+
+def test_generation_summary_requires_baseline_when_creatures_were_mutated():
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    evaluated = [_creature(genotype, 1.0, changed_by_mutation=True)]
+
+    with pytest.raises(ValueError, match="baseline fitness"):
+        evolve_lib.generation_summary(
+            1, evaluated, evaluated[0], record_mutant_types=True
+        )
+
+
+def test_evaluated_creature_fitness_is_read_from_result():
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    creature = _creature(genotype, 2.0, body_count=3)
+
+    assert creature.fitness == 2.0
+    assert creature.metrics_dict()["fitness"] == 2.0
+    assert creature.metrics_dict()["body_count"] == 3
+    with pytest.raises(AttributeError):
+        creature.fitness = 5.0
+    with pytest.raises(FrozenInstanceError):
+        creature.result.fitness = 5.0
+
+
+def test_evaluate_creature_uses_task_failure_result_when_evaluation_raises(monkeypatch):
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    definition = task_definition("walking_x")
+    definition.config = WalkingEvaluationConfig(episode_seconds=0.02)
+
+    def explode(_genotype, _definition):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(evolve_lib, "evaluate_task", explode)
+
+    creature = evolve_lib._evaluate_creature(genotype, definition)
+
+    assert isinstance(creature.result, definition.result_type)
+    assert creature.fitness == definition.config.build_failure_fitness
+    assert creature.build_failed
+    assert not creature.disqualified
+    assert creature.result.failure_reason == "boom"
+
+
+def test_next_population_with_mutation_flags_marks_only_changed_children(monkeypatch):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+        _creature(genotype, 1.0),
     ]
     calls = 0
 
@@ -979,7 +1025,7 @@ def test_next_population_with_mutant_records_marks_only_changed_children(monkeyp
 
     monkeypatch.setattr(evolve_lib, "mutate_quietly", mutate_second_child)
 
-    population, records = evolve_lib.next_population_with_mutant_records(
+    population, changed = evolve_lib.next_population_with_mutation_flags(
         evaluated=evaluated,
         population_size=3,
         elite_count=1,
@@ -987,13 +1033,10 @@ def test_next_population_with_mutant_records_marks_only_changed_children(monkeyp
         min_mutations=1,
         max_mutations=1,
         rng=random.Random(1),
-        previous_best_fitness=1.0,
     )
 
     assert len(population) == 3
-    assert records[0] is None
-    assert records[1] is None
-    assert records[2] == evolve_lib.MutantRecord(previous_best_fitness=1.0)
+    assert changed == [False, False, True]
 
 
 def test_default_run_directory_uses_task_name(monkeypatch):
@@ -1128,7 +1171,7 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
 def test_next_population_forwards_topology_mutation_setting(monkeypatch):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+        _creature(genotype, 1.0),
     ]
     settings = []
 
@@ -1164,7 +1207,7 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
 def test_population_helpers_forward_allow_slide_joint(monkeypatch):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+        _creature(genotype, 1.0),
     ]
     settings = []
 
@@ -1204,7 +1247,7 @@ def test_population_helpers_forward_allow_slide_joint(monkeypatch):
 def test_population_helpers_forward_root_mutation_setting(monkeypatch):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [
-        evolve_lib.EvaluatedCreature(genotype, fitness=1.0, metrics={}),
+        _creature(genotype, 1.0),
     ]
     settings = []
 

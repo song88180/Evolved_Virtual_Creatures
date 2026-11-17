@@ -17,7 +17,12 @@ from statistics import mean
 from typing import Any
 
 from .evaluation import evaluate_task
-from .evolution_tasks.shared import EnvironmentFamily, EvaluationConfig, TaskDefinition
+from .evolution_tasks.shared import (
+    EnvironmentFamily,
+    EvaluationConfig,
+    EvaluationResult,
+    TaskDefinition,
+)
 from .genotype import Genotype
 from .genotype_io import genotype_to_dict, save_genotype_to_json
 from .graph_analysis import PhenotypeBuildAbort
@@ -26,18 +31,33 @@ from .phenotype import PhenotypeBuilder
 
 @dataclass
 class EvaluatedCreature:
-    """A genotype paired with its fitness score and evaluation metrics."""
+    """A genotype paired with its typed task evaluation result.
+
+    ``result`` is the single source of truth for fitness and metrics. Use
+    ``metrics_dict()`` only when the result has to be written as JSON.
+    ``changed_by_mutation`` is true when this creature's genotype differs from
+    the parent it was copied from in the previous generation.
+    """
 
     genotype: Genotype
-    fitness: float
-    metrics: dict[str, Any]
+    result: EvaluationResult
+    changed_by_mutation: bool = False
 
+    @property
+    def fitness(self) -> float:
+        return self.result.fitness
 
-@dataclass(frozen=True)
-class MutantRecord:
-    """Comparison baseline for a child that actually changed during mutation."""
+    @property
+    def build_failed(self) -> bool:
+        return self.result.build_failed
 
-    previous_best_fitness: float
+    @property
+    def disqualified(self) -> bool:
+        return self.result.disqualified
+
+    def metrics_dict(self) -> dict[str, Any]:
+        """Return the evaluation result as a JSON-ready dictionary."""
+        return asdict(self.result)
 
 
 def _evaluate_population(
@@ -45,49 +65,42 @@ def _evaluate_population(
     definition: TaskDefinition,
     config_or_executor: EvaluationConfig | ProcessPoolExecutor,
     executor: ProcessPoolExecutor | None = None,
+    changed_by_mutation: list[bool] | None = None,
 ) -> list[EvaluatedCreature]:
-    """Simulate and score every genotype concurrently, preserving input order."""
+    """Simulate and score every genotype concurrently, preserving input order.
+
+    ``changed_by_mutation`` optionally gives one flag per genotype, as returned
+    by ``next_population_with_mutation_flags``; it is attached to each result.
+    """
     if executor is None:
         executor = config_or_executor
     else:
         definition.config = config_or_executor
-    return list(
+    if changed_by_mutation is not None and len(changed_by_mutation) != len(population):
+        raise ValueError("changed_by_mutation must match population length")
+    evaluated = list(
         executor.map(
             _evaluate_creature,
             population,
             repeat(definition),
         )
     )
+    if changed_by_mutation is not None:
+        for creature, changed in zip(evaluated, changed_by_mutation):
+            creature.changed_by_mutation = changed
+    return evaluated
 
 
 def _evaluate_creature(
     genotype: Genotype,
     definition: TaskDefinition,
 ) -> EvaluatedCreature:
-    """Evaluate one genotype, returning a failure score if simulation raises."""
+    """Evaluate one genotype, returning the task's failure result if simulation raises."""
     try:
         result = evaluate_task(genotype, definition)
-        metrics = asdict(result)
-        fitness = result.fitness
     except Exception as error:
-        metrics = {
-            "fitness": definition.config.build_failure_fitness,
-            "forward_distance": 0.0,
-            "average_forward_speed": 0.0,
-            "sideways_drift_speed": 0.0,
-            "vertical_drift_speed": 0.0,
-            "control_energy": 0.0,
-            "mean_angular_speed": 0.0,
-            "simulated_seconds": 0.0,
-            "actuator_count": 0,
-            "body_count": 0,
-            "total_volume": 0.0,
-            "build_failed": True,
-            "disqualified": False,
-            "failure_reason": str(error),
-        }
-        fitness = definition.config.build_failure_fitness
-    return EvaluatedCreature(genotype=genotype, fitness=fitness, metrics=metrics)
+        result = definition.failed_task_callback(definition.config, str(error))
+    return EvaluatedCreature(genotype=genotype, result=result)
 
 
 def _save_generation_best(
@@ -104,7 +117,7 @@ def _save_generation_best(
         definition.config = config
     save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
     save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
-    write_json(run_dir / "best_metrics.json", best_so_far.metrics)
+    write_json(run_dir / "best_metrics.json", best_so_far.metrics_dict())
     _write_best_xml(
         run_dir / "best_creature.xml",
         best_so_far.genotype,
@@ -197,7 +210,7 @@ def next_population(
     topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
 ) -> list[Genotype]:
     """Select elites and tournament winners, then mutate them into the next generation."""
-    population, _mutant_records = next_population_with_mutant_records(
+    population, _changed_by_mutation = next_population_with_mutation_flags(
         evaluated=evaluated,
         population_size=population_size,
         elite_count=elite_count,
@@ -209,12 +222,11 @@ def next_population(
         allow_slide_joint=allow_slide_joint,
         allow_root_mutation=allow_root_mutation,
         topology_mutation_rate_min=topology_mutation_rate_min,
-        previous_best_fitness=None,
     )
     return population
 
 
-def next_population_with_mutant_records(
+def next_population_with_mutation_flags(
     evaluated: list[EvaluatedCreature],
     population_size: int,
     elite_count: int,
@@ -226,14 +238,18 @@ def next_population_with_mutant_records(
     allow_slide_joint: bool = False,
     allow_root_mutation: bool = True,
     topology_mutation_rate_min: float = Genotype.DEFAULT_TOPOLOGY_MUTATION_RATE_MIN,
-    previous_best_fitness: float | None = None,
-) -> tuple[list[Genotype], list[MutantRecord | None]]:
-    """Select the next generation and mark children that changed by mutation."""
+) -> tuple[list[Genotype], list[bool]]:
+    """Select the next generation and flag children that changed by mutation.
+
+    Returns the new genotypes and a parallel list that is ``True`` only for
+    offspring whose genotype differs from their parent's. Elites and offspring
+    whose mutations had no net effect are ``False``.
+    """
     next_generation = [
         copy.deepcopy(creature.genotype)
         for creature in evaluated[:elite_count]
     ]
-    mutant_records: list[MutantRecord | None] = [None] * len(next_generation)
+    changed_by_mutation = [False] * len(next_generation)
 
     while len(next_generation) < population_size:
         parent = tournament_select(evaluated, tournament_size, rng)
@@ -250,17 +266,9 @@ def next_population_with_mutant_records(
             topology_mutation_rate_min=topology_mutation_rate_min,
         )
         next_generation.append(child)
-        if (
-            previous_best_fitness is not None
-            and genotype_to_dict(child) != parent_snapshot
-        ):
-            mutant_records.append(
-                MutantRecord(previous_best_fitness=previous_best_fitness)
-            )
-        else:
-            mutant_records.append(None)
+        changed_by_mutation.append(genotype_to_dict(child) != parent_snapshot)
 
-    return next_generation, mutant_records
+    return next_generation, changed_by_mutation
 
 
 def tournament_select(
@@ -311,14 +319,20 @@ def generation_summary(
     generation: int,
     evaluated: list[EvaluatedCreature],
     best_so_far: EvaluatedCreature,
-    mutant_records: list[MutantRecord | None] | None = None,
+    record_mutant_types: bool = False,
+    mutant_baseline_fitness: float | None = None,
 ) -> dict[str, Any]:
-    """Summarize generation fitness statistics for logging and metrics output."""
+    """Summarize generation fitness statistics for logging and metrics output.
+
+    With ``record_mutant_types``, also count creatures changed by mutation as
+    fitter, neutral, or less fit than ``mutant_baseline_fitness``, the previous
+    generation's best fitness (``None`` for generation 0, which has no mutants).
+    """
     fitnesses = [creature.fitness for creature in evaluated]
     build_failures = sum(
         1
         for creature in evaluated
-        if creature.metrics.get("build_failed", False)
+        if creature.build_failed
     )
     summary = {
         "generation": generation,
@@ -330,17 +344,17 @@ def generation_summary(
         "disqualifications": sum(
             1
             for creature in evaluated
-            if creature.metrics.get("disqualified", False)
+            if creature.disqualified
         ),
         "best_gene_count": _active_gene_count(evaluated[0].genotype),
         "best_ever_gene_count": _active_gene_count(best_so_far.genotype),
-        "best_body_count": evaluated[0].metrics.get("body_count", 0),
-        "best_ever_body_count": best_so_far.metrics.get("body_count", 0),
-        "best_metrics": evaluated[0].metrics,
-        "best_ever_metrics": best_so_far.metrics,
+        "best_body_count": evaluated[0].result.body_count,
+        "best_ever_body_count": best_so_far.result.body_count,
+        "best_metrics": evaluated[0].metrics_dict(),
+        "best_ever_metrics": best_so_far.metrics_dict(),
     }
-    if mutant_records is not None:
-        summary.update(_mutant_type_counts(evaluated, mutant_records))
+    if record_mutant_types:
+        summary.update(_mutant_type_counts(evaluated, mutant_baseline_fitness))
     return summary
 
 
@@ -351,30 +365,29 @@ def _active_gene_count(genotype: Genotype) -> int:
 
 def _mutant_type_counts(
     evaluated: list[EvaluatedCreature],
-    mutant_records: list[MutantRecord | None],
+    baseline_fitness: float | None,
 ) -> dict[str, int]:
-    """Count actual mutants by fitness relative to the previous generation best."""
-    if len(mutant_records) != len(evaluated):
-        raise ValueError("mutant records must match evaluated population length")
+    """Count creatures changed by mutation by fitness relative to ``baseline_fitness``."""
+    if baseline_fitness is None and any(
+        creature.changed_by_mutation for creature in evaluated
+    ):
+        raise ValueError("mutated creatures need a baseline fitness to compare against")
 
     counts = {
         "fitter_mutants": 0,
         "less_fit_mutants": 0,
         "neutral_mutants": 0,
     }
-    for creature, record in zip(evaluated, mutant_records):
-        if record is None:
+    for creature in evaluated:
+        if not creature.changed_by_mutation:
             continue
-        if (
-            creature.metrics.get("build_failed", False)
-            or creature.metrics.get("disqualified", False)
-        ):
+        if creature.build_failed or creature.disqualified:
             counts["less_fit_mutants"] += 1
-        elif creature.fitness > record.previous_best_fitness:
+        elif creature.fitness > baseline_fitness:
             counts["fitter_mutants"] += 1
         elif math.isclose(
             creature.fitness,
-            record.previous_best_fitness,
+            baseline_fitness,
             rel_tol=1e-12,
             abs_tol=1e-12,
         ):

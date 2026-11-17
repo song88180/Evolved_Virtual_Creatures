@@ -22,7 +22,7 @@ from evol_virtual_creature.evolve import (
     default_thread_count,
     generation_summary,
     initial_population,
-    next_population_with_mutant_records,
+    next_population_with_mutation_flags,
     write_json,
 )
 from evol_virtual_creature.genotype_io import (
@@ -64,7 +64,9 @@ def main() -> None:
     )
 
     best_so_far: EvaluatedCreature | None = None
-    mutant_records = [None] * len(population) if args.record_mutant_type else None
+    changed_by_mutation = [False] * len(population)
+    # Best fitness of the previous generation; baseline for --record-mutant-type.
+    previous_best_fitness: float | None = None
     metrics_path = run_dir / "metrics.jsonl"
 
     print(f"Run directory: {run_dir}")
@@ -88,17 +90,9 @@ def main() -> None:
                 population,
                 definition,
                 executor,
+                changed_by_mutation=changed_by_mutation,
             )
-            if args.record_mutant_type:
-                evaluated_with_records = list(zip(evaluated, mutant_records))
-                evaluated_with_records.sort(
-                    key=lambda item: item[0].fitness, reverse=True
-                )
-                evaluated = [item[0] for item in evaluated_with_records]
-                sorted_mutant_records = [item[1] for item in evaluated_with_records]
-            else:
-                evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
-                sorted_mutant_records = None
+            evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
             best = evaluated[0]
             best_so_far = best_of(best_so_far, best)
 
@@ -106,7 +100,8 @@ def main() -> None:
                 generation,
                 evaluated,
                 best_so_far,
-                mutant_records=sorted_mutant_records,
+                record_mutant_types=args.record_mutant_type,
+                mutant_baseline_fitness=previous_best_fitness,
             )
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
@@ -128,7 +123,8 @@ def main() -> None:
             if generation == args.generations:
                 break
 
-            population, mutant_records = next_population_with_mutant_records(
+            previous_best_fitness = best.fitness
+            population, changed_by_mutation = next_population_with_mutation_flags(
                 evaluated=evaluated,
                 population_size=args.population_size,
                 elite_count=args.elite_count,
@@ -140,7 +136,6 @@ def main() -> None:
                 allow_slide_joint=args.allow_slide_joint,
                 allow_root_mutation=not args.disallow_root_mutation,
                 topology_mutation_rate_min=args.topology_mutation_rate_min,
-                previous_best_fitness=best.fitness if args.record_mutant_type else None,
             )
 
     print(f"Best genotype: {run_dir / 'best_genotype.json'}")
@@ -158,8 +153,8 @@ def _format_generation_progress(
         f"best={best.fitness:.6f} "
         f"genes={summary['best_gene_count']} "
         f"bodies={summary['best_body_count']} "
-        f"volume={best.metrics.get('total_volume', 0.0):.6f} "
-        f"energy={best.metrics.get('control_energy', 0.0):.6f} "
+        f"volume={best.result.total_volume:.6f} "
+        f"energy={best.result.control_energy:.6f} "
         f"failures={summary['build_failures']} "
         f"disqualified={summary['disqualifications']}"
     )
