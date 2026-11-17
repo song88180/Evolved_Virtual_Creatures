@@ -391,7 +391,7 @@ def _run_episode(
     root_body_name: str | None = None,
     apply_controls: bool = True,
 ):
-    actuator_ids = _actuator_ids(model, builder.actuator_controllers)
+    actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     body_count = max(model.nbody - 1, 0)
     total_volume = _creature_volume(model)
     target_direction = _normalized_target_direction(config.target_direction)
@@ -615,10 +615,6 @@ def _creature_volume_failure_reason(
             f"{total_volume:.6g} m^3; minimum is {min_total_volume:.6g} m^3."
         )
     return None
-
-
-def _actuator_ids(model: mujoco.MjModel, controllers: list[ActuatorController]):
-    return actuator_ids_for_controllers(model, controllers)
 
 
 def _has_nonparent_self_collision(

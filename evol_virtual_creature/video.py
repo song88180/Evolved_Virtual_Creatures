@@ -23,7 +23,6 @@ from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
-    actuator_ids_for_controllers,
     apply_controller,
     apply_open_loop_controller as _apply_open_loop_controller,
 )
@@ -167,7 +166,6 @@ def save_x_axis_video(
     # video on a different, potentially unstable trajectory from evaluation.
     mujoco.mj_forward(model, data)
 
-    actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
     frames = []
     next_frame_time = 0.0
     frame_interval = speed / fps
