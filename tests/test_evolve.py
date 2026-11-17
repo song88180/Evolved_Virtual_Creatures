@@ -905,7 +905,7 @@ def test_generation_summary_counts_disqualifications_and_active_genes():
     )
     summary = evolve_lib.generation_summary(0, [creature], creature)
     expected_genes = len(genotype.nodes) + sum(
-        len(node.children)
+        len(node.child_connections)
         for node in genotype.nodes.values()
     )
     assert summary["disqualifications"] == 1

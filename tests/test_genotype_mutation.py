@@ -16,6 +16,8 @@ from evol_virtual_creature.graph_analysis import (
     GenotypeGraphError,
 )
 
+from genotype_factory import tree_genotype, tree_node
+
 
 def test_new_node_names_do_not_reuse_archived_gene_names():
     genotype = Genotype(
@@ -36,12 +38,12 @@ def test_new_node_names_do_not_reuse_archived_gene_names():
 
 
 def test_archived_node_snapshots_use_normal_names_and_preserve_self_links():
-    recursive_node = NodeGene(
+    recursive_node = tree_node(
         name="segment",
         size=(0.1, 0.1, 0.1),
         children=[ConnectionGene(child="segment", axis=(0.0, 1.0, 0.0))],
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
             "body": NodeGene(
@@ -53,16 +55,16 @@ def test_archived_node_snapshots_use_normal_names_and_preserve_self_links():
         },
     )
 
-    genotype._archive_node_snapshots([recursive_node])
+    genotype._archive_node_snapshots([genotype.nodes["segment"]])
 
     archived = next(iter(genotype.archived_nodes.values()))
     assert archived.name == "segment_mut1"
-    assert archived.children[0].child == archived.name
+    assert genotype.outgoing_connections(archived.name)[0].child == archived.name
     genotype.validate_node_names()
 
 
 def test_reactivating_archived_node_moves_it_without_renaming():
-    archived = NodeGene(
+    archived = tree_node(
         name="segment_mut3",
         size=(0.1, 0.1, 0.1),
         children=[
@@ -72,7 +74,7 @@ def test_reactivating_archived_node_moves_it_without_renaming():
             )
         ],
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
             "body": NodeGene(
@@ -84,13 +86,14 @@ def test_reactivating_archived_node_moves_it_without_renaming():
         archived_nodes=[archived],
     )
 
-    activated = genotype._activate_node_gene(archived)
+    archived_gene = genotype.archived_nodes["segment_mut3"]
+    activated = genotype._activate_node_gene(archived_gene)
 
-    assert activated is archived
+    assert activated is archived_gene
     assert activated.name == "segment_mut3"
-    assert activated.children[0].child == "segment_mut3"
+    assert genotype.outgoing_connections(activated.name)[0].child == "segment_mut3"
     assert "segment_mut3" in genotype.nodes
-    assert archived.name not in genotype.archived_nodes
+    assert archived_gene.name not in genotype.archived_nodes
     genotype.validate_node_names()
 
 
@@ -139,8 +142,8 @@ def test_fresh_node_connection_addition_can_grow_single_free_root():
     assert "fresh node-connection addition" in description
     assert "randomized" in description
     assert len(genotype.nodes) == 2
-    assert len(genotype.nodes["body"].children) == 1
-    connection = genotype.nodes["body"].children[0]
+    assert len(genotype.outgoing_connections("body")) == 1
+    connection = genotype.outgoing_connections("body")[0]
     child_name = connection.child
     assert child_name in genotype.nodes
     child = genotype.nodes[child_name]
@@ -291,10 +294,10 @@ def test_count_based_mutation_adds_topology_floor_mutations():
 
 def test_terminal_only_mutation_cannot_enable_on_self_connection():
     connection = ConnectionGene(child="segment", axis=(0, 1, 0))
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="segment",
         nodes={
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.2, 0.1, 0.1),
                 joint_type="free",
@@ -314,10 +317,10 @@ def test_terminal_only_mutation_cannot_enable_on_self_connection():
 
 
 def test_terminal_only_self_connection_is_rejected_during_build_analysis():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="segment",
         nodes={
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.2, 0.1, 0.1),
                 joint_type="free",
@@ -337,10 +340,10 @@ def test_terminal_only_self_connection_is_rejected_during_build_analysis():
 
 
 def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -370,10 +373,10 @@ def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
 
 
 def test_joint_type_mutation_allows_slide_when_enabled():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -397,10 +400,10 @@ def test_joint_type_mutation_allows_slide_when_enabled():
 
 
 def test_shape_mutation_repairs_round_cross_section():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -467,7 +470,7 @@ def test_template_new_node_addition_attaches_connection_before_mutating_it():
     description = genotype._mutate_connection_new_node_addition(random.Random(1))
 
     assert "connection new-node addition" in description
-    assert any(node.children for node in genotype.nodes.values())
+    assert any(node.child_connections for node in genotype.nodes.values())
 
 
 def test_template_new_child_node_size_scales_from_connection_parent(monkeypatch):
@@ -501,7 +504,10 @@ def test_template_new_child_node_size_scales_from_connection_parent(monkeypatch)
     parent_node = next(
         node
         for node in genotype.nodes.values()
-        if any(connection.child == new_node_name for connection in node.children)
+        if any(
+            connection.child == new_node_name
+            for connection in genotype.outgoing_connections(node.name)
+        )
     )
     child_node = genotype.nodes[new_node_name]
     assert all(
@@ -519,10 +525,10 @@ def test_destination_replacement_child_node_size_scales_from_connection_parent(
     monkeypatch,
 ):
     connection = ConnectionGene(child="limb", axis=(0, 1, 0))
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.5, 0.25, 0.125),
                 joint_type="free",
@@ -564,10 +570,10 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
         child="limb",
         axis=(0, 1, 0),
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -597,10 +603,10 @@ def test_preselected_neural_mutation_skips_archived_replaced_connection():
 
 def test_preselected_origin_mutation_skips_connection_moved_from_origin():
     connection = ConnectionGene(child="limb", axis=(0, 1, 0))
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -633,10 +639,10 @@ def _neural_hinge_genotype():
         child="limb",
         axis=(0, 1, 0),
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -732,7 +738,7 @@ def test_new_connection_randomly_initializes_neural_tensors():
         genotype.nodes["limb"],
         random.Random(7),
     )
-    connection = genotype.nodes["body"].children[0]
+    connection = genotype.outgoing_connections("body")[0]
 
     assert len(connection.neural_w1) == 16
     assert len(connection.neural_w1[0]) == 12
@@ -876,7 +882,7 @@ def _mutable_effect_genotype(field_name):
     )
     body_children = [target]
     nodes = {
-        "body": NodeGene(
+        "body": tree_node(
             name="body",
             size=(0.3, 0.2, 0.1),
             joint_type="free",
@@ -894,7 +900,7 @@ def _mutable_effect_genotype(field_name):
         target = ConnectionGene(child="segment", axis=(0.3, 0.4, 0.5))
         recursive = ConnectionGene(child="segment", axis=(0.2, 0.5, 0.4))
         nodes["body"].children = [target]
-        nodes["segment"] = NodeGene(
+        nodes["segment"] = tree_node(
             name="segment",
             size=(0.12, 0.08, 0.04),
             recursive_limit=1,
@@ -910,7 +916,7 @@ def _mutable_effect_genotype(field_name):
         nodes["body"].children = [
             ConnectionGene(child="segment", axis=(0.1, 0.6, 0.2))
         ]
-        nodes["segment"] = NodeGene(
+        nodes["segment"] = tree_node(
             name="segment",
             size=(0.12, 0.08, 0.04),
             recursive_limit=3,
@@ -920,7 +926,7 @@ def _mutable_effect_genotype(field_name):
         recursive = ConnectionGene(child="segment", axis=(0.2, 0.5, 0.4))
         target = ConnectionGene(child="limb", axis=(0.3, 0.4, 0.5))
         nodes["body"].children = [ConnectionGene(child="segment", axis=(0, 1, 0))]
-        nodes["segment"] = NodeGene(
+        nodes["segment"] = tree_node(
             name="segment",
             size=(0.12, 0.08, 0.04),
             recursive_limit=2,
@@ -932,7 +938,7 @@ def _mutable_effect_genotype(field_name):
         nodes["body"].children = [anchor, target]
         nodes["anchor"] = NodeGene(name="anchor", size=(0.05, 0.05, 0.05))
 
-    return Genotype(root="body", nodes=nodes), target
+    return tree_genotype(root="body", nodes=nodes), target
 
 
 def test_non_topology_mutations_only_register_body_count_stable_fields():
@@ -1093,16 +1099,16 @@ def test_topology_mutations_register_body_count_fields():
 
 
 def test_non_topology_mutations_preserve_phenotype_body_count():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.3, 0.2, 0.1),
                 joint_type="free",
                 children=[ConnectionGene(child="segment", axis=(0, 1, 0))],
             ),
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.12, 0.08, 0.04),
                 recursive_limit=3,
@@ -1136,10 +1142,10 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
 
 
 def test_disallow_root_mutation_excludes_root_node_fields():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.3, 0.2, 0.1),
                 joint_type="free",

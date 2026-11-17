@@ -1644,10 +1644,6 @@ class GenotypeMutationMixin:
                 self.archived_connections[connection.name] = connection
                 cloned_connection_names.append(connection.name)
             node.child_connections = cloned_connection_names
-            node._connection_lookup = {
-                **self.connections,
-                **self.archived_connections,
-            }
             self.archived_nodes[node.name] = node
         return archived_copies
 

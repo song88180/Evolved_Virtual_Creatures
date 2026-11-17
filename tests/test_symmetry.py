@@ -4,7 +4,6 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from evol_virtual_creature.genes import ConnectionGene, NodeGene
-from evol_virtual_creature.genotype import Genotype
 from evol_virtual_creature.genotype_io import (
     load_genotype_from_json,
     save_genotype_to_json,
@@ -14,6 +13,8 @@ from evol_virtual_creature.graph_analysis import (
     PhenotypeNodeLimitExceeded,
 )
 from evol_virtual_creature.phenotype import PhenotypeBuilder
+
+from genotype_factory import tree_genotype, tree_node
 
 
 def _vector(element, attribute):
@@ -40,10 +41,10 @@ def test_connection_validates_and_canonicalizes_symmetry_planes():
 
 
 def test_symmetry_round_trips_through_json(tmp_path):
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
@@ -61,15 +62,15 @@ def test_symmetry_round_trips_through_json(tmp_path):
     save_genotype_to_json(genotype, path)
     loaded = load_genotype_from_json(path)
 
-    assert loaded.nodes["body"].children[0].symmetry == ("xy", "yz")
+    assert loaded.outgoing_connections("body")[0].symmetry == ("xy", "yz")
 
 
 def test_symmetry_mutation_toggles_one_plane():
     connection = ConnectionGene(child="limb", axis=(0, 1, 0))
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
@@ -95,10 +96,10 @@ def test_symmetry_mutation_toggles_one_plane():
 
 
 def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(2.0, 1.0, 0.5),
                 joint_type="free",
@@ -111,7 +112,7 @@ def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
                     control_phase_order_scale=1.5,
                 )],
             ),
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.4, 0.3, 0.2),
                 children=[ConnectionGene(
@@ -164,10 +165,10 @@ def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
 
 
 def test_three_symmetry_planes_create_eight_children_and_count_them():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(2.0, 1.0, 0.5),
                 joint_type="free",

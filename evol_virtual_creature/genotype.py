@@ -40,7 +40,6 @@ class Genotype(GenotypeMutationMixin):
             self.archived_connections = self._normalize_connection_list(
                 self.archived_connections, "archived_connection"
             )
-        self._normalize_embedded_connections()
         if (
             not math.isfinite(self.global_control_freq)
             or self.global_control_freq <= 0.0
@@ -71,34 +70,21 @@ class Genotype(GenotypeMutationMixin):
             result[name] = gene
         return result
 
-    def _normalize_embedded_connections(self) -> None:
-        for node in self.nodes.values():
-            self._normalize_node_connections(node, self.connections)
-        for node in self.archived_nodes.values():
-            self._normalize_node_connections(node, self.archived_connections)
-            node._connection_lookup = {
-                **self.connections,
-                **self.archived_connections,
-            }
+    def outgoing_connections(self, node_name: str) -> List[ConnectionGene]:
+        """Resolve a node's ``child_connections`` names to connection genes.
 
-    def _normalize_node_connections(
-        self,
-        node: NodeGene,
-        target: Dict[str, ConnectionGene],
-    ) -> None:
-        pending = list(node._pending_children)
-        for connection in pending:
-            base = connection.name or "connection"
-            name = base
-            index = 1
-            while name in target and target[name] is not connection:
-                index += 1
-                name = f"{base}_{index}"
-            connection.name = name
-            target[name] = connection
-            node.child_connections.append(name)
-        node._pending_children = []
-        node._connection_lookup = target
+        Active nodes resolve against active connections; archived nodes may
+        reference either active or archived connections.
+        """
+        if node_name in self.nodes:
+            node = self.nodes[node_name]
+            lookup = self.connections
+        elif node_name in self.archived_nodes:
+            node = self.archived_nodes[node_name]
+            lookup = {**self.connections, **self.archived_connections}
+        else:
+            raise KeyError(f"Unknown node gene: {node_name!r}")
+        return [lookup[name] for name in node.child_connections]
 
     def validate_node_names(self) -> None:
         """Require one globally unique name for every active or archived node gene."""

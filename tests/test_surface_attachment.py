@@ -21,6 +21,8 @@ from evol_virtual_creature.genotype_io import (
 from evol_virtual_creature.graph_analysis import GenotypeGraphAnalyzer
 from evol_virtual_creature.phenotype import PhenotypeBuilder
 
+from genotype_factory import tree_genotype, tree_node
+
 
 def _vector(element, attribute):
     return tuple(float(value) for value in element.get(attribute).split())
@@ -186,15 +188,15 @@ def test_missing_orientation_loads_with_identity_for_default_face(tmp_path):
     genotype = load_genotype_from_json(genotype_path)
 
     assert genotype.nodes["body"].orientation == (0.0, 0.0, 0.0)
-    assert genotype.nodes["body"].children[0].orientation == (0.0, 0.0, 0.0)
-    assert genotype.nodes["body"].children[0].child_surface_uv == (0.0, 0.0)
+    assert genotype.outgoing_connections("body")[0].orientation == (0.0, 0.0, 0.0)
+    assert genotype.outgoing_connections("body")[0].child_surface_uv == (0.0, 0.0)
 
 
 def test_orientation_round_trips_through_json(tmp_path):
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -220,8 +222,8 @@ def test_orientation_round_trips_through_json(tmp_path):
     assert data["connections"][connection_name]["orientation"] == [0.0, 0.0, 30.0]
     assert data["connections"][connection_name]["child_surface_uv"] == [0.25, -0.5]
     assert loaded.nodes["body"].orientation == (10.0, 20.0, 30.0)
-    assert loaded.nodes["body"].children[0].orientation == (0.0, 0.0, 30.0)
-    assert loaded.nodes["body"].children[0].child_surface_uv == (0.25, -0.5)
+    assert loaded.outgoing_connections("body")[0].orientation == (0.0, 0.0, 30.0)
+    assert loaded.outgoing_connections("body")[0].child_surface_uv == (0.25, -0.5)
 
 
 def test_named_connection_can_be_shared_by_different_nodes(tmp_path):
@@ -248,8 +250,8 @@ def test_named_connection_can_be_shared_by_different_nodes(tmp_path):
 
     genotype = load_genotype_from_json(path)
 
-    assert genotype.nodes["body"].children[0] is genotype.connections["to_limb"]
-    assert genotype.nodes["branch"].children[0] is genotype.connections["to_limb"]
+    assert genotype.outgoing_connections("body")[0] is genotype.connections["to_limb"]
+    assert genotype.outgoing_connections("branch")[0] is genotype.connections["to_limb"]
 
 
 def test_duplicate_connection_reference_in_one_node_is_rejected():
@@ -370,7 +372,7 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
     }))
 
     genotype = load_genotype_from_json(genotype_path)
-    connection = genotype.nodes["body"].children[0]
+    connection = genotype.outgoing_connections("body")[0]
 
     assert genotype.control_mode == "neural"
     assert len(connection.neural_w1) == 16
@@ -383,10 +385,10 @@ def test_missing_neural_fields_load_as_zero_neural_controller(tmp_path):
 
 
 def test_neural_hinge_joint_uses_wide_symmetric_range():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -586,10 +588,10 @@ def test_missing_joint_type_uses_node_gene_default(tmp_path):
 
 
 def test_fixed_joint_emits_rigid_child_without_joint_or_motor():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -617,10 +619,10 @@ def test_fixed_joint_emits_rigid_child_without_joint_or_motor():
 
 
 def test_oriented_root_and_child_emit_quat_and_compile():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(0.2, 0.2, 0.2),
                 joint_type="free",
@@ -735,16 +737,16 @@ def test_connection_scale_changes_repeated_child_size_by_hierarchy_order():
         symmetry=("xz",),
         scale=0.8,
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
                 children=[ConnectionGene(child="segment", axis=(0, 1, 0))],
             ),
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.5, 0.25, 0.1),
                 recursive_limit=3,
@@ -778,16 +780,16 @@ def test_connection_scale_changes_repeated_child_size_by_hierarchy_order():
 
 
 def test_terminal_only_child_is_created_only_on_terminal_parent():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
                 children=[ConnectionGene(child="segment", axis=(0, 1, 0))],
             ),
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.4, 0.2, 0.1),
                 recursive_limit=3,
@@ -818,10 +820,10 @@ def test_terminal_only_child_is_created_only_on_terminal_parent():
 
 
 def test_slide_and_ball_joints_compile_with_expected_actuators():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
@@ -888,10 +890,10 @@ def test_ball_neural_motors_use_persisted_output_axes():
             (1.0, 0.0, 0.0),
         ),
     )
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
@@ -919,10 +921,10 @@ def test_ball_neural_motors_use_persisted_output_axes():
 
 
 def test_slide_axis_uses_vector_reflection_for_symmetry():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
@@ -955,10 +957,10 @@ def test_slide_axis_uses_vector_reflection_for_symmetry():
 
 
 def test_recursive_attachment_uses_parent_geom_center():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(2.0, 1.0, 0.5),
                 joint_type="free",
@@ -968,7 +970,7 @@ def test_recursive_attachment_uses_parent_geom_center():
                     parent_face="+x",
                 )],
             ),
-            "segment": NodeGene(
+            "segment": tree_node(
                 name="segment",
                 size=(0.4, 0.3, 0.2),
                 children=[ConnectionGene(
@@ -998,10 +1000,10 @@ def test_recursive_attachment_uses_parent_geom_center():
 
 
 def test_symmetric_rotated_children_attach_at_child_surface():
-    genotype = Genotype(
+    genotype = tree_genotype(
         root="body",
         nodes={
-            "body": NodeGene(
+            "body": tree_node(
                 name="body",
                 size=(1.0, 1.0, 1.0),
                 joint_type="free",
