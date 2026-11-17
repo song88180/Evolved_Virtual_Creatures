@@ -838,6 +838,14 @@ def test_ball_to_hinge_keeps_seeded_output_and_its_direction():
 
 
 MUTABLE_NODE_FIELDS = {"size", "joint_type", "shape", "orientation"}
+SINE_CONTROL_FIELDS = {
+    "control_amp",
+    "control_freq",
+    "control_phase",
+    "control_phase_depth_scale",
+    "control_phase_order_scale",
+}
+NEURAL_CONTROL_FIELDS = {"neural_w1", "neural_b1", "neural_w2", "neural_b2"}
 MUTABLE_CONNECTION_FIELDS = {
     "parent_face",
     "surface_uv",
@@ -848,11 +856,6 @@ MUTABLE_CONNECTION_FIELDS = {
     "motor_enabled",
     "motor_gear",
     "ctrlrange",
-    "control_amp",
-    "control_freq",
-    "control_phase",
-    "control_phase_depth_scale",
-    "control_phase_order_scale",
 }
 
 
@@ -938,18 +941,70 @@ def _mutable_effect_genotype(field_name):
         nodes["body"].children = [anchor, target]
         nodes["anchor"] = NodeGene(name="anchor", size=(0.05, 0.05, 0.05))
 
-    return tree_genotype(root="body", nodes=nodes), target
+    # Sine controller fields only affect behavior in sine mode.
+    control_mode = "sine" if field_name in SINE_CONTROL_FIELDS else "neural"
+    return (
+        tree_genotype(root="body", nodes=nodes, control_mode=control_mode),
+        target,
+    )
+
+
+def _registered_fields(genotype, allow_topology_mutations=False):
+    paths = genotype._collect_mutable_parameters(
+        allow_topology_mutations=allow_topology_mutations
+    )
+    node_fields = {path[2] for path in paths if path[0] == "node"}
+    connection_fields = {
+        path[2] for path in paths if path[0] in {"connection", "connection_neural"}
+    }
+    return paths, node_fields, connection_fields
 
 
 def test_non_topology_mutations_only_register_body_count_stable_fields():
     genotype, _ = _mutable_effect_genotype("axis")
-    paths = genotype._collect_mutable_parameters(allow_topology_mutations=False)
-    node_fields = {path[2] for path in paths if path[0] == "node"}
-    connection_fields = {path[2] for path in paths if path[0] == "connection"}
+    genotype.control_mode = "sine"
+    paths, node_fields, connection_fields = _registered_fields(genotype)
 
     assert ("genotype", "global_control_freq") in paths
     assert node_fields == MUTABLE_NODE_FIELDS
-    assert connection_fields == MUTABLE_CONNECTION_FIELDS
+    assert connection_fields == MUTABLE_CONNECTION_FIELDS | SINE_CONTROL_FIELDS
+
+
+@pytest.mark.parametrize("allow_topology_mutations", [False, True])
+def test_neural_mode_does_not_register_dormant_sine_fields(allow_topology_mutations):
+    genotype, _ = _mutable_effect_genotype("axis")
+    assert genotype.control_mode == "neural"
+    paths, _, connection_fields = _registered_fields(
+        genotype, allow_topology_mutations=allow_topology_mutations
+    )
+
+    assert ("genotype", "global_control_freq") not in paths
+    assert not connection_fields & SINE_CONTROL_FIELDS
+    assert connection_fields & NEURAL_CONTROL_FIELDS == NEURAL_CONTROL_FIELDS
+
+
+def test_sine_mode_does_not_register_neural_fields():
+    genotype, _ = _mutable_effect_genotype("axis")
+    genotype.control_mode = "sine"
+    _, _, connection_fields = _registered_fields(genotype)
+
+    assert SINE_CONTROL_FIELDS <= connection_fields
+    assert not connection_fields & NEURAL_CONTROL_FIELDS
+
+
+def test_neural_mutation_never_changes_sine_fields():
+    genotype, connection = _mutable_effect_genotype("axis")
+    sine_before = {name: getattr(connection, name) for name in SINE_CONTROL_FIELDS}
+    global_freq_before = genotype.global_control_freq
+
+    genotype.mutation(num_mutations=200, rng=random.Random(3))
+
+    for gene in genotype.connections.values():
+        if gene is connection:
+            assert {
+                name: getattr(gene, name) for name in SINE_CONTROL_FIELDS
+            } == sine_before
+    assert genotype.global_control_freq == global_freq_before
 
 
 MUTABLE_EFFECT_CASES = [

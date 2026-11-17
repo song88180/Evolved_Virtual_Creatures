@@ -67,6 +67,16 @@ class GenotypeMutationMixin:
             "connection_removal",
         }
     )
+    # Connection fields read only by the sine controller; not mutated in neural mode.
+    SINE_CONTROL_FIELDS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "control_amp",
+            "control_freq",
+            "control_phase",
+            "control_phase_depth_scale",
+            "control_phase_order_scale",
+        }
+    )
     NEW_CHILD_SIZE_MIN_SCALE: ClassVar[float] = 0.1
     NEW_CHILD_SIZE_MAX_SCALE: ClassVar[float] = 1.9
 
@@ -196,9 +206,12 @@ class GenotypeMutationMixin:
         allow_topology_mutations: bool = True,
         allow_root_mutation: bool = True,
     ) -> List[Tuple[Any, ...]]:
-        mutable_parameters: List[Tuple[Any, ...]] = [
-            ("genotype", "global_control_freq"),
-        ]
+        # Sine controller fields are read only in sine mode; neural weights are
+        # registered separately below and only in neural mode.
+        sine_mode = self.control_mode == "sine"
+        mutable_parameters: List[Tuple[Any, ...]] = []
+        if sine_mode:
+            mutable_parameters.append(("genotype", "global_control_freq"))
         if allow_topology_mutations:
             mutable_parameters.extend((
                 ("connection_addition",),
@@ -268,6 +281,8 @@ class GenotypeMutationMixin:
                     not allow_topology_mutations
                     and field_name in topology_sensitive_connection_fields
                 ):
+                    continue
+                if not sine_mode and field_name in self.SINE_CONTROL_FIELDS:
                     continue
                 base_path = ("connection", connection, field_name)
                 if field_name == "symmetry":
