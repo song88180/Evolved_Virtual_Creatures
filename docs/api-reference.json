@@ -503,7 +503,7 @@
       "Main_Use_Cases": [
         "Validate a genotype and build MJCF XML",
         "Create MuJoCo bodies, joints, geoms, motors, defaults, and world elements",
-        "Record open-loop controller metadata for generated actuators"
+        "Record per-joint controller metadata (ActuatorController) for generated actuators"
       ],
       "Related_Modules": [
         "evol_virtual_creature.genes",
@@ -516,25 +516,34 @@
     },
     "Classes": {
       "ActuatorController": {
-        "Purpose": "Stores generated motor name and sine-wave control parameters.",
+        "Purpose": "Per-joint controller record created by PhenotypeBuilder and applied each step by control.apply_controller. Defined in evol_virtual_creature.control. One controller drives every motor of its joint: one for hinge or slide joints, three for ball joints.",
         "Constructor": {
-          "Signature": "ActuatorController(motor_name: str, amp: float, freq: float, phase: float)",
+          "Signature": "ActuatorController(motor_names: tuple[str, ...], joint_name: str, joint_type: str, control_mode: str, ctrlranges: tuple[tuple[float, float], ...], neural_w1=(), neural_b1=(), neural_w2=(), neural_b2=(), amp: float = 0.0, freq: float = 0.0, phase: float = 0.0)",
           "Parameters": {
-            "motor_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo motor name."},
-            "amp": {"Type": "float", "Default": "required", "Description": "Controller amplitude."},
-            "freq": {"Type": "float", "Default": "required", "Description": "Effective sine control frequency after global base frequency and connection harmonic multiplier are combined."},
-            "phase": {"Type": "float", "Default": "required", "Description": "Controller phase offset."}
+            "motor_names": {"Type": "tuple[str, ...]", "Default": "required", "Description": "Generated MuJoCo motor names for this joint, one per actuated axis."},
+            "joint_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo joint name the motors act on."},
+            "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: hinge, slide, or ball."},
+            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family copied from the genotype: neural or sine."},
+            "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Default": "required", "Description": "Control range for each motor, in motor_names order."},
+            "neural_w1": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural hidden-layer weights (16 x input size). Used only in neural mode."},
+            "neural_b1": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural hidden-layer biases. Used only in neural mode."},
+            "neural_w2": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural output weights (outputs x 16). Used only in neural mode."},
+            "neural_b2": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural output biases. Used only in neural mode."},
+            "amp": {"Type": "float", "Default": "0.0", "Description": "Sine control amplitude. Used only in sine mode."},
+            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency after the global base frequency and connection harmonic multiplier are combined. Used only in sine mode."},
+            "phase": {"Type": "float", "Default": "0.0", "Description": "Sine phase offset. Used only in sine mode."}
           },
           "Raises": []
         },
         "Attributes": {
-          "motor_name": {"Type": "str", "Description": "Generated motor name."},
-          "amp": {"Type": "float", "Description": "Sine control amplitude."},
-          "freq": {"Type": "float", "Description": "Effective sine control frequency."},
-          "phase": {"Type": "float", "Description": "Sine control phase."}
+          "motor_names": {"Type": "tuple[str, ...]", "Description": "Generated motor names driven by this controller."},
+          "joint_name": {"Type": "str", "Description": "Controlled joint name."},
+          "joint_type": {"Type": "str", "Description": "hinge, slide, or ball."},
+          "control_mode": {"Type": "str", "Description": "neural or sine."},
+          "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Description": "Per-motor control ranges."}
         },
         "Methods": {},
-        "Example": "controller = ActuatorController(\"tail_joint_motor_1\", amp=0.1, freq=10.0, phase=0.0)"
+        "Example": "controller = ActuatorController(motor_names=(\"tail_joint_motor_1\",), joint_name=\"tail_joint_1\", joint_type=\"hinge\", control_mode=\"sine\", ctrlranges=((-1.0, 1.0),), amp=0.1, freq=10.0, phase=0.0)"
       },
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",

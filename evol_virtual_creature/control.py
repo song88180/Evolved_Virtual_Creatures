@@ -41,10 +41,6 @@ class ActuatorController:
     freq: float = 0.0
     phase: float = 0.0
 
-    @property
-    def motor_name(self) -> str:
-        return self.motor_names[0]
-
 
 def zero_neural_parameters(
     joint_type: str,
