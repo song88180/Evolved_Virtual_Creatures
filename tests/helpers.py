@@ -108,7 +108,7 @@ def make_definition(
     base = task_definition(task)
     return replace(
         base,
-        config=replace(base.config, **config_overrides),
+        config=base.config_type(**config_overrides),
         environment=base.environment if environment is None else environment,
     )
 

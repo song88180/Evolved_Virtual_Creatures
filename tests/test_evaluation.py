@@ -563,6 +563,23 @@ def test_self_collision_masks_and_parent_filtering():
     assert _collision_enabled(swimming_with_self_collision, *nonparent_pair)
 
 
+def test_evaluate_task_overrides_do_not_modify_definition():
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    original_config = WALKING_X_TASK.config
+    original_environment = WALKING_X_TASK.environment
+    override_environment = replace(original_environment, gravity=-1.0)
+
+    evaluate_task(
+        genotype,
+        WALKING_X_TASK,
+        WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0),
+        override_environment,
+    )
+
+    assert WALKING_X_TASK.config is original_config
+    assert WALKING_X_TASK.environment is original_environment
+
+
 def test_both_tasks_return_finite_results():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     swimming = evaluate_task(

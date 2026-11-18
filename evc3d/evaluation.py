@@ -10,6 +10,7 @@ settling, safety checks) live in ``evc3d.simulation``; task loading lives in
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import Sequence
 
 import mujoco
@@ -52,11 +53,19 @@ def evaluate_task(
     config: task_shared.EvaluationConfig | None = None,
     environment: task_shared.EnvironmentFamily | None = None,
 ):
-    """Build, simulate, and score a genotype using its registered task callbacks."""
+    """Build, simulate, and score a genotype using its registered task callbacks.
+
+    ``config`` and ``environment`` override the definition's own values for
+    this call only; ``definition`` itself (often a shared registry object) is
+    never modified.
+    """
+    overrides = {}
     if config is not None:
-        definition.config = config
+        overrides["config"] = config
     if environment is not None:
-        definition.environment = environment
+        overrides["environment"] = environment
+    if overrides:
+        definition = replace(definition, **overrides)
     config = definition.config
     if not isinstance(config, definition.config_type):
         raise TypeError(
