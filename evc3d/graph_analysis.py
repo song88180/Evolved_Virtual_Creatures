@@ -9,8 +9,8 @@ class PhenotypeBuildAbort(RuntimeError):
     """Raised when the genotype should not be expanded into a phenotype."""
 
 
-class PhenotypeNodeLimitExceeded(PhenotypeBuildAbort):
-    pass
+class PhenotypeBodyLimitExceeded(PhenotypeBuildAbort):
+    """Raised when the expanded creature would have more than max_body_count bodies."""
 
 
 class GenotypeGraphError(PhenotypeBuildAbort):
@@ -18,12 +18,12 @@ class GenotypeGraphError(PhenotypeBuildAbort):
 
 
 class GenotypeGraphAnalyzer:
-    def __init__(self, genotype: Genotype, max_node: int):
-        if max_node < 1:
-            raise ValueError("max_node must be at least 1")
+    def __init__(self, genotype: Genotype, max_body_count: int):
+        if max_body_count < 1:
+            raise ValueError("max_body_count must be at least 1")
 
         self.genotype = genotype
-        self.max_node = max_node
+        self.max_body_count = max_body_count
         self.memoized_counts: Dict[Tuple[str, Tuple[Tuple[str, int], ...]], int] = {}
         self.active_states: set[Tuple[str, Tuple[Tuple[str, int], ...]]] = set()
 
@@ -31,7 +31,9 @@ class GenotypeGraphAnalyzer:
         """
         Analyze expansion from the genotype graph before creating XML.
 
-        Returns the exact phenotype node count when it is within max_node.
+        Returns the exact number of generated bodies when it is within
+        max_body_count. (A genotype node can expand into many bodies through
+        recursion and symmetry.)
         Raises if an invalid/unbounded graph or oversized phenotype is found.
         """
         if self.genotype.root not in self.genotype.nodes:
@@ -41,7 +43,7 @@ class GenotypeGraphAnalyzer:
 
         self._validate_recursive_limits()
         self._validate_terminal_connections()
-        return self._count_expanded_nodes(self.genotype.root, {})
+        return self._count_expanded_bodies(self.genotype.root, {})
 
     def _validate_recursive_limits(self):
         for node in self.genotype.nodes.values():
@@ -65,7 +67,7 @@ class GenotypeGraphAnalyzer:
                         f"{node.name!r} -> {connection.child!r}."
                     )
 
-    def _count_expanded_nodes(
+    def _count_expanded_bodies(
         self,
         node_name: str,
         current_depths: Dict[str, int],
@@ -87,7 +89,7 @@ class GenotypeGraphAnalyzer:
         next_depths[node.name] = node_depth
 
         self.active_states.add(state)
-        total_nodes = 1
+        total_bodies = 1
         for connection_name in node.child_connections:
             connection = self.genotype.connections[connection_name]
             if connection.terminal_only and node_depth < node.recursive_limit:
@@ -104,19 +106,19 @@ class GenotypeGraphAnalyzer:
             if child_depth >= child_node.recursive_limit:
                 continue
 
-            child_subtree_count = self._count_expanded_nodes(
+            child_subtree_count = self._count_expanded_bodies(
                 child_node.name,
                 next_depths,
             )
-            total_nodes += (2 ** len(connection.symmetry)) * child_subtree_count
-            if total_nodes > self.max_node:
-                raise PhenotypeNodeLimitExceeded(
-                    "Maximum allowed number of phenotype nodes exceeded during "
-                    f"genotype graph analysis: needed at least {total_nodes}, "
-                    f"but max_node is {self.max_node}."
+            total_bodies += (2 ** len(connection.symmetry)) * child_subtree_count
+            if total_bodies > self.max_body_count:
+                raise PhenotypeBodyLimitExceeded(
+                    "Maximum allowed number of bodies exceeded during "
+                    f"genotype graph analysis: needed at least {total_bodies}, "
+                    f"but max_body_count is {self.max_body_count}."
                 )
 
         self.active_states.remove(state)
-        self.memoized_counts[state] = total_nodes
-        return total_nodes
+        self.memoized_counts[state] = total_bodies
+        return total_bodies
 

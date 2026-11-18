@@ -298,29 +298,29 @@ def test_task_physics_settings_are_distinct():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500, environment=SWIMMING_X_ENVIRONMENT,
+                max_body_count=500, environment=SWIMMING_X_ENVIRONMENT,
             ),
         ).build()
     )
     walking = ET.fromstring(
-        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=WALKING_X_ENVIRONMENT)).build()
+        PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=WALKING_X_ENVIRONMENT)).build()
     )
     swimming_away = ET.fromstring(
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500, environment=SWIMMING_AWAY_ENVIRONMENT,
+                max_body_count=500, environment=SWIMMING_AWAY_ENVIRONMENT,
             ),
         ).build()
     )
     walking_away = ET.fromstring(
-        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=WALKING_AWAY_ENVIRONMENT)).build()
+        PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=WALKING_AWAY_ENVIRONMENT)).build()
     )
     flying = ET.fromstring(
-        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=FLYING_X_ENVIRONMENT)).build()
+        PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=FLYING_X_ENVIRONMENT)).build()
     )
     flying_away = ET.fromstring(
-        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=FLYING_AWAY_ENVIRONMENT)).build()
+        PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=FLYING_AWAY_ENVIRONMENT)).build()
     )
 
     swimming_option = swimming.find("option")
@@ -386,7 +386,7 @@ def test_flying_fluid_settings_compile_in_mujoco():
     mjcf = PhenotypeBuilder(
         genotype,
         make_definition(
-            max_node=500, environment=FLYING_X_ENVIRONMENT,
+            max_body_count=500, environment=FLYING_X_ENVIRONMENT,
         ),
     ).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
@@ -401,7 +401,7 @@ def test_flying_fluid_settings_can_be_overridden():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500,
+                max_body_count=500,
                 environment=replace(
                     FLYING_X_ENVIRONMENT, fluid_density=0.9,
                     fluid_viscosity=0.00002, fluid_shape="none",
@@ -461,7 +461,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500,
+                max_body_count=500,
                 environment=WALKING_X_ENVIRONMENT,
                 self_collision=False,
             ),
@@ -485,7 +485,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500,
+                max_body_count=500,
                 environment=WALKING_X_ENVIRONMENT,
                 self_collision=True,
             ),
@@ -505,7 +505,7 @@ def test_self_collision_masks_and_parent_filtering():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500,
+                max_body_count=500,
                 environment=SWIMMING_X_ENVIRONMENT,
                 self_collision=True,
             ),
@@ -959,7 +959,7 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     builder = PhenotypeBuilder(
         genotype,
         make_definition(
-            max_node=config.max_node,
+            max_body_count=config.max_body_count,
             environment=environment,
         ),
     )
@@ -1059,7 +1059,7 @@ def test_flying_initialization_raises_low_creature_above_floor():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500, environment=FLYING_X_ENVIRONMENT,
+                max_body_count=500, environment=FLYING_X_ENVIRONMENT,
             ),
         ).build()
     )
@@ -1091,7 +1091,7 @@ def test_walking_initialization_raises_low_creature_above_floor():
         PhenotypeBuilder(
             genotype,
             make_definition(
-                max_node=500, environment=WALKING_X_ENVIRONMENT,
+                max_body_count=500, environment=WALKING_X_ENVIRONMENT,
             ),
         ).build()
     )
@@ -1122,7 +1122,7 @@ def test_generic_initialization_runs_environment_callback():
     )
     custom_definition = replace(SWIMMING_X_TASK, environment=environment)
     config = SwimmingEvaluationConfig()
-    builder = PhenotypeBuilder(genotype, make_definition(max_node=500, environment=environment))
+    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=environment))
     model = mujoco.MjModel.from_xml_string(builder.build())
 
     assert initialize_model(model, mujoco.MjData(model), config, environment) == (
@@ -1486,7 +1486,7 @@ def _neural_single_motor_model(neural_b2):
             "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
         },
     )
-    builder = PhenotypeBuilder(genotype, make_definition(max_node=10))
+    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=10))
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)

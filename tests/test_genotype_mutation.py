@@ -336,7 +336,7 @@ def test_terminal_only_self_connection_is_rejected_during_build_analysis():
     )
 
     with pytest.raises(GenotypeGraphError, match="cannot point to its own node"):
-        GenotypeGraphAnalyzer(genotype, max_node=10).validate()
+        GenotypeGraphAnalyzer(genotype, max_body_count=10).validate()
 
 
 def test_joint_type_mutation_excludes_free_root_and_mutates_articulated_nodes():
@@ -860,7 +860,7 @@ MUTABLE_CONNECTION_FIELDS = {
 
 
 def _phenotype_and_controller_snapshot(genotype):
-    builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
+    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=100))
     mjcf = builder.build()
     controllers = tuple(
         (controller.amp, controller.freq, controller.phase)
@@ -1182,7 +1182,7 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
             ),
         },
     )
-    before_builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
+    before_builder = PhenotypeBuilder(genotype, make_definition(max_body_count=100))
     before_builder.build()
 
     genotype.mutation(
@@ -1191,7 +1191,7 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
         allow_topology_mutations=False,
     )
 
-    after_builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
+    after_builder = PhenotypeBuilder(genotype, make_definition(max_body_count=100))
     after_builder.build()
     assert after_builder.body_counter == before_builder.body_counter
 

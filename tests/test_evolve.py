@@ -1352,7 +1352,7 @@ def test_build_default_matches_plain_phenotype_builder(tmp_path):
     cli.main(["build", "--output", str(output)])
 
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    expected = PhenotypeBuilder(genotype, make_definition(max_node=500)).build()
+    expected = PhenotypeBuilder(genotype, make_definition(max_body_count=500)).build()
     assert output.read_text() == expected
 
 

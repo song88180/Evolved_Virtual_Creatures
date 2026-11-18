@@ -18,7 +18,7 @@ Use this map to choose files before broad searches:
 - `evc3d/genotype_io.py`: JSON schema loading, old-genotype migration, and serialization. Edit when genotype JSON fields, defaults, or backward compatibility behavior changes.
 - `evc3d/genotype_mutation.py`: mutation parameter discovery and mutation operators. Edit when adding mutable fields, topology mutations, repair rules, or random fresh gene generation.
 - `evc3d/phenotype.py`: genotype-to-MJCF expansion. Edit when body placement, joints, motors, symmetry reflection, body quaternions, geometry, collision settings, or task-specific XML output changes.
-- `evc3d/graph_analysis.py`: graph validity and phenotype node-count analysis. Edit for recursion, terminal-only, missing-node, or max-node validation rules.
+- `evc3d/graph_analysis.py`: graph validity and generated body-count analysis. Edit for recursion, terminal-only, missing-node, or max-body-count validation rules.
 - `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
 - `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
 - `evc3d/scene.py`: shared display setup for viewer and video (build for a task, placement and settling without scoring rules, lighting, floor, one controlled step with failure checks). Edit for anything both display modes should share.

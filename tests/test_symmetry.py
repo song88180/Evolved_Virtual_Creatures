@@ -10,7 +10,7 @@ from evc3d.genotype_io import (
 )
 from evc3d.graph_analysis import (
     GenotypeGraphAnalyzer,
-    PhenotypeNodeLimitExceeded,
+    PhenotypeBodyLimitExceeded,
 )
 from evc3d.phenotype import PhenotypeBuilder
 
@@ -127,7 +127,7 @@ def test_single_plane_mirrors_subtree_axes_and_actuator_controls():
         },
     )
 
-    builder = PhenotypeBuilder(genotype, make_definition(max_node=10))
+    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=10))
     xml_root = ET.fromstring(builder.build())
     root_body = xml_root.find("./worldbody/body")
     segment_bodies = root_body.findall("body")
@@ -184,11 +184,11 @@ def test_three_symmetry_planes_create_eight_children_and_count_them():
         },
     )
 
-    assert GenotypeGraphAnalyzer(genotype, max_node=9).validate() == 9
-    with pytest.raises(PhenotypeNodeLimitExceeded):
-        GenotypeGraphAnalyzer(genotype, max_node=8).validate()
+    assert GenotypeGraphAnalyzer(genotype, max_body_count=9).validate() == 9
+    with pytest.raises(PhenotypeBodyLimitExceeded):
+        GenotypeGraphAnalyzer(genotype, max_body_count=8).validate()
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=9)).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_body_count=9)).build())
     root_body = xml_root.find("./worldbody/body")
     child_positions = {_vector(body, "pos") for body in root_body.findall("body")}
 

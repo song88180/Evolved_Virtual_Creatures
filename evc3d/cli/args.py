@@ -18,7 +18,7 @@ from ..genotype import Genotype
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GENOTYPE_PATH = REPO_ROOT / "examples" / "example_genotype.json"
 DEFAULT_TASK = "swimming_x"
-DEFAULT_MAX_NODE = 500
+DEFAULT_MAX_BODY_COUNT = 500
 
 
 class HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
@@ -54,10 +54,10 @@ def add_environment_arguments(
         help=task_help,
     )
     group.add_argument(
-        "--max-node",
+        "--max-body-count",
         type=int,
-        default=DEFAULT_MAX_NODE,
-        help="Maximum phenotype nodes allowed during build/evaluation.",
+        default=DEFAULT_MAX_BODY_COUNT,
+        help="Maximum number of generated bodies (after recursion and symmetry).",
     )
     group.add_argument(
         "--fluid-density",
@@ -102,8 +102,8 @@ def add_environment_arguments(
 
 
 def validate_environment_arguments(args: argparse.Namespace) -> None:
-    if args.max_node < 1:
-        raise ValueError("--max-node must be at least 1")
+    if args.max_body_count < 1:
+        raise ValueError("--max-body-count must be at least 1")
     if args.fluid_density is not None and args.fluid_density < 0.0:
         raise ValueError("--fluid-density must be non-negative")
     if args.fluid_viscosity is not None and args.fluid_viscosity < 0.0:

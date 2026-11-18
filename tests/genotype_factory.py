@@ -91,7 +91,7 @@ def make_definition(
     """Return a private copy of a registered task with config/environment overrides.
 
     ``PhenotypeBuilder`` takes a task definition; geometry tests use this to set
-    just the fields they care about (usually ``max_node``). The registry's
+    just the fields they care about (usually ``max_body_count``). The registry's
     shared definition object is never modified.
     """
     base = task_definition(task)

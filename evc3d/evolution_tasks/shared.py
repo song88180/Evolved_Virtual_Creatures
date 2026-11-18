@@ -77,7 +77,7 @@ class EvaluationConfig:
     min_center_height_fraction: float = 0.0
     initial_floor_contact_policy: str = "allow"
     episode_seconds: float = 10.0
-    max_node: int = 500
+    max_body_count: int = 500
     self_collision: bool = False
     disallow_collision: bool = False
     target_direction: Sequence[float] = (1.0, 0.0, 0.0)
@@ -180,7 +180,7 @@ class TaskDefinition:
         supported = {item.name for item in fields(config)}
         candidates = {
             "episode_seconds": getattr(args, "duration", None),
-            "max_node": getattr(args, "max_node", None),
+            "max_body_count": getattr(args, "max_body_count", None),
             "body_count_weight": getattr(args, "body_count_weight", None),
             "volume_weight": getattr(args, "volume_weight", None),
             "volume_penalty_cutoff": getattr(args, "volume_penalty_cutoff", None),

@@ -15,7 +15,7 @@ from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES, euler_degrees_to_matrix
 from .genotype import ConnectionGene, Genotype, NodeGene
 from .graph_analysis import (
     GenotypeGraphAnalyzer,
-    PhenotypeNodeLimitExceeded,
+    PhenotypeBodyLimitExceeded,
 )
 
 PLANE_REFLECTIONS = {
@@ -33,18 +33,18 @@ class PhenotypeBuilder:
     def __init__(self, genotype: Genotype, definition: TaskDefinition):
         """Prepare to build ``genotype`` exactly as ``definition`` evaluates it.
 
-        The task supplies the node limit (``config.max_node``), the physical
+        The task supplies the body limit (``config.max_body_count``), the physical
         environment, and the collision rule: body parts collide with each other
         when ``config.self_collision`` is set, and also whenever
         ``config.disallow_collision`` is set, since disqualifying collisions
         requires detecting them.
         """
         config = definition.config
-        if config.max_node < 1:
-            raise ValueError("max_node must be at least 1")
+        if config.max_body_count < 1:
+            raise ValueError("max_body_count must be at least 1")
         self.genotype = genotype
         self.definition = definition
-        self.max_node = config.max_node
+        self.max_body_count = config.max_body_count
         self.environment = definition.environment
         self.self_collision = config.self_collision or config.disallow_collision
         self.body_counter = 0
@@ -70,7 +70,7 @@ class PhenotypeBuilder:
         return f"{joint_name}_motor_{self.motor_counter}"
 
     def build(self) -> str:
-        GenotypeGraphAnalyzer(self.genotype, self.max_node).validate()
+        GenotypeGraphAnalyzer(self.genotype, self.max_body_count).validate()
         self.actuator_controllers = []
         self.control_orders = {}
         self.mujoco_xml = ET.Element("mujoco", model="genotype_creature")
@@ -194,10 +194,10 @@ class PhenotypeBuilder:
         pos: str,
         quat: Sequence[float] | None = None,
     ) -> ET.Element:
-        if self.body_counter >= self.max_node:
-            raise PhenotypeNodeLimitExceeded(
-                "Maximum allowed number of phenotype nodes exceeded while "
-                f"building XML: max_node is {self.max_node}."
+        if self.body_counter >= self.max_body_count:
+            raise PhenotypeBodyLimitExceeded(
+                "Maximum allowed number of bodies exceeded while "
+                f"building XML: max_body_count is {self.max_body_count}."
             )
 
         body = ET.SubElement(parent_xml, "body")
