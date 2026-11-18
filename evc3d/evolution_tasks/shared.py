@@ -1,185 +1,24 @@
-"""Shared constants and registration metadata for built-in tasks."""
+"""Task definitions: results, rollout policy, and the ``TaskDefinition`` record.
+
+Environment and scoring settings live in ``evolution_tasks.config``. This module
+holds what a task module exports around them: its result type, how the shared
+engine should roll it out, how its fitness is computed, and the helpers the
+task modules share (``make_result``, ``failed_result``, ``excess_volume``).
+"""
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field, fields, replace
-from typing import Any, Callable, Sequence
+from functools import partial
+from typing import Any, Callable, get_args, get_type_hints
 
-
-@dataclass(frozen=True)
-class EnvironmentFamily:
-    """Declarative MuJoCo physics and initial placement for one task."""
-
-    name: str = "swimming"
-    timestep: float = 0.01
-    gravity: float = 0.0
-    fluid_density: float | None = 1000.0
-    fluid_viscosity: float | None = 0.001
-    fluid_shape: str | None = None
-    fluid_coef: Sequence[float] | None = None
-    body_density: float = 500.0
-    body_friction: Sequence[float] = (1.0, 0.5, 0.5)
-    creature_contype: int = 0
-    creature_conaffinity: int = 0
-    self_collision_contype: int = 2
-    self_collision_conaffinity: int = 2
-    floor_position: Sequence[float] = (0.0, 0.0, -0.05)
-    floor_size: Sequence[float] = (5.0, 5.0, 0.1)
-    floor_contype: int = 0
-    floor_conaffinity: int = 0
-    initial_root_position: Sequence[float] = (0.0, 0.0, 0.6)
-    initial_floor_clearance: float | None = None
-    supports_scheduled_gravity: bool = False
-    initialization_callback: Callable | None = None
-
-    def __post_init__(self) -> None:
-        if not self.name or not self.name.isidentifier():
-            raise ValueError("environment name must be a non-empty identifier")
-        if self.timestep <= 0.0:
-            raise ValueError("environment timestep must be positive")
-        if self.fluid_density is not None and self.fluid_density < 0.0:
-            raise ValueError("fluid_density must be non-negative")
-        if self.fluid_viscosity is not None and self.fluid_viscosity < 0.0:
-            raise ValueError("fluid_viscosity must be non-negative")
-        if self.fluid_coef is not None and len(self.fluid_coef) != 5:
-            raise ValueError("fluid_coef must contain exactly five values")
-        if len(self.body_friction) != 3:
-            raise ValueError("body_friction must contain exactly three values")
-        if any(value < 0.0 for value in self.body_friction):
-            raise ValueError("body_friction values must be non-negative")
-        if len(self.floor_position) != 3 or len(self.floor_size) != 3:
-            raise ValueError("floor position and size must contain three values")
-        if len(self.initial_root_position) != 3:
-            raise ValueError("initial_root_position must contain three values")
-        if self.initial_floor_clearance is not None and self.initial_floor_clearance < 0:
-            raise ValueError("initial_floor_clearance must be non-negative")
-        collision_bits = (
-            self.creature_contype,
-            self.creature_conaffinity,
-            self.self_collision_contype,
-            self.self_collision_conaffinity,
-            self.floor_contype,
-            self.floor_conaffinity,
-        )
-        if any(value < 0 for value in collision_bits):
-            raise ValueError("collision bits must be non-negative")
-
-
-DEFAULT_ENVIRONMENT = EnvironmentFamily()
-
-
-# Start rule for floor contact when the creature is placed: allow anything,
-# reject geometry sunk into the floor, or reject any floor contact at all.
-INITIAL_FLOOR_CONTACT_POLICIES = ("allow", "no_penetration", "no_contact")
-
-# Config and environment fields settable from the CLI. Each option is named
-# after its field (``max_volume`` <-> ``--max-volume``, argparse dest
-# ``max_volume``); used to apply CLI overrides and to reword validation errors.
-CONFIG_FIELD_OPTIONS = (
-    "episode_seconds",
-    "max_body_count",
-    "body_count_weight",
-    "volume_weight",
-    "volume_penalty_cutoff",
-    "min_body_volume",
-    "min_total_volume",
-    "max_volume",
-    "self_collision",
-    "disallow_collision",
-    "fitness_gain_fraction",
+from .config import (
+    CONFIG_FIELD_OPTIONS,
+    DEFAULT_UPRIGHT_ERROR_WEIGHT,
+    ENVIRONMENT_FIELD_OPTIONS,
+    EnvironmentFamily,
+    EvaluationConfig,
 )
-ENVIRONMENT_FIELD_OPTIONS = ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef")
-
-
-# Upper limits where +inf is a meaningful "no limit"; every other float config
-# field must be finite. NaN is rejected everywhere.
-UNBOUNDED_LIMIT_FIELDS = frozenset(
-    {
-        "max_volume",
-        "max_creature_height",
-        "max_abs_state_value",
-        "max_abs_velocity",
-        "max_abs_acceleration",
-    }
-)
-
-
-@dataclass(frozen=True)
-class EvaluationConfig:
-    """Common simulation, safety, and complexity settings for every task."""
-
-    settle_seconds: float = 0.0
-    max_creature_height: float = 0.0
-    min_center_height_fraction: float = 0.0
-    initial_floor_contact_policy: str = "allow"
-    episode_seconds: float = 10.0
-    max_body_count: int = 500
-    self_collision: bool = False
-    disallow_collision: bool = False
-    target_direction: Sequence[float] = (1.0, 0.0, 0.0)
-    body_count_weight: float = 0.001
-    volume_weight: float = 0.01
-    volume_penalty_cutoff: float = 0.1
-    min_body_volume: float = 1e-6
-    min_total_volume: float = 0.0
-    max_volume: float = 1.0
-    build_failure_fitness: float = -1_000.0
-    max_abs_state_value: float = 1_000_000.0
-    max_abs_velocity: float = 1_000.0
-    max_abs_acceleration: float = 100_000.0
-
-    def __post_init__(self) -> None:
-        """Reject configs that cannot be scored meaningfully.
-
-        Runs for every task config (they all inherit it), whether built by the
-        CLI or directly in code. Messages name config fields; the CLI rewords
-        them with option names via CONFIG_FIELD_OPTIONS.
-        """
-        for item in fields(self):
-            value = getattr(self, item.name)
-            if not isinstance(value, float) or math.isfinite(value):
-                continue
-            if math.isnan(value):
-                raise ValueError(f"{item.name} must be a number, not NaN")
-            if not (value > 0.0 and item.name in UNBOUNDED_LIMIT_FIELDS):
-                raise ValueError(f"{item.name} must be finite")
-        if self.episode_seconds <= 0.0:
-            raise ValueError("episode_seconds must be greater than zero")
-        if self.settle_seconds < 0.0:
-            raise ValueError("settle_seconds must be non-negative")
-        if self.max_body_count < 1:
-            raise ValueError("max_body_count must be at least 1")
-        for name in (
-            "body_count_weight",
-            "volume_weight",
-            "volume_penalty_cutoff",
-            "min_body_volume",
-            "min_total_volume",
-            "max_creature_height",
-        ):
-            if getattr(self, name) < 0.0:
-                raise ValueError(f"{name} must be non-negative")
-        if self.max_volume <= self.volume_penalty_cutoff:
-            raise ValueError("max_volume must be greater than volume_penalty_cutoff")
-        if not 0.0 <= self.min_center_height_fraction <= 1.0:
-            raise ValueError("min_center_height_fraction must be between 0 and 1")
-        if self.initial_floor_contact_policy not in INITIAL_FLOOR_CONTACT_POLICIES:
-            raise ValueError(
-                f"initial_floor_contact_policy must be one of "
-                f"{', '.join(INITIAL_FLOOR_CONTACT_POLICIES)}"
-            )
-        if (
-            len(self.target_direction) != 3
-            or not any(self.target_direction)
-            or not all(math.isfinite(value) for value in self.target_direction)
-        ):
-            raise ValueError(
-                "target_direction must have three finite components, not all zero"
-            )
-        for name in ("max_abs_state_value", "max_abs_velocity", "max_abs_acceleration"):
-            if getattr(self, name) <= 0.0:
-                raise ValueError(f"{name} must be greater than zero")
 
 
 @dataclass(frozen=True)
@@ -228,17 +67,19 @@ class TaskDefinition:
     config_type: type
     result_type: type
     fitness_callback: Callable
-    failed_task_callback: Callable
     rollout_policy: RolloutPolicy
     environment: EnvironmentFamily
     title: str
     result_fields: tuple[ResultField, ...]
     order: int
+    failed_task_callback: Callable | None = None
     config: EvaluationConfig | None = None
     _default_environment: EnvironmentFamily = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._default_environment = self.environment
+        if self.failed_task_callback is None:
+            self.failed_task_callback = partial(failed_result, self.result_type)
         if self.config is None:
             self.config = self.config_type()
         elif not isinstance(self.config, self.config_type):
@@ -282,11 +123,6 @@ class TaskDefinition:
 TASK_REGISTRY: dict[str, TaskDefinition] = {}
 _BUILTIN_TASKS_LOADED = False
 
-
-DEFAULT_MIN_BODY_VOLUME = 1e-6
-DEFAULT_MIN_TOTAL_VOLUME = 0.0
-DEFAULT_FLYING_MIN_TOTAL_VOLUME = 1e-4
-DEFAULT_UPRIGHT_ERROR_WEIGHT = 0.2
 DISALLOWED_COLLISION_REASON = "Disallowed non-parent self-collision detected."
 
 SWIMMING_RESULT_FIELDS = (ResultField("Vertical drift speed", "vertical_drift_speed"),)
@@ -308,6 +144,52 @@ FLYING_RESULT_FIELDS = (
 def failure_flags(reason: str) -> dict:
     collision = reason == DISALLOWED_COLLISION_REASON
     return dict(build_failed=not collision, disqualified=collision, failure_reason=reason)
+
+
+def make_result(result_type: type, fitness: float, metrics: dict):
+    """Build ``result_type`` from ``fitness`` and the rollout metrics it declares.
+
+    The rollout reports every metric it can measure; each result type keeps the
+    ones it has fields for. A declared field the rollout did not report raises
+    ``TypeError``, so a task cannot silently score with a missing metric.
+    """
+    names = {item.name for item in fields(result_type)}
+    return result_type(
+        fitness=fitness,
+        **{key: value for key, value in metrics.items() if key in names},
+    )
+
+
+def failed_result(result_type: type, config: EvaluationConfig, reason: str):
+    """Return the result for a creature that failed to build or was disqualified.
+
+    Fitness is ``config.build_failure_fitness``; every metric is zero (or None
+    where the field allows it), so new result fields need no failure-case code.
+    """
+    hints = get_type_hints(result_type)
+    values = {
+        item.name: _empty_value(hints[item.name])
+        for item in fields(result_type)
+        if item.name != "fitness" and item.name not in FAILURE_FLAG_FIELDS
+    }
+    return result_type(
+        fitness=config.build_failure_fitness, **values, **failure_flags(reason)
+    )
+
+
+FAILURE_FLAG_FIELDS = ("build_failed", "disqualified", "failure_reason")
+
+
+def _empty_value(annotation: Any):
+    if annotation is bool:
+        return False
+    if annotation is int:
+        return 0
+    if annotation is float:
+        return 0.0
+    if type(None) in get_args(annotation):
+        return None
+    raise TypeError(f"Cannot build an empty result value for type {annotation!r}")
 
 
 def excess_volume(total_volume: float, cutoff: float) -> float:

@@ -13,7 +13,7 @@ import sys
 from typing import Sequence
 
 from ..evolution_tasks import task_definition
-from ..evolution_tasks.shared import EnvironmentFamily
+from ..evolution_tasks.config import EnvironmentFamily
 from ..evolution import (
     EvaluatedCreature,
     best_of,

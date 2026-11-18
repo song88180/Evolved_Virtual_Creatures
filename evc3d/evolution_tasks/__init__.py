@@ -12,6 +12,9 @@ from pkgutil import iter_modules
 
 from . import shared
 
+# Helper modules that are not tasks; every other public module here is one.
+NON_TASK_MODULES = frozenset({"shared", "config", "families"})
+
 
 def _cache_task_definition(
     definition: shared.TaskDefinition,
@@ -27,7 +30,7 @@ def _task_module_names() -> tuple[str, ...]:
     return tuple(
         module.name
         for module in sorted(iter_modules(__path__), key=lambda item: item.name)
-        if module.name != "shared" and not module.name.startswith("_")
+        if module.name not in NON_TASK_MODULES and not module.name.startswith("_")
     )
 
 

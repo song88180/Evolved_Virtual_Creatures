@@ -15,11 +15,8 @@ from typing import Callable
 import mujoco
 import numpy as np
 
-from .evolution_tasks.shared import (
-    DISALLOWED_COLLISION_REASON,
-    EnvironmentFamily,
-    EvaluationConfig,
-)
+from .evolution_tasks.config import EnvironmentFamily, EvaluationConfig
+from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON
 
 NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 

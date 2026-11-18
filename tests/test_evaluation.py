@@ -42,14 +42,16 @@ from evc3d.evolution_tasks.flying_x import (
     fitness_callback as flying_x_fitness,
     TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT,
 )
-from evc3d.evolution_tasks.shared import (
+from evc3d.evolution_tasks.config import (
     DEFAULT_ENVIRONMENT,
     EvaluationConfig,
+    UNBOUNDED_LIMIT_FIELDS,
+)
+from evc3d.evolution_tasks.shared import (
     EvaluationResult,
     ResultField,
     TASK_REGISTRY,
     TaskDefinition,
-    UNBOUNDED_LIMIT_FIELDS,
 )
 from evc3d.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
@@ -321,7 +323,7 @@ def test_load_task_definition_matches_task_to_module_filename():
     assert definition is module.TASK_DEFINITION
     assert isinstance(definition, TaskDefinition)
     assert isinstance(definition.result_fields[0], ResultField)
-    assert EvaluationConfig.__module__.endswith("evolution_tasks.shared")
+    assert EvaluationConfig.__module__.endswith("evolution_tasks.config")
     assert load_task_definition("swimming_x") is definition
 
     for invalid_task in ("turn-around", "tasks.walking_x", "../walking_x", "_shared"):
@@ -1556,15 +1558,17 @@ def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
         angular_speed_weight=0.0,
         body_count_weight=0.0,
         volume_weight=0.0,
+        ground_touch_weight=0.5,
+        episode_seconds=10.0,
     )
+    # First contact halfway through the episode: penalty 0.5 * (1 - 0.5).
     metrics = {
         "origin_distance": 20.0,
         "forward_distance": 12.0,
         "average_origin_speed": 4.0,
         "average_forward_speed": 2.0,
         "height_loss": 0.5,
-        "ground_touch_penalty": 0.25,
-        "no_ground_touch_bonus": 0.0,
+        "first_ground_contact_time": 5.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
         "body_count": 1,
@@ -1576,8 +1580,7 @@ def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     )
 
     metrics["height_loss"] = 0.0
-    metrics["ground_touch_penalty"] = 0.0
-    metrics["no_ground_touch_bonus"] = config.no_ground_touch_bonus
+    metrics["first_ground_contact_time"] = None
     assert flying_away_episode_fitness(config, metrics) == pytest.approx(
         0.4 + config.no_ground_touch_bonus
     )
@@ -1592,8 +1595,6 @@ def test_x_axis_flying_fitness_uses_forward_speed():
         "sideways_drift_speed": 0.0,
         "height_loss": 0.0,
         "first_ground_contact_time": None,
-        "ground_touch_penalty": 0.0,
-        "no_ground_touch_bonus": 0.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
         "simulated_seconds": 1.0,
@@ -1605,6 +1606,7 @@ def test_x_axis_flying_fitness_uses_forward_speed():
     config = FlyingEvaluationConfig(
         forward_speed_weight=1.0, energy_weight=0.0, height_loss_weight=0.0,
         angular_speed_weight=0.0, body_count_weight=0.0, volume_weight=0.0,
+        no_ground_touch_bonus=0.0,
     )
     assert flying_x_episode_fitness(config, metrics) == pytest.approx(2.0)
 
@@ -1620,8 +1622,6 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
         "sideways_drift_speed": 0.0,
         "height_loss": 0.0,
         "first_ground_contact_time": None,
-        "ground_touch_penalty": 0.0,
-        "no_ground_touch_bonus": 0.0,
         "control_energy": 0.0,
         "mean_angular_speed": 0.0,
         "simulated_seconds": 1.0,
@@ -1644,6 +1644,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
         body_count_weight=0.0,
         volume_weight=0.0,
         fitness_gain_fraction=0.5,
+        no_ground_touch_bonus=0.0,
     )
     monkeypatch.setattr(evaluation, "copy_simulation_state", lambda *_args: object())
     monkeypatch.setattr(evaluation, "_run_episode", fake_run)
@@ -1765,3 +1766,95 @@ def test_flying_configs_reject_fitness_gain_fraction_outside_unit_interval(confi
 @pytest.mark.parametrize("config_type", ALL_TASK_CONFIGS)
 def test_task_config_defaults_are_valid(config_type):
     config_type()
+
+
+@pytest.mark.parametrize("task", task_names())
+def test_generic_failed_result_zero_fills_every_metric(task):
+    from dataclasses import fields
+
+    definition = task_definition(task)
+    result = definition.failed_task_callback(definition.config, "boom")
+
+    assert isinstance(result, definition.result_type)
+    assert result.fitness == definition.config.build_failure_fitness
+    assert result.build_failed and not result.disqualified
+    assert result.failure_reason == "boom"
+    for item in fields(result):
+        if item.name in ("fitness", "build_failed", "disqualified", "failure_reason"):
+            continue
+        assert getattr(result, item.name) in (0, 0.0, None), item.name
+
+
+def test_generic_failed_result_flags_collision_as_disqualified():
+    from evc3d.evolution_tasks.shared import DISALLOWED_COLLISION_REASON
+
+    definition = task_definition("walking_x")
+    result = definition.failed_task_callback(
+        definition.config, DISALLOWED_COLLISION_REASON
+    )
+
+    assert result.disqualified and not result.build_failed
+
+
+def test_make_result_keeps_declared_metrics_and_requires_them():
+    from evc3d.evolution_tasks.shared import make_result
+
+    definition = task_definition("swimming_x")
+    metrics = {
+        name: 1.0
+        for name in (
+            "origin_distance", "average_origin_speed", "forward_distance",
+            "average_forward_speed", "sideways_drift_speed", "control_energy",
+            "mean_angular_speed", "simulated_seconds", "vertical_drift_speed",
+        )
+    }
+    metrics.update(actuator_count=1, body_count=1, total_volume=1.0, height_loss=9.0)
+
+    result = make_result(definition.result_type, 2.0, metrics)
+    assert result.fitness == 2.0
+    assert not hasattr(result, "height_loss")  # undeclared metrics are ignored
+
+    del metrics["vertical_drift_speed"]
+    with pytest.raises(TypeError):
+        make_result(definition.result_type, 2.0, metrics)
+
+
+def test_ground_touch_terms():
+    from evc3d.evolution_tasks.families import ground_touch_terms
+
+    config = FlyingEvaluationConfig(
+        episode_seconds=10.0, ground_touch_weight=0.5, no_ground_touch_bonus=7.0
+    )
+    assert ground_touch_terms(config, None) == (0.0, 7.0)
+    assert ground_touch_terms(config, 5.0) == pytest.approx((0.25, 0.0))
+    assert ground_touch_terms(config, 10.0) == pytest.approx((0.0, 0.0))
+    assert ground_touch_terms(config, 0.0) == pytest.approx((0.5, 0.0))
+
+
+def test_helper_modules_are_not_loaded_as_tasks():
+    from evc3d.evolution_tasks import NON_TASK_MODULES
+
+    assert {"shared", "config", "families"} <= NON_TASK_MODULES
+    assert not NON_TASK_MODULES & set(task_names())
+    for helper in NON_TASK_MODULES:
+        with pytest.raises((KeyError, ValueError, TypeError)):
+            load_task_definition(helper)
+
+
+def test_rollout_reports_every_measurable_metric_for_a_plain_task():
+    genotype = build_genotype(
+        root="body",
+        spec={"body": {"size": (0.1, 0.1, 0.1), "joint_type": "free"}},
+    )
+    config = SwimmingEvaluationConfig(episode_seconds=0.05)
+    definition = make_definition("swimming_x")
+    builder = PhenotypeBuilder(genotype, definition)
+    model = mujoco.MjModel.from_xml_string(builder.build())
+    data = mujoco.MjData(model)
+
+    metrics = _run_episode(model, data, builder, config)
+
+    assert not isinstance(metrics, str)
+    assert {"vertical_drift_speed", "height_loss", "first_ground_contact_time"} <= set(metrics)
+    assert metrics["first_ground_contact_time"] is None
+    assert "mean_upright_error" not in metrics  # needs a root body name

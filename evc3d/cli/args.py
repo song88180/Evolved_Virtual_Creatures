@@ -15,11 +15,8 @@ from pathlib import Path
 import re
 
 from ..evolution_tasks import task_definition, task_names
-from ..evolution_tasks.shared import (
-    CONFIG_FIELD_OPTIONS,
-    ENVIRONMENT_FIELD_OPTIONS,
-    TaskDefinition,
-)
+from ..evolution_tasks.config import CONFIG_FIELD_OPTIONS, ENVIRONMENT_FIELD_OPTIONS
+from ..evolution_tasks.shared import TaskDefinition
 from ..genotype import Genotype
 
 

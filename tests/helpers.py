@@ -23,7 +23,8 @@ import mujoco
 
 from evc3d import evolution
 from evc3d.evolution_tasks import task_definition
-from evc3d.evolution_tasks.shared import EnvironmentFamily, TaskDefinition
+from evc3d.evolution_tasks.config import EnvironmentFamily
+from evc3d.evolution_tasks.shared import TaskDefinition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
 from evc3d.genotype_io import load_genotype_from_json

@@ -1,8 +1,16 @@
 """Distance-from-origin swimming task."""
 
 from dataclasses import dataclass
-from .shared import SWIMMING_RESULT_FIELDS, EnvironmentFamily, EvaluationConfig, EvaluationResult, RolloutPolicy, TaskDefinition, excess_volume, failure_flags
 
+from .config import EnvironmentFamily, EvaluationConfig
+from .families import SwimmingResult
+from .shared import (
+    SWIMMING_RESULT_FIELDS,
+    RolloutPolicy,
+    TaskDefinition,
+    excess_volume,
+    make_result,
+)
 
 TASK_ENVIRONMENT = EnvironmentFamily(name="swimming_away")
 
@@ -15,11 +23,8 @@ class SwimmingAwayEvaluationConfig(EvaluationConfig):
 
 
 @dataclass(frozen=True)
-class OriginDistanceEvaluationResult(EvaluationResult):
-    vertical_drift_speed: float
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
+class OriginDistanceEvaluationResult(SwimmingResult):
+    """Result of the distance-from-origin swimming task."""
 
 
 def fitness_callback(config, metrics: dict, _passive_metrics: dict | None):
@@ -28,22 +33,10 @@ def fitness_callback(config, metrics: dict, _passive_metrics: dict | None):
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]
-        - config.volume_weight * excess_volume(
-            metrics["total_volume"], config.volume_penalty_cutoff
-        )
+        - config.volume_weight
+        * excess_volume(metrics["total_volume"], config.volume_penalty_cutoff)
     )
-    return OriginDistanceEvaluationResult(fitness=fitness, **metrics)
-
-
-def failed_task_callback(config, reason: str):
-    return OriginDistanceEvaluationResult(
-        fitness=config.build_failure_fitness, origin_distance=0.0,
-        average_origin_speed=0.0, forward_distance=0.0,
-        average_forward_speed=0.0, sideways_drift_speed=0.0,
-        vertical_drift_speed=0.0, control_energy=0.0, mean_angular_speed=0.0,
-        simulated_seconds=0.0, actuator_count=0, body_count=0, total_volume=0.0,
-        **failure_flags(reason),
-    )
+    return make_result(OriginDistanceEvaluationResult, fitness, metrics)
 
 
 TASK_DEFINITION = TaskDefinition(
@@ -51,7 +44,6 @@ TASK_DEFINITION = TaskDefinition(
     config_type=SwimmingAwayEvaluationConfig,
     result_type=OriginDistanceEvaluationResult,
     fitness_callback=fitness_callback,
-    failed_task_callback=failed_task_callback,
     rollout_policy=RolloutPolicy(),
     environment=TASK_ENVIRONMENT,
     title="Distance-from-origin swimming_away evaluation",

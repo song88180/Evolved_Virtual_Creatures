@@ -870,7 +870,7 @@
   },
   "evc3d.evolution_tasks": {
     "Overview": {
-      "Purpose": "Package of task modules. A task string such as `walking_x` is the filename of its module, which load_task_definition (in this package) imports lazily. Every task module follows the same pattern: a `<Task>EvaluationConfig` dataclass (scoring and start-rule settings, extending shared.EvaluationConfig), a `<Task>EvaluationResult` dataclass (metrics, extending shared.EvaluationResult), `fitness_callback(config, metrics, passive_metrics)` returning the result, `failed_task_callback(config, reason)` returning a failure result, a `TASK_ENVIRONMENT` (shared.EnvironmentFamily), and a `TASK_DEFINITION` (shared.TaskDefinition) bundling them. Adding a task means adding one such module.",
+      "Purpose": "Package of task modules. A task string such as `walking_x` is the filename of its module, which load_task_definition (in this package) imports lazily. Every task module follows the same pattern: a `<Task>EvaluationConfig` dataclass (scoring and start-rule settings, extending config.EvaluationConfig), a `<Task>EvaluationResult` dataclass (metrics, extending shared.EvaluationResult), `fitness_callback(config, metrics, passive_metrics)` returning the result (built with shared.make_result), a `TASK_ENVIRONMENT` (config.EnvironmentFamily), and a `TASK_DEFINITION` (shared.TaskDefinition) bundling them; failed evaluations get a generic result from shared.failed_result unless the definition supplies its own `failed_task_callback`. Paired `_x`/`_away` tasks share their environment, config fields, and result fields through `families.py`. Adding a task means adding one such module; helper modules (`shared`, `config`, `families`) are listed in NON_TASK_MODULES and are never loaded as tasks.",
       "Main_Use_Cases": [
         "Add a new locomotion task as a single module",
         "Look up a task's config defaults and result metrics in its module entry"
@@ -883,6 +883,8 @@
         "evc3d.evolution_tasks.flying_x",
         "evc3d.evolution_tasks.flying_away",
         "evc3d.evolution_tasks.shared",
+        "evc3d.evolution_tasks.config",
+        "evc3d.evolution_tasks.families",
         "evc3d.evaluation"
       ]
     },
@@ -1034,7 +1036,7 @@
       "Main_Use_Cases": [
         "Add a task, environment, scoring, or mutation option once for all subcommands"
       ],
-      "Related_Modules": ["evc3d.cli", "evc3d.evolution_tasks.shared"]
+      "Related_Modules": ["evc3d.cli", "evc3d.evolution_tasks.config"]
     },
     "Classes": {
       "HelpFormatter": {
@@ -1122,7 +1124,7 @@
       },
       "option_message": {
         "Signature": "option_message(message: str) -> str",
-        "Purpose": "Replace config and environment field names in an error message with the CLI options that set them (each option is named after its field), using evolution_tasks.shared.CONFIG_FIELD_OPTIONS and ENVIRONMENT_FIELD_OPTIONS.",
+        "Purpose": "Replace config and environment field names in an error message with the CLI options that set them (each option is named after its field), using evolution_tasks.config.CONFIG_FIELD_OPTIONS and ENVIRONMENT_FIELD_OPTIONS.",
         "Parameters": {
           "message": {"Type": "str", "Default": "required", "Description": "Error message naming config or environment fields."}
         },
@@ -1397,14 +1399,14 @@
     "Internal_Functions": {"_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."},
     "Exceptions": {}
   },
-  "evc3d.evolution_tasks.shared": {
+  "evc3d.evolution_tasks.config": {
     "Overview": {
-      "Purpose": "Building blocks shared by all tasks: EnvironmentFamily (physics and placement), EvaluationConfig and EvaluationResult (base scoring settings and metrics), RolloutPolicy, ResultField, and TaskDefinition, which bundles a task's config, result type, callbacks, and environment.",
+      "Purpose": "Task configuration: EnvironmentFamily (MuJoCo physics and initial placement) and EvaluationConfig (simulation, safety, and complexity settings every task shares). Both validate themselves on construction, so CLI input and code see the same rules; the CLI option names come from CONFIG_FIELD_OPTIONS and ENVIRONMENT_FIELD_OPTIONS in this module.",
       "Main_Use_Cases": [
-        "Define a new task's config, result, and TASK_DEFINITION",
-        "Inspect default physics and scoring settings"
+        "Inspect default physics and scoring settings",
+        "Extend EvaluationConfig for a new task's weights"
       ],
-      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evaluation"]
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.cli.args"]
     },
     "Classes": {
       "EnvironmentFamily": {
@@ -1468,7 +1470,151 @@
         },
         "Attributes": {},
         "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.families": {
+    "Overview": {
+      "Purpose": "Building blocks shared by the paired task modules (`_x` and `_away` variants of swimming, walking, and flying): the walking and flying environments, the config and result base classes, and the flying scoring terms (ground-touch penalty and bonus, passive-baseline blending). A task module extends a base with its own speed reward. Fitness expressions stay explicit in each task module so their term order, and therefore scores, stay stable. Not a task itself.",
+      "Main_Use_Cases": [
+        "Start a new walking or flying variant from the family base classes",
+        "Change a family's shared environment or result fields in one place"
+      ],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evolution_tasks.config"]
+    },
+    "Classes": {
+      "FlyingConfig": {
+        "Purpose": "EvaluationConfig base for the flying tasks; validates fitness_gain_fraction in [0, 1]. Extend it with the task's speed weight.",
+        "Constructor": {},
+        "Attributes": {
+          "energy_weight": {"Type": "float", "Description": "Penalty multiplier for control energy."},
+          "angular_speed_weight": {"Type": "float", "Description": "Penalty multiplier for tumbling/angular speed."},
+          "height_loss_weight": {"Type": "float", "Description": "Penalty multiplier for center-of-mass height loss."},
+          "ground_touch_weight": {"Type": "float", "Description": "Penalty weight for touching the floor early."},
+          "no_ground_touch_bonus": {"Type": "float", "Description": "Bonus for never touching the floor."},
+          "fitness_gain_fraction": {"Type": "float", "Description": "Blend weight between controlled fitness and its gain over the passive baseline (0 to 1)."}
+        },
+        "Methods": {}
       },
+      "FlyingResult": {
+        "Purpose": "Result base for the flying tasks, with ground-contact and passive-baseline metrics.",
+        "Constructor": {},
+        "Attributes": {
+          "height_loss": {"Type": "float", "Description": "Center-of-mass height lost from start to end, in meters."},
+          "first_ground_contact_time": {"Type": "float | None", "Description": "Simulated seconds until first floor contact; None if never."},
+          "ground_touch_penalty": {"Type": "float", "Description": "Penalty for touching the floor early."},
+          "no_ground_touch_bonus": {"Type": "float", "Description": "Bonus for never touching the floor."},
+          "controlled_fitness": {"Type": "float", "Description": "Fitness of the controlled episode."},
+          "passive_fitness": {"Type": "float", "Description": "Fitness of the passive (no control) baseline episode."},
+          "fitness_gain": {"Type": "float", "Description": "Controlled fitness minus passive fitness."},
+          "build_failed": {"Type": "bool", "Description": "True when the creature failed to build or simulate."},
+          "disqualified": {"Type": "bool", "Description": "True when disqualified for disallowed self-collision."},
+          "failure_reason": {"Type": "str | None", "Description": "Why the evaluation failed, or None."}
+        },
+        "Methods": {}
+      },
+      "SwimmingResult": {
+        "Purpose": "Result base for the swimming tasks.",
+        "Constructor": {},
+        "Attributes": {
+          "vertical_drift_speed": {"Type": "float", "Description": "Average speed along z."},
+          "build_failed": {"Type": "bool", "Description": "True when the creature failed to build or simulate."},
+          "disqualified": {"Type": "bool", "Description": "True when disqualified for disallowed self-collision."},
+          "failure_reason": {"Type": "str | None", "Description": "Why the evaluation failed, or None."}
+        },
+        "Methods": {}
+      },
+      "WalkingConfig": {
+        "Purpose": "EvaluationConfig base for the walking tasks (floor start rule, settling, height and posture limits). Extend it with the task's speed weight.",
+        "Constructor": {},
+        "Attributes": {
+          "energy_weight": {"Type": "float", "Description": "Penalty multiplier for control energy."},
+          "angular_speed_weight": {"Type": "float", "Description": "Penalty multiplier for tumbling/angular speed."},
+          "height_loss_weight": {"Type": "float", "Description": "Penalty multiplier for center-of-mass height loss."}
+        },
+        "Methods": {}
+      },
+      "WalkingResult": {
+        "Purpose": "Result base for the walking tasks.",
+        "Constructor": {},
+        "Attributes": {
+          "height_loss": {"Type": "float", "Description": "Center-of-mass height lost from start to end, in meters."},
+          "mean_upright_error": {"Type": "float", "Description": "Mean tilt of the root body's up axis from vertical."},
+          "build_failed": {"Type": "bool", "Description": "True when the creature failed to build or simulate."},
+          "disqualified": {"Type": "bool", "Description": "True when disqualified for disallowed self-collision."},
+          "failure_reason": {"Type": "str | None", "Description": "Why the evaluation failed, or None."}
+        },
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "blend_flying_fitness": {
+        "Signature": "blend_flying_fitness(config: FlyingConfig, controlled_metrics: dict, passive_metrics: dict | None, episode_fitness: Callable[[FlyingConfig, dict], float], result_type: type)",
+        "Purpose": "Blend the controlled episode's fitness with its gain over the passive baseline and build the task result, including the ground-touch terms.",
+        "Parameters": {
+          "config": {"Type": "FlyingConfig", "Default": "required", "Description": "Flying task config."},
+          "controlled_metrics": {"Type": "dict", "Default": "required", "Description": "Metrics of the controlled episode."},
+          "passive_metrics": {"Type": "dict | None", "Default": "required", "Description": "Metrics of the passive baseline episode (required)."},
+          "episode_fitness": {"Type": "Callable[[FlyingConfig, dict], float]", "Default": "required", "Description": "The task's per-episode fitness function."},
+          "result_type": {"Type": "type", "Default": "required", "Description": "Task result dataclass to build."}
+        },
+        "Returns": {"Type": "FlyingResult", "Description": "Result with controlled, passive, and gain fitness."},
+        "Raises": []
+      },
+      "flying_environment": {
+        "Signature": "flying_environment(name: str) -> EnvironmentFamily",
+        "Purpose": "Gravity and air drag, starting well above a contact floor.",
+        "Parameters": {
+          "name": {"Type": "str", "Default": "required", "Description": "Environment name, normally the task name."}
+        },
+        "Returns": {"Type": "EnvironmentFamily", "Description": "Flying physics and placement."},
+        "Raises": []
+      },
+      "flying_episode_fitness": {
+        "Signature": "flying_episode_fitness(config: FlyingConfig, metrics: dict, speed_term: float) -> float",
+        "Purpose": "Score one flying episode from its metrics, given the task's weighted speed reward.",
+        "Parameters": {
+          "config": {"Type": "FlyingConfig", "Default": "required", "Description": "Flying task config."},
+          "metrics": {"Type": "dict", "Default": "required", "Description": "Episode metrics, including first_ground_contact_time."},
+          "speed_term": {"Type": "float", "Default": "required", "Description": "Weighted speed reward chosen by the task."}
+        },
+        "Returns": {"Type": "float", "Description": "Episode fitness."},
+        "Raises": []
+      },
+      "ground_touch_terms": {
+        "Signature": "ground_touch_terms(config: FlyingConfig, first_ground_contact_time: float | None) -> tuple[float, float]",
+        "Purpose": "Return the ground-touch penalty and no-ground-touch bonus for one episode: never touching earns the full bonus; touching costs a penalty that shrinks the later first contact happens.",
+        "Parameters": {
+          "config": {"Type": "FlyingConfig", "Default": "required", "Description": "Flying task config."},
+          "first_ground_contact_time": {"Type": "float | None", "Default": "required", "Description": "Simulated seconds until first floor contact, or None."}
+        },
+        "Returns": {"Type": "tuple[float, float]", "Description": "(penalty, bonus)."},
+        "Raises": []
+      },
+      "walking_environment": {
+        "Signature": "walking_environment(name: str) -> EnvironmentFamily",
+        "Purpose": "Gravity and a contact floor; no fluid.",
+        "Parameters": {
+          "name": {"Type": "str", "Default": "required", "Description": "Environment name, normally the task name."}
+        },
+        "Returns": {"Type": "EnvironmentFamily", "Description": "Walking physics and placement."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.shared": {
+    "Overview": {
+      "Purpose": "What a task module exports around its config: EvaluationResult (base metrics), RolloutPolicy, ResultField, and TaskDefinition, which bundles a task's config, result type, fitness callback, and environment; plus the helpers task modules share (make_result, failed_result, failure_flags, excess_volume) and the task registry state. Environment and scoring settings live in evc3d.evolution_tasks.config.",
+      "Main_Use_Cases": [
+        "Define a new task's config, result, and TASK_DEFINITION",
+        "Build a result from rollout metrics or a failed-evaluation result"
+      ],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.config", "evc3d.evolution_tasks.families", "evc3d.evaluation"]
+    },
+    "Classes": {
       "EvaluationResult": {
         "Purpose": "Metrics produced by every locomotion task.",
         "Constructor": {
@@ -1525,18 +1671,18 @@
       "TaskDefinition": {
         "Purpose": "Complete public definition exported by one task module.",
         "Constructor": {
-          "Signature": "TaskDefinition(name: str, config_type: type, result_type: type, fitness_callback: Callable, failed_task_callback: Callable, rollout_policy: RolloutPolicy, environment: EnvironmentFamily, title: str, result_fields: tuple[ResultField, ...], order: int, config: EvaluationConfig | None = None) -> None",
+          "Signature": "TaskDefinition(name: str, config_type: type, result_type: type, fitness_callback: Callable, rollout_policy: RolloutPolicy, environment: EnvironmentFamily, title: str, result_fields: tuple[ResultField, ...], order: int, failed_task_callback: Callable | None = None, config: EvaluationConfig | None = None) -> None",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Gene or object name."},
             "config_type": {"Type": "type", "Default": "required", "Description": "Task config dataclass."},
             "result_type": {"Type": "type", "Default": "required", "Description": "Task result dataclass."},
             "fitness_callback": {"Type": "Callable", "Default": "required", "Description": "(config, metrics, passive_metrics) -> result."},
-            "failed_task_callback": {"Type": "Callable", "Default": "required", "Description": "(config, reason) -> failure result."},
             "rollout_policy": {"Type": "RolloutPolicy", "Default": "required", "Description": "What the episode measures."},
             "environment": {"Type": "EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."},
             "title": {"Type": "str", "Default": "required", "Description": "Printed task title."},
             "result_fields": {"Type": "tuple[ResultField, ...]", "Default": "required", "Description": "Task-specific fields printed by evaluate."},
             "order": {"Type": "int", "Default": "required", "Description": "Sort order in task listings."},
+            "failed_task_callback": {"Type": "Callable | None", "Default": "None", "Description": "(config, reason) -> failure result; defaults to failed_result for result_type."},
             "config": {"Type": "EvaluationConfig | None", "Default": "None", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
           },
           "Raises": []
@@ -1546,6 +1692,28 @@
       }
     },
     "Functions": {
+      "failed_result": {
+        "Signature": "failed_result(result_type: type, config: EvaluationConfig, reason: str)",
+        "Purpose": "Build the result for a creature that failed to build or was disqualified: fitness is config.build_failure_fitness, every metric is zero (or None where allowed), and the failure flags are set.",
+        "Parameters": {
+          "result_type": {"Type": "type", "Default": "required", "Description": "Task result dataclass."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Task config supplying build_failure_fitness."},
+          "reason": {"Type": "str", "Default": "required", "Description": "Failure reason message."}
+        },
+        "Returns": {"Type": "EvaluationResult", "Description": "Failure result of result_type."},
+        "Raises": []
+      },
+      "make_result": {
+        "Signature": "make_result(result_type: type, fitness: float, metrics: dict)",
+        "Purpose": "Build result_type from fitness and the rollout metrics it declares; metrics it has no field for are ignored, and a declared field the rollout did not report raises TypeError.",
+        "Parameters": {
+          "result_type": {"Type": "type", "Default": "required", "Description": "Task result dataclass."},
+          "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
+          "metrics": {"Type": "dict", "Default": "required", "Description": "Rollout metrics."}
+        },
+        "Returns": {"Type": "EvaluationResult", "Description": "Result of result_type."},
+        "Raises": []
+      },
       "excess_volume": {
         "Signature": "excess_volume(total_volume: float, cutoff: float) -> float",
         "Purpose": "Return the creature volume above the unpenalized cutoff.",
@@ -1847,7 +2015,7 @@
   },
   "evc3d.evolution_tasks.swimming_x": {
     "Overview": {
-      "Purpose": "Task module for `swimming_x`: Swim in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `swimming_x`: Swim in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -1955,7 +2123,7 @@
   },
   "evc3d.evolution_tasks.swimming_away": {
     "Overview": {
-      "Purpose": "Task module for `swimming_away`: Swim away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `swimming_away`: Swim away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -2000,7 +2168,7 @@
   },
   "evc3d.evolution_tasks.walking_x": {
     "Overview": {
-      "Purpose": "Task module for `walking_x`: Walk in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `walking_x`: Walk in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -2008,7 +2176,7 @@
       "WalkingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_x land locomotion.",
         "Constructor": {
-          "Signature": "WalkingEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = no_penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, forward_speed_weight: float = 1.0, energy_weight: float = 1e-07, sideways_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, upright_weight: float = 0.0, height_loss_weight: float = 0.2) -> None",
+          "Signature": "WalkingEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = no_penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2, forward_speed_weight: float = 1.0, sideways_drift_weight: float = 0.1, upright_weight: float = 0.0) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "10.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -2029,12 +2197,12 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Fitness weight on average forward speed."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
-            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness penalty per unit sideways drift speed."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
-            "upright_weight": {"Type": "float", "Default": "0.0", "Description": "Fitness penalty per unit mean upright error (enabled by --upright-error)."},
-            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."}
+            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."},
+            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Fitness weight on average forward speed."},
+            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness penalty per unit sideways drift speed."},
+            "upright_weight": {"Type": "float", "Default": "0.0", "Description": "Fitness penalty per unit mean upright error (enabled by --upright-error)."}
           },
           "Raises": []
         },
@@ -2048,7 +2216,7 @@
   },
   "evc3d.evolution_tasks.walking_away": {
     "Overview": {
-      "Purpose": "Task module for `walking_away`: Walk away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `walking_away`: Walk away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -2056,7 +2224,7 @@
       "WalkingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_away distance-from-origin fitness in the land environment.",
         "Constructor": {
-          "Signature": "WalkingAwayEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = no_penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, origin_speed_weight: float = 1.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2) -> None",
+          "Signature": "WalkingAwayEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = no_penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2, origin_speed_weight: float = 1.0) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Unscored time used to let the creature settle onto the floor."},
             "max_creature_height": {"Type": "float", "Default": "10.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -2077,10 +2245,10 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "origin_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
-            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."}
+            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."},
+            "origin_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."}
           },
           "Raises": []
         },
@@ -2100,7 +2268,7 @@
   },
   "evc3d.evolution_tasks.flying_x": {
     "Overview": {
-      "Purpose": "Task module for `flying_x`: Fly in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `flying_x`: Fly in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -2108,7 +2276,7 @@
       "FlyingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_x.",
         "Constructor": {
-          "Signature": "FlyingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = no_contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, forward_speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Signature": "FlyingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = no_contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5, forward_speed_weight: float = 0.1) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -2129,13 +2297,13 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "forward_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average forward speed."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
             "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},
             "ground_touch_weight": {"Type": "float", "Default": "0.0", "Description": "Penalty scale for touching the ground early."},
             "no_ground_touch_bonus": {"Type": "float", "Default": "10", "Description": "Bonus when the creature never touches the ground."},
-            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."}
+            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."},
+            "forward_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average forward speed."}
           },
           "Raises": []
         },
@@ -2149,7 +2317,7 @@
   },
   "evc3d.evolution_tasks.flying_away": {
     "Overview": {
-      "Purpose": "Task module for `flying_away`: Fly away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Purpose": "Task module for `flying_away`: Fly away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
       "Main_Use_Cases": [],
       "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
@@ -2157,7 +2325,7 @@
       "FlyingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_away.",
         "Constructor": {
-          "Signature": "FlyingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = no_contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, origin_speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Signature": "FlyingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = no_contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5, origin_speed_weight: float = 0.1) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -2178,13 +2346,13 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "origin_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average speed away from the start."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
             "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},
             "ground_touch_weight": {"Type": "float", "Default": "0.0", "Description": "Penalty scale for touching the ground early."},
             "no_ground_touch_bonus": {"Type": "float", "Default": "10", "Description": "Bonus when the creature never touches the ground."},
-            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."}
+            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."},
+            "origin_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average speed away from the start."}
           },
           "Raises": []
         },
