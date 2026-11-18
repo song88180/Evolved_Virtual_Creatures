@@ -37,8 +37,9 @@ Use this map to choose files before broad searches:
 - `tests/test_genotype_mutation.py`: tests for mutation registration, field mutation effects, topology mutation behavior, and mutation invariants.
 - `tests/test_symmetry.py`: tests for symmetry validation, JSON round trips, mirrored child generation, and reflected joint axes.
 - `tests/test_evaluation.py`: tests for task physics, MuJoCo compilation, collision settings, volume checks, and evaluation metrics.
+- `tests/test_api_reference.py`: checks `docs/api-reference.json` against the code (names exist, parameters and defaults match, public members documented).
 - `tests/test_evolve.py`: tests for `evc3d` CLI parsing and subcommands, evolution task config forwarding, population helpers, and run artifact behavior.
-- `docs/`: static GitHub Pages documentation site. Update `docs/index.html` for user-facing concepts and `docs/api-reference.json` for generated API reference content.
+- `docs/`: static GitHub Pages documentation site. Update `docs/index.html` for user-facing concepts and `docs/api-reference.json` for the API reference. The API reference is hand-written but checked by `tests/test_api_reference.py`: after changing a public signature, default, class, or module, update its entry until that test passes.
 - `CODE_EXPLANATION.md`: narrative architecture walkthrough for humans and agents.
 
 # Codex Git Workflow

@@ -35,36 +35,9 @@ The code is split by responsibility:
 
 ## Genotype Data Structures
 
-The genotype section defines three dataclasses: `ConnectionGene`, `NodeGene`, and `Genotype`.
+The genotype section defines three dataclasses: `ConnectionGene`, `NodeGene`, and `Genotype`. This walkthrough explains what their fields mean; exact types and default values are in the API reference (`docs/api-reference.json`, rendered on the documentation site), which a test keeps in sync with the code.
 
 ### `ConnectionGene`
-
-```python
-@dataclass
-class ConnectionGene:
-    name: str
-    child: str
-    axis: Tuple[float, float, float]
-    parent_face: str = "+x"
-    surface_uv: Tuple[float, float] = (0.0, 0.0)
-    symmetry: Tuple[str, ...] = ()
-    scale: float = 1.0
-    terminal_only: bool = False
-    motor_enabled: bool = True
-    motor_gear: float = 2.0
-    ctrlrange: Tuple[float, float] = (-1.0, 1.0)
-    control_amp: float = 0.1
-    control_freq: float = 0.1  # harmonic multiplier
-    control_phase: float = 0.0
-    control_phase_depth_scale: float = 0.0
-    control_phase_order_scale: float = 0.0
-    neural_w1: Tuple[Tuple[float, ...], ...] = ()
-    neural_b1: Tuple[float, ...] = ()
-    neural_w2: Tuple[Tuple[float, ...], ...] = ()
-    neural_b2: Tuple[float, ...] = ()
-    neural_output_axes: Tuple[Tuple[float, float, float], ...] = ()
-    orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-```
 
 A `ConnectionGene` describes how one body-part node connects to another. Its important fields are:
 
@@ -91,18 +64,6 @@ With all three symmetry planes selected, one connection generates `2 ** 3 = 8` m
 
 ### `NodeGene`
 
-```python
-@dataclass
-class NodeGene:
-    name: str
-    size: Tuple[float, float, float]
-    joint_type: str = "hinge"
-    recursive_limit: int = 1
-    child_connections: List[str] = field(default_factory=list)
-    orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    shape: str = "box"
-```
-
 A `NodeGene` describes one reusable body-part type. It includes:
 
 - `name`: a symbolic name such as `"body"`, `"segment"`, or `"limb"`.
@@ -116,16 +77,6 @@ A `NodeGene` describes one reusable body-part type. It includes:
 Different nodes may reference the same connection name, intentionally sharing one mutable connection gene. A node may not repeat a name in its own list.
 
 ### `Genotype`
-
-```python
-@dataclass
-class Genotype:
-    root: str
-    nodes: Dict[str, NodeGene]
-    connections: Dict[str, ConnectionGene]
-    global_control_freq: float = 1.0
-    control_mode: str = "neural"
-```
 
 `Genotype` wraps the full creature recipe. `root` names the starting node, while `nodes` and `connections` are name-keyed active gene maps. Archived genes use the same map shape. `control_mode` selects the global controller family for the whole simulation: `"neural"` or `"sine"`.
 
@@ -315,11 +266,11 @@ The default geometry type is already set to `box` in the `<default>` section, so
 
 ### Tracking Recursion Depth
 
-The method copies and updates the `current_depths` dictionary:
+`next_depths()` returns a copy of the `current_depths` dictionary with the current node's depth recorded:
 
 ```python
-current_depths = dict(current_depths)
-current_depths[node.name] = current_depths.get(node.name, 0) + 1
+next_depths = dict(current_depths)
+next_depths[node_name] = node_depth
 ```
 
 This tracks how many times each node type has appeared along the current branch. Copying the dictionary is important because each recursive branch should track its own path independently.
@@ -394,79 +345,45 @@ def vec_to_str(v):
 
 MuJoCo XML expects vectors as space-separated strings, such as `"0.25 0.15 0.1"`. This helper converts Python tuples into that XML-friendly format.
 
-## Program Entry Point
+## Running a Creature
 
-The `main()` function runs the full pipeline:
+The `evc3d` command drives the whole pipeline. A typical session:
 
-```python
-genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
-genotype.mutation(num_mutations=10)
-print("Building MuJoCo organism from mutated genotype.")
-builder = PhenotypeBuilder(genotype, task_definition("swimming_x"))
-mjcf = builder.build()
+```bash
+evc3d mutate --output mutated.json --mutations 3 --seed 42   # genotype -> mutated genotype
+evc3d build --genotype mutated.json --task walking_x         # genotype -> MuJoCo XML
+evc3d evaluate --genotype mutated.json --task walking_x      # simulate and score
+evc3d view --genotype mutated.json --task walking_x          # watch it (window, or --mp4)
 ```
 
-It loads the genotype from JSON, applies random mutations, builds the MJCF XML from the mutated genotype, and stores the XML string in `mjcf`. Because `Genotype.mutation()` prints the mutation report itself, each run shows which genotype parameters changed before the MuJoCo organism is built.
+`Genotype.mutation()` prints which parameters changed. `PhenotypeBuilder(genotype, definition)` expands the genotype into MJCF XML for the task's environment and records one `ActuatorController` per articulated joint in `builder.actuator_controllers`.
 
-Then it writes the XML to disk:
+During simulation, `control.apply_controller()` is the single entry point that writes motor commands each step. It looks up each controller's own motors by name, so a ball joint's three motors are all driven by that joint's controller:
 
-```python
-with open("generated_creature.xml", "w") as f:
-    f.write(mjcf)
-```
+- **Neural** (`control_mode = "neural"`, the default): a two-layer network per joint reads the joint's position and velocity plus the root body's orientation and velocity, and outputs one command per motor. The weights come from the connection gene, so they evolve with the body.
+- **Sine** (`control_mode = "sine"`): each joint's motors follow `amp * sin(freq * t + phase)`, where the frequency is the genotype's global base frequency times the connection's harmonic multiplier.
 
-After that, it loads the generated XML directly into MuJoCo:
-
-```python
-model = mujoco.MjModel.from_xml_string(mjcf)
-data = mujoco.MjData(model)
-```
-
-Finally, it opens the MuJoCo viewer:
-
-```python
-with mujoco.viewer.launch_passive(model, data) as viewer:
-```
-
-Inside the viewer loop, the script drives every actuator with a sine wave:
-
-```python
-t = data.time
-for actuator_id, controller in zip(actuator_ids, builder.actuator_controllers):
-    data.ctrl[actuator_id] = controller.amp * math.sin(
-        controller.freq * t + controller.phase
-    )
-```
-
-`builder.actuator_controllers` stores the controller recipe for each generated motor. Each motor gets its own amplitude and phase from the connection gene that created it, while frequency is the genotype global base frequency multiplied by the connection's harmonic frequency multiplier. This makes the controller part of the genotype, so mutation can affect both body shape and motion.
-
-Then the simulation advances one step and synchronizes the viewer:
-
-```python
-mujoco.mj_step(model, data)
-viewer.sync()
-```
+Evaluation (`evaluation.evaluate_task`) and viewing (`evc3d view`, via `scene.py`) build, place, and settle the creature the same way, so what you watch starts exactly like what was scored.
 
 ## Generated Output
 
-Running the script produces `generated_creature.xml`. That file contains:
+`evc3d build` writes `generated_creature.xml` by default. For the example genotype it contains:
 
 - One root body with a free joint.
-- A mutated recursive body plan generated from `examples/example_genotype.json`.
+- The recursive body plan generated from `examples/example_genotype.json` (or a mutated copy from `evc3d mutate`).
 - Two limb bodies attached to each segment.
 - One motor for every motor-enabled hinge, slide, or ball joint.
-- A floor plane and a light.
+- A floor plane, a light, and the task's physics settings (gravity, fluid, collisions).
 
-The exact XML can differ from run to run because the genotype is randomly mutated before expansion. The resulting creature is not controlled by a learned policy. It uses deterministic sinusoidal controllers whose parameters may also be affected by mutation.
+The XML describes the body and world only; the controller runs in Python, so opening the file in MuJoCo's standalone viewer shows a limp creature. Use `evc3d view` to watch it move.
 
 ## Extension Points
 
-The current script is intentionally minimal, but it leaves several natural places to grow:
+Natural places to grow:
 
 - Add crossover operations to combine two genotypes.
 - Record mutation history across multiple mutation steps if longer evolutionary traces are needed.
 - Add or tune fitness functions in the task-specific modules under `evolution_tasks/`. Current CLI tasks are `swimming_x`, `walking_x`, `flying_x`, `swimming_away`, `walking_away`, and `flying_away`; the `_x` variants reward positive X-axis progress and the `_away` variants reward average speed away from the starting point. Flying tasks start above the floor, use horizontal speed, penalize center-of-mass height loss and earlier ground contact, and add a bonus when no ground contact occurs. A new task is a single module whose filename is its task name and which contains its config and result dataclasses, fitness and failure callbacks, rollout policy, and `TASK_DEFINITION`; lazy loading then supplies CLI discovery, shared evaluation dispatch, environment selection, and result presentation metadata without registration side effects.
-- Replace the open-loop sine controller with an evolved or learned controller.
 
 ## Summary
 

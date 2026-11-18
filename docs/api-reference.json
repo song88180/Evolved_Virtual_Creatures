@@ -19,93 +19,31 @@
       "ConnectionGene": {
         "Purpose": "Describes how a parent genotype node attaches and orients a child node plus the generated actuator parameters.",
         "Constructor": {
-          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], name: str = \"\", parent_face: str = \"+x\", ...)",
+          "Signature": "ConnectionGene(child: str, axis: Tuple[float, float, float], name: str = , parent_face: str = +x, surface_uv: Tuple[float, float] = (0.0, 0.0), child_surface_uv: Tuple[float, float] = (0.0, 0.0), symmetry: Tuple[str, ...] = (), scale: float = 1.0, terminal_only: bool = False, motor_enabled: bool = True, motor_gear: float = 100.0, ctrlrange: Tuple[float, float] = (-1.0, 1.0), control_amp: float = 0.1, control_freq: float = 10, control_phase: float = 0.0, control_phase_depth_scale: float = 0.0, control_phase_order_scale: float = 0.0, neural_w1: Tuple[Tuple[float, ...], ...] = (), neural_b1: Tuple[float, ...] = (), neural_w2: Tuple[Tuple[float, ...], ...] = (), neural_b2: Tuple[float, ...] = (), neural_output_axes: Tuple[Tuple[float, float, float], ...] = (), orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None",
           "Parameters": {
-            "child": {
-              "Type": "str",
-              "Default": "required",
-              "Description": "Name of the child node in Genotype.nodes."
-            },
-            "parent_face": {
-              "Type": "str",
-              "Default": "\"+x\"",
-              "Description": "Parent box face containing the child hinge and attachment point."
-            },
-            "surface_uv": {
-              "Type": "Tuple[float, float]",
-              "Default": "(0.0, 0.0)",
-              "Description": "Normalized coordinates from -1 to 1 along the two remaining axes in X/Y/Z order."
-            },
-            "orientation": {
-              "Type": "Tuple[float, float, float]",
-              "Default": "(0.0, 0.0, 0.0)",
-              "Description": "Child body Euler orientation in degrees relative to the parent body. The rotated child local +X axis must point within 90 degrees of the selected parent face normal."
-            },
-            "symmetry": {
-              "Type": "Tuple[str, ...]",
-              "Default": "()",
-              "Description": "Any subset of xy, xz, and yz; each selected plane doubles the mirrored child subtree."
-            },
-            "axis": {
-              "Type": "Tuple[float, float, float]",
-              "Default": "required",
-              "Description": "Joint or actuator axis; translation for slide and rotation/torque for hinge or ball."
-            },
-            "scale": {
-              "Type": "float",
-              "Default": "1.0",
-              "Description": "Scales child size by scale ** (order - 1) for this connection along each hierarchy path; symmetry siblings with one parent share an order."
-            },
-            "terminal_only": {
-              "Type": "bool",
-              "Default": "False",
-              "Description": "Creates the child only at the terminal occurrence of the parent node; cannot be enabled on a self-pointing connection."
-            },
-            "motor_enabled": {
-              "Type": "bool",
-              "Default": "True",
-              "Description": "Whether this connection receives a generated MuJoCo motor."
-            },
-            "motor_gear": {
-              "Type": "float",
-              "Default": "100.0",
-              "Description": "Motor gear value written to the MJCF actuator."
-            },
-            "ctrlrange": {
-              "Type": "Tuple[float, float]",
-              "Default": "(-1.0, 1.0)",
-              "Description": "Control range for the generated motor."
-            },
-            "control_amp": {
-              "Type": "float",
-              "Default": "0.1",
-              "Description": "Amplitude for the sine-wave open-loop controller."
-            },
-            "control_freq": {
-              "Type": "float",
-              "Default": "10",
-              "Description": "Harmonic multiplier applied to Genotype.global_control_freq for the sine-wave controller."
-            },
-            "control_phase": {
-              "Type": "float",
-              "Default": "0.0",
-              "Description": "Base phase offset for the sine-wave open-loop controller."
-            },
-            "control_phase_depth_scale": {
-              "Type": "float",
-              "Default": "0.0",
-              "Description": "Additional phase offset multiplied by recursive depth."
-            },
-            "control_phase_order_scale": {
-              "Type": "float",
-              "Default": "0.0",
-              "Description": "Additional phase offset multiplied by actuator order."
-            },
-            "neural_output_axes": {
-              "Type": "Tuple[Tuple[float, float, float], ...]",
-              "Default": "()",
-              "Description": "Signed physical axis associated with each neural output row."
-            }
+            "child": {"Type": "str", "Default": "required", "Description": "Name of the child node in Genotype.nodes."},
+            "axis": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Joint or actuator axis; translation for slide and rotation/torque for hinge or ball."},
+            "name": {"Type": "str", "Default": "''", "Description": "Gene or object name."},
+            "parent_face": {"Type": "str", "Default": "\"+x\"", "Description": "Parent box face containing the child hinge and attachment point."},
+            "surface_uv": {"Type": "Tuple[float, float]", "Default": "(0.0, 0.0)", "Description": "Normalized coordinates from -1 to 1 along the two remaining axes in X/Y/Z order."},
+            "child_surface_uv": {"Type": "Tuple[float, float]", "Default": "(0.0, 0.0)", "Description": "Attachment point on the child's opposite face, each coordinate in [-1, 1]."},
+            "symmetry": {"Type": "Tuple[str, ...]", "Default": "()", "Description": "Any subset of xy, xz, and yz; each selected plane doubles the mirrored child subtree."},
+            "scale": {"Type": "float", "Default": "1.0", "Description": "Scales child size by scale ** (order - 1) for this connection along each hierarchy path; symmetry siblings with one parent share an order."},
+            "terminal_only": {"Type": "bool", "Default": "False", "Description": "Creates the child only at the terminal occurrence of the parent node; cannot be enabled on a self-pointing connection."},
+            "motor_enabled": {"Type": "bool", "Default": "True", "Description": "Whether this connection receives a generated MuJoCo motor."},
+            "motor_gear": {"Type": "float", "Default": "100.0", "Description": "Motor gear value written to the MJCF actuator."},
+            "ctrlrange": {"Type": "Tuple[float, float]", "Default": "(-1.0, 1.0)", "Description": "Control range for the generated motor."},
+            "control_amp": {"Type": "float", "Default": "0.1", "Description": "Amplitude for the sine-wave open-loop controller."},
+            "control_freq": {"Type": "float", "Default": "10", "Description": "Harmonic multiplier applied to Genotype.global_control_freq for the sine-wave controller."},
+            "control_phase": {"Type": "float", "Default": "0.0", "Description": "Base phase offset for the sine-wave open-loop controller."},
+            "control_phase_depth_scale": {"Type": "float", "Default": "0.0", "Description": "Additional phase offset multiplied by recursive depth."},
+            "control_phase_order_scale": {"Type": "float", "Default": "0.0", "Description": "Additional phase offset multiplied by actuator order."},
+            "neural_w1": {"Type": "Tuple[Tuple[float, ...], ...]", "Default": "()", "Description": "Neural hidden-layer weight matrix."},
+            "neural_b1": {"Type": "Tuple[float, ...]", "Default": "()", "Description": "Neural hidden-layer biases."},
+            "neural_w2": {"Type": "Tuple[Tuple[float, ...], ...]", "Default": "()", "Description": "Neural output-layer weight matrix."},
+            "neural_b2": {"Type": "Tuple[float, ...]", "Default": "()", "Description": "Neural output-layer biases."},
+            "neural_output_axes": {"Type": "Tuple[Tuple[float, float, float], ...]", "Default": "()", "Description": "Signed physical axis associated with each neural output row."},
+            "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Child body Euler orientation in degrees relative to the parent body. The rotated child local +X axis must point within 90 degrees of the selected parent face normal."}
           },
           "Raises": ["ValueError"]
         },
@@ -133,13 +71,10 @@
             "Signature": "phase_for(depth: int, order: int) -> float",
             "Purpose": "Compute the controller phase after depth and actuator-order offsets are applied.",
             "Parameters": {
-              "depth": {"Type": "int", "Description": "Recursive node depth for the generated body."},
-              "order": {"Type": "int", "Description": "Zero-based order of the generated actuator."}
+              "depth": {"Type": "int", "Default": "required", "Description": "Recursive node depth for the generated body."},
+              "order": {"Type": "int", "Default": "required", "Description": "Zero-based order of the generated actuator."}
             },
-            "Returns": {
-              "Type": "float",
-              "Description": "control_phase + control_phase_depth_scale * (depth - 1) + control_phase_order_scale * order."
-            },
+            "Returns": {"Type": "float", "Description": "control_phase + control_phase_depth_scale * (depth - 1) + control_phase_order_scale * order."},
             "Raises": [],
             "Example": "phase = connection.phase_for(depth=2, order=0)"
           }
@@ -149,15 +84,15 @@
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph, including the optional root-body orientation.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = \"hinge\", recursive_limit: int = 1, child_connections: List[str] | None = None, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = \"box\")",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = hinge, recursive_limit: int = 1, child_connections: List[str] = <factory>, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = box) -> None",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Local bounding half extents for generated geometry. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius."},
             "joint_type": {"Type": "str", "Default": "\"hinge\"", "Description": "Joint type for generated body: \"free\", \"hinge\", \"slide\", or \"ball\"."},
-            "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."},
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
-            "child_connections": {"Type": "List[str]", "Default": "[]", "Description": "Ordered connection-gene names expanded beneath generated bodies of this type."},
-            "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."}
+            "child_connections": {"Type": "List[str]", "Default": "field(default_factory=...)", "Description": "Ordered connection-gene names expanded beneath generated bodies of this type."},
+            "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."},
+            "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."}
           },
           "Raises": []
         },
@@ -179,8 +114,8 @@
         "Signature": "child_orientation_is_valid(parent_face: str, orientation: Tuple[float, float, float]) -> bool",
         "Purpose": "Return whether a child orientation keeps the child local +X axis within 90 degrees of the selected parent face normal.",
         "Parameters": {
-          "parent_face": {"Type": "str", "Description": "Attachment face such as +x, -y, or +z."},
-          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees."}
+          "parent_face": {"Type": "str", "Default": "required", "Description": "Attachment face such as +x, -y, or +z."},
+          "orientation": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Euler orientation in degrees."}
         },
         "Returns": {"Type": "bool", "Description": "True when the orientation satisfies the child-normal constraint."},
         "Raises": [],
@@ -189,10 +124,89 @@
       "euler_degrees_to_matrix": {
         "Signature": "euler_degrees_to_matrix(orientation: Tuple[float, float, float]) -> Tuple[Tuple[float, float, float], ...]",
         "Purpose": "Convert roll, pitch, yaw Euler angles in degrees to the rotation matrix used for genotype orientation checks and MJCF quaternion generation.",
-        "Parameters": {"orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler angles in degrees."}},
+        "Parameters": {
+          "orientation": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Euler angles in degrees."}
+        },
         "Returns": {"Type": "Tuple[Tuple[float, float, float], ...]", "Description": "3x3 rotation matrix."},
         "Raises": [],
         "Example": "rotation = euler_degrees_to_matrix((0.0, 0.0, 45.0))"
+      },
+      "child_orientation_dot": {
+        "Signature": "child_orientation_dot(parent_face: str, orientation: Tuple[float, float, float]) -> float",
+        "Purpose": "Dot product of a child's rotated x axis with the parent face normal; positive means the child points away from the parent.",
+        "Parameters": {
+          "parent_face": {"Type": "str", "Default": "required", "Description": "Parent attachment face: one of +x, -x, +y, -y, +z, -z."},
+          "orientation": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Euler angles (roll, pitch, yaw) in degrees."}
+        },
+        "Returns": {"Type": "float", "Description": "Dot product; > 0 is a valid outward orientation."},
+        "Raises": []
+      },
+      "normalize_numeric_matrix": {
+        "Signature": "normalize_numeric_matrix(values: Tuple[Tuple[float, ...], ...], field_name: str) -> Tuple[Tuple[float, ...], ...]",
+        "Purpose": "Convert a matrix to a tuple of float tuples, rejecting non-finite values.",
+        "Parameters": {
+          "values": {"Type": "Tuple[Tuple[float, ...], ...]", "Default": "required", "Description": "Numeric values to validate."},
+          "field_name": {"Type": "str", "Default": "required", "Description": "Field name used in validation error messages."}
+        },
+        "Returns": {"Type": "Tuple[Tuple[float, ...], ...]", "Description": "Normalized matrix."},
+        "Raises": []
+      },
+      "normalize_numeric_vector": {
+        "Signature": "normalize_numeric_vector(values: Tuple[float, ...], field_name: str) -> Tuple[float, ...]",
+        "Purpose": "Convert values to a float tuple, rejecting non-finite values.",
+        "Parameters": {
+          "values": {"Type": "Tuple[float, ...]", "Default": "required", "Description": "Numeric values to validate."},
+          "field_name": {"Type": "str", "Default": "required", "Description": "Field name used in validation error messages."}
+        },
+        "Returns": {"Type": "Tuple[float, ...]", "Description": "Normalized values."},
+        "Raises": []
+      },
+      "normalize_orientation": {
+        "Signature": "normalize_orientation(orientation: Tuple[float, float, float]) -> Tuple[float, float, float]",
+        "Purpose": "Validate three finite Euler angles and return them as floats.",
+        "Parameters": {
+          "orientation": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Euler angles (roll, pitch, yaw) in degrees."}
+        },
+        "Returns": {"Type": "Tuple[float, float, float]", "Description": "Normalized angles."},
+        "Raises": []
+      },
+      "normalize_size": {
+        "Signature": "normalize_size(size: Tuple[float, float, float], shape: str) -> Tuple[float, float, float]",
+        "Purpose": "Validate three positive finite dimensions; round shapes use one radius for y and z.",
+        "Parameters": {
+          "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Body dimensions (x, y, z) in meters."},
+          "shape": {"Type": "str", "Default": "required", "Description": "Body shape: box, ellipsoid, capsule, or cylinder."}
+        },
+        "Returns": {"Type": "Tuple[float, float, float]", "Description": "Normalized size."},
+        "Raises": []
+      },
+      "normalize_surface_uv": {
+        "Signature": "normalize_surface_uv(surface_uv: Tuple[float, float], field_name: str) -> Tuple[float, float]",
+        "Purpose": "Validate two finite coordinates in [-1, 1].",
+        "Parameters": {
+          "surface_uv": {"Type": "Tuple[float, float]", "Default": "required", "Description": "Attachment point on the parent face, each coordinate in [-1, 1]."},
+          "field_name": {"Type": "str", "Default": "required", "Description": "Field name used in validation error messages."}
+        },
+        "Returns": {"Type": "Tuple[float, float]", "Description": "Normalized coordinates."},
+        "Raises": []
+      },
+      "orientation_for_parent_face": {
+        "Signature": "orientation_for_parent_face(parent_face: str) -> Tuple[float, float, float]",
+        "Purpose": "Default Euler orientation that points a child away from the given parent face.",
+        "Parameters": {
+          "parent_face": {"Type": "str", "Default": "required", "Description": "Parent attachment face: one of +x, -x, +y, -y, +z, -z."}
+        },
+        "Returns": {"Type": "Tuple[float, float, float]", "Description": "Euler angles in degrees."},
+        "Raises": []
+      },
+      "wrap_degrees": {
+        "Signature": "wrap_degrees(angle: float) -> float",
+        "Purpose": "Wrap an angle into [-180, 180).",
+        "Parameters": {
+          "angle": {"Type": "float", "Default": "required", "Description": "Angle in degrees."}
+        },
+        "Returns": {"Type": "float", "Description": "Wrapped angle in degrees."},
+        "Raises": []
       }
     },
     "Exceptions": {}
@@ -216,11 +230,11 @@
       "Genotype": {
         "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
         "Constructor": {
-          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], connections: Dict[str, ConnectionGene], global_control_freq: float = 1.0, control_mode: str = \"neural\", archived_connections: Dict[str, ConnectionGene] = field(default_factory=dict), archived_nodes: Dict[str, NodeGene] = field(default_factory=dict))",
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], connections: Dict[str, ConnectionGene] = <factory>, global_control_freq: float = 1.0, control_mode: str = neural, archived_connections: Dict[str, ConnectionGene] = <factory>, archived_nodes: Dict[str, NodeGene] = <factory>) -> None",
           "Parameters": {
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
-            "connections": {"Type": "Dict[str, ConnectionGene]", "Default": "required", "Description": "Active connection genes keyed by connection name."},
+            "connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=...)", "Description": "Active connection genes keyed by connection name."},
             "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base angular frequency multiplied by each connection control_freq harmonic."},
             "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural or sine."},
             "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named connection genes retained as mutation templates."},
@@ -239,13 +253,16 @@
         },
         "Methods": {
           "mutation": {
-            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True) -> Genotype",
+            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> \"Genotype\"",
             "Purpose": "Inherited from GenotypeMutationMixin; mutates genotype parameters in place and returns the same object.",
             "Parameters": {
               "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters to sample when mutation_rate is not provided."},
               "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent mutation probability for every mutable parameter; overrides num_mutations when provided."},
               "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source for reproducible mutation sequences."},
-              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether to allow connection and node topology changes."}
+              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether to allow connection and node topology changes."},
+              "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+              "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+              "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
             },
             "Returns": {"Type": "Genotype", "Description": "The same genotype object after in-place mutation."},
             "Raises": ["ValueError"],
@@ -266,22 +283,20 @@
         "Load genotype recipes from JSON files",
         "Save active and archived genetic material back to JSON"
       ],
-      "Related_Modules": [
-        "evc3d.genes",
-        "evc3d.genotype"
-      ]
+      "Related_Modules": ["evc3d.genes", "evc3d.genotype"]
     },
     "Classes": {},
     "Functions": {
       "build_genotype": {
-        "Signature": "build_genotype(root: str, nodes: GeneSpec, connections: GeneSpec, global_control_freq: float = 1.0, control_mode: str = \"neural\") -> Genotype",
+        "Signature": "build_genotype(root: str, nodes: GeneSpec | None = None, connections: GeneSpec | None = None, global_control_freq: float = 1.0, control_mode: str = neural, *, spec: GeneSpec | None = None) -> Genotype",
         "Purpose": "Build a concrete Genotype from normalized node and connection mappings.",
         "Parameters": {
           "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
-          "nodes": {"Type": "GeneSpec", "Default": "required", "Description": "Mapping from node names to node fields and child_connections lists."},
-          "connections": {"Type": "GeneSpec", "Default": "required", "Description": "Mapping from connection names to connection fields."},
+          "nodes": {"Type": "GeneSpec | None", "Default": "None", "Description": "Mapping from node names to node fields and child_connections lists."},
+          "connections": {"Type": "GeneSpec | None", "Default": "None", "Description": "Mapping from connection names to connection fields."},
           "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."},
-          "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the returned genotype."}
+          "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the returned genotype."},
+          "spec": {"Type": "GeneSpec | None", "Default": "None", "Description": "Legacy nested genotype specification with embedded children (alternative to nodes/connections)."}
         },
         "Returns": {"Type": "Genotype", "Description": "A genotype with NodeGene and ConnectionGene objects linked according to spec."},
         "Raises": ["KeyError"],
@@ -317,12 +332,20 @@
         "Returns": {"Type": "Dict[str, Any]", "Description": "Dictionary with root, nodes, archived_connections, and archived_nodes."},
         "Raises": [],
         "Example": "data = genotype_to_dict(genotype)"
+      },
+      "convert_control_mode": {
+        "Signature": "convert_control_mode(genotype: Genotype, control_mode: str) -> Genotype",
+        "Purpose": "Return a copy of `genotype` switched to `control_mode`.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
+          "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural or sine."}
+        },
+        "Returns": {"Type": "Genotype", "Description": "Converted copy; the input is unchanged."},
+        "Raises": []
       }
     },
     "Internal_Functions": {},
-    "Type_Aliases": {
-      "GeneSpec": "Mapping[str, Mapping[str, Any]]"
-    },
+    "Type_Aliases": {"GeneSpec": "Mapping[str, Mapping[str, Any]]"},
     "Exceptions": {}
   },
   "evc3d.genotype_mutation": {
@@ -333,10 +356,7 @@
         "Add, remove, replace, and retarget genotype connections",
         "Create new mutated node genes and archive disconnected genetic material"
       ],
-      "Related_Modules": [
-        "evc3d.genes",
-        "evc3d.genotype"
-      ]
+      "Related_Modules": ["evc3d.genes", "evc3d.genotype"]
     },
     "Classes": {
       "GenotypeMutationMixin": {
@@ -359,64 +379,29 @@
         },
         "Methods": {
           "mutation": {
-            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True) -> Genotype",
+            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> \"Genotype\"",
             "Purpose": "Randomly mutate mutable genotype parameters in place.",
             "Parameters": {
               "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters sampled when mutation_rate is None."},
               "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent probability applied to every mutable parameter."},
               "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source; defaults to the random module."},
-              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether topology-changing mutation paths are included."}
+              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether topology-changing mutation paths are included."},
+              "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+              "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+              "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
             },
             "Returns": {"Type": "Genotype", "Description": "The mutated object itself."},
             "Raises": ["ValueError"],
             "Example": "genotype.mutation(num_mutations=5, rng=random.Random(42))"
           }
         },
-        "Internal_Methods": {
-          "_collect_mutable_parameters": "Collects tuple paths for all mutable fields and optional topology operations.",
-          "_add_mutable_parameter_paths": "Adds scalar or per-element tuple/list mutation paths for one field.",
-          "_mutate_parameter_path": "Dispatches one selected mutation path to the appropriate mutation operation.",
-          "_describe_parameter_target": "Builds human-readable labels for mutation logging.",
-          "_resolve_parameter_path": "Resolves a mutation path to the owner object, field name, and optional index.",
-          "_path_index": "Returns the optional tuple/list index from a mutation path.",
-          "_mutation_spec": "Maps field names to mutation kind, minimum standard deviation, and ordered-pair behavior.",
-          "_mutate_value": "Mutates boolean, integer, positive, and relative numeric values.",
-          "_normal_mutation_delta": "Draws a Gaussian mutation delta with a minimum standard deviation.",
-          "_mutate_connection_origin": "Moves a connection to a different origin node.",
-          "_mutate_connection_destination": "Changes a connection child to another non-free node.",
-          "_mutate_connection_type": "Copies connection parameters from another active or archived connection.",
-          "_mutate_connection_replacement": "Archives a connection and replaces it with a mutated copy.",
-          "_mutate_connection_addition": "Adds a new connection between active or archived node templates.",
-          "_mutate_connection_new_node_addition": "Creates a new mutated node and connects it to an existing origin.",
-          "_add_new_connection": "Creates and attaches a new connection from a template or default coding.",
-          "_mutate_connection_removal": "Archives and removes an active connection.",
-          "_mutate_connection_origin_node_replacement": "Creates a mutated replacement for the origin node of a connection.",
-          "_mutate_connection_destination_node_replacement": "Creates a mutated replacement for the destination node of a connection.",
-          "_new_node_from_existing": "Deep-copies a node and assigns a new mutation-derived name.",
-          "_new_node_name": "Finds an unused name of the form '<base>_mutN'.",
-          "_mutate_new_node": "Mutates one field on a newly created node.",
-          "_resolve_new_node_path": "Resolves a mutation path for a new node.",
-          "_mutate_new_connection": "Mutates one field on a newly created connection.",
-          "_connection_coding_pool": "Returns active and archived connections as templates.",
-          "_random_connection_template": "Chooses a connection template or returns None when none exist.",
-          "_node_coding_pool": "Returns active and archived nodes as templates.",
-          "_activate_node_gene": "Moves an archived node template into active nodes, recursively activating archived children when needed.",
-          "_find_archived_node": "Finds the most recently archived node by name.",
-          "_prune_disconnected_nodes": "Archives and removes nodes unreachable from the genotype root.",
-          "_reachable_node_names": "Computes active node names reachable from the root.",
-          "_describe_connection_source": "Builds human-readable labels for active or archived connection templates.",
-          "_is_active_connection": "Checks whether a connection object is attached to an active node.",
-          "_archived_connection_index": "Finds the archive index for a connection object.",
-          "_find_connection_owner": "Finds the active origin node and child index for a connection object."
-        },
+        "Internal_Methods": {"_collect_mutable_parameters": "Collects tuple paths for all mutable fields and optional topology operations.", "_add_mutable_parameter_paths": "Adds scalar or per-element tuple/list mutation paths for one field.", "_mutate_parameter_path": "Dispatches one selected mutation path to the appropriate mutation operation.", "_describe_parameter_target": "Builds human-readable labels for mutation logging.", "_resolve_parameter_path": "Resolves a mutation path to the owner object, field name, and optional index.", "_path_index": "Returns the optional tuple/list index from a mutation path.", "_mutation_spec": "Maps field names to mutation kind, minimum standard deviation, and ordered-pair behavior.", "_mutate_value": "Mutates boolean, integer, positive, and relative numeric values.", "_normal_mutation_delta": "Draws a Gaussian mutation delta with a minimum standard deviation.", "_mutate_connection_origin": "Moves a connection to a different origin node.", "_mutate_connection_destination": "Changes a connection child to another non-free node.", "_mutate_connection_type": "Copies connection parameters from another active or archived connection.", "_mutate_connection_replacement": "Archives a connection and replaces it with a mutated copy.", "_mutate_connection_addition": "Adds a new connection between active or archived node templates.", "_mutate_connection_new_node_addition": "Creates a new mutated node and connects it to an existing origin.", "_add_new_connection": "Creates and attaches a new connection from a template or default coding.", "_mutate_connection_removal": "Archives and removes an active connection.", "_mutate_connection_origin_node_replacement": "Creates a mutated replacement for the origin node of a connection.", "_mutate_connection_destination_node_replacement": "Creates a mutated replacement for the destination node of a connection.", "_new_node_from_existing": "Deep-copies a node and assigns a new mutation-derived name.", "_new_node_name": "Finds an unused name of the form '<base>_mutN'.", "_mutate_new_node": "Mutates one field on a newly created node.", "_resolve_new_node_path": "Resolves a mutation path for a new node.", "_mutate_new_connection": "Mutates one field on a newly created connection.", "_connection_coding_pool": "Returns active and archived connections as templates.", "_random_connection_template": "Chooses a connection template or returns None when none exist.", "_node_coding_pool": "Returns active and archived nodes as templates.", "_activate_node_gene": "Moves an archived node template into active nodes, recursively activating archived children when needed.", "_find_archived_node": "Finds the most recently archived node by name.", "_prune_disconnected_nodes": "Archives and removes nodes unreachable from the genotype root.", "_reachable_node_names": "Computes active node names reachable from the root.", "_describe_connection_source": "Builds human-readable labels for active or archived connection templates.", "_is_active_connection": "Checks whether a connection object is attached to an active node.", "_archived_connection_index": "Finds the archive index for a connection object.", "_find_connection_owner": "Finds the active origin node and child index for a connection object."},
         "Example": "mutant = genotype.mutation(mutation_rate=0.05, allow_topology_mutations=True)"
       }
     },
     "Functions": {},
     "Exceptions": {
-      "ValueError": {
-        "Description": "Raised by mutation when mutation_rate is outside [0, 1], num_mutations is negative, or an unknown mutation path/kind is encountered."
-      }
+      "ValueError": {"Description": "Raised by mutation when mutation_rate is outside [0, 1], num_mutations is negative, or an unknown mutation path/kind is encountered."}
     }
   },
   "evc3d.graph_analysis": {
@@ -427,12 +412,7 @@
         "Reject invalid recursion limits and unbounded recursive loops",
         "Abort expansion before max_node would be exceeded"
       ],
-      "Related_Modules": [
-        "evc3d.genotype",
-        "evc3d.phenotype",
-        "evc3d.evaluation",
-        "evc3d.video"
-      ]
+      "Related_Modules": ["evc3d.genotype", "evc3d.phenotype", "evc3d.evaluation", "evc3d.video"]
     },
     "Classes": {
       "PhenotypeBuildAbort": {
@@ -482,10 +462,7 @@
             "Example": "node_count = GenotypeGraphAnalyzer(genotype, max_node=500).validate()"
           }
         },
-        "Internal_Methods": {
-          "_validate_recursive_limits": "Ensures every node recursive_limit is a positive integer and not a bool.",
-          "_count_expanded_nodes": "Recursively counts expanded nodes with memoization and cycle detection."
-        },
+        "Internal_Methods": {"_validate_recursive_limits": "Ensures every node recursive_limit is a positive integer and not a bool.", "_count_expanded_nodes": "Recursively counts expanded nodes with memoization and cycle detection."},
         "Example": "GenotypeGraphAnalyzer(genotype, max_node=500).validate()"
       }
     },
@@ -518,7 +495,7 @@
       "ActuatorController": {
         "Purpose": "Per-joint controller record created by PhenotypeBuilder and applied each step by control.apply_controller. Defined in evc3d.control. One controller drives every motor of its joint: one for hinge or slide joints, three for ball joints.",
         "Constructor": {
-          "Signature": "ActuatorController(motor_names: tuple[str, ...], joint_name: str, joint_type: str, control_mode: str, ctrlranges: tuple[tuple[float, float], ...], neural_w1=(), neural_b1=(), neural_w2=(), neural_b2=(), amp: float = 0.0, freq: float = 0.0, phase: float = 0.0)",
+          "Signature": "ActuatorController(motor_names: tuple[str, ...], joint_name: str, joint_type: str, control_mode: str, ctrlranges: tuple[tuple[float, float], ...], neural_w1: tuple[tuple[float, ...], ...] = (), neural_b1: tuple[float, ...] = (), neural_w2: tuple[tuple[float, ...], ...] = (), neural_b2: tuple[float, ...] = (), amp: float = 0.0, freq: float = 0.0, phase: float = 0.0) -> None",
           "Parameters": {
             "motor_names": {"Type": "tuple[str, ...]", "Default": "required", "Description": "Generated MuJoCo motor names for this joint, one per actuated axis."},
             "joint_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo joint name the motors act on."},
@@ -581,7 +558,9 @@
           "new_body_name": {
             "Signature": "new_body_name(node_name: str) -> str",
             "Purpose": "Create a unique body name.",
-            "Parameters": {"node_name": {"Type": "str", "Description": "Source node name."}},
+            "Parameters": {
+              "node_name": {"Type": "str", "Default": "required", "Description": "Source node name."}
+            },
             "Returns": {"Type": "str", "Description": "Name like '<node_name>_<counter>'."},
             "Raises": [],
             "Example": "name = builder.new_body_name(\"segment\")"
@@ -589,7 +568,9 @@
           "new_joint_name": {
             "Signature": "new_joint_name(node_name: str) -> str",
             "Purpose": "Create a unique joint name.",
-            "Parameters": {"node_name": {"Type": "str", "Description": "Source node name."}},
+            "Parameters": {
+              "node_name": {"Type": "str", "Default": "required", "Description": "Source node name."}
+            },
             "Returns": {"Type": "str", "Description": "Name like '<node_name>_joint_<counter>'."},
             "Raises": [],
             "Example": "name = builder.new_joint_name(\"segment\")"
@@ -597,13 +578,15 @@
           "new_motor_name": {
             "Signature": "new_motor_name(joint_name: str) -> str",
             "Purpose": "Create a unique motor name for a generated joint.",
-            "Parameters": {"joint_name": {"Type": "str", "Description": "Generated joint name."}},
+            "Parameters": {
+              "joint_name": {"Type": "str", "Default": "required", "Description": "Generated joint name."}
+            },
             "Returns": {"Type": "str", "Description": "Name like '<joint_name>_motor_<counter>'."},
             "Raises": [],
             "Example": "name = builder.new_motor_name(\"segment_joint_1\")"
           },
           "configure_model": {
-            "Signature": "configure_model() -> None",
+            "Signature": "configure_model()",
             "Purpose": "Add compiler, option, and default MJCF settings.",
             "Parameters": {},
             "Returns": {"Type": "None", "Description": "Mutates builder.mujoco_xml."},
@@ -611,7 +594,7 @@
             "Example": "builder.configure_model()"
           },
           "add_defaults": {
-            "Signature": "add_defaults() -> None",
+            "Signature": "add_defaults()",
             "Purpose": "Add default geom, joint, and motor settings to the MJCF model.",
             "Parameters": {},
             "Returns": {"Type": "None", "Description": "Mutates builder.mujoco_xml."},
@@ -619,96 +602,104 @@
             "Example": "builder.add_defaults()"
           },
           "add_world_elements": {
-            "Signature": "add_world_elements(worldbody: ET.Element) -> None",
+            "Signature": "add_world_elements(worldbody: ET.Element)",
             "Purpose": "Add floor and light elements to the MuJoCo worldbody.",
-            "Parameters": {"worldbody": {"Type": "ET.Element", "Description": "MJCF worldbody element."}},
+            "Parameters": {
+              "worldbody": {"Type": "ET.Element", "Default": "required", "Description": "MJCF worldbody element."}
+            },
             "Returns": {"Type": "None", "Description": "Mutates the supplied worldbody element."},
             "Raises": [],
             "Example": "builder.add_world_elements(worldbody)"
           },
           "create_body": {
-            "Signature": "create_body(parent_xml: ET.Element, node: NodeGene, pos: str) -> ET.Element",
+            "Signature": "create_body(parent_xml: ET.Element, node: NodeGene, pos: str, quat: Sequence[float] | None = None) -> ET.Element",
             "Purpose": "Create one MJCF body element for a node.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Parent XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node gene for the body."},
-              "pos": {"Type": "str", "Description": "MuJoCo position string."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Parent XML element."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node gene for the body."},
+              "pos": {"Type": "str", "Default": "required", "Description": "MuJoCo position string."},
+              "quat": {"Type": "Sequence[float] | None", "Default": "None", "Description": "Body orientation quaternion as an MJCF string."}
             },
             "Returns": {"Type": "ET.Element", "Description": "Created body element."},
             "Raises": ["PhenotypeNodeLimitExceeded"],
             "Example": "body = builder.create_body(worldbody, root_node, \"0 0 0.6\")"
           },
           "add_node_to_body": {
-            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], current_depths: Dict[str, int], connection_orders: Dict[int, int], effective_size: Tuple[float, float, float], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_node_to_body(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]], current_depths: Dict[str, int], connection_orders: Dict[str, int], effective_size: Tuple[float, float, float], geom_center: tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...])",
             "Purpose": "Add joint, geom, and recursive children for one node body.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element to populate."},
-              "node": {"Type": "NodeGene", "Description": "Node gene represented by the body."},
-              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection used to reach this node, if any."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Current recursive depth by node name."},
-              "connection_orders": {"Type": "Dict[int, int]", "Description": "Current hierarchy order for each connection on this ancestry path."},
-              "effective_size": {"Type": "Tuple[float, float, float]", "Description": "Scaled size of this generated body."},
-              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."},
-              "reflection": {"Type": "Tuple[float, float, float]", "Description": "Accumulated subtree reflection signs."},
-              "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Body XML element to populate."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node gene represented by the body."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Default": "required", "Description": "Connection used to reach this node, if any."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Default": "required", "Description": "Possibly reflected articulated-joint axis."},
+              "incoming_neural_axes": {"Type": "Optional[Tuple[Tuple[float, float, float], ...]]", "Default": "required", "Description": "Neural output axes of the incoming connection, if any."},
+              "current_depths": {"Type": "Dict[str, int]", "Default": "required", "Description": "Current recursive depth by node name."},
+              "connection_orders": {"Type": "Dict[str, int]", "Default": "required", "Description": "Current hierarchy order for each connection on this ancestry path."},
+              "effective_size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Scaled size of this generated body."},
+              "geom_center": {"Type": "tuple[float, float, float]", "Default": "required", "Description": "Box center in the current body frame."},
+              "reflection": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Accumulated subtree reflection signs."},
+              "logical_path": {"Type": "Tuple[int, ...]", "Default": "required", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["RuntimeError", "PhenotypeNodeLimitExceeded"],
             "Example": "builder.add_node_to_body(root_body, root_node, None, None, {}, {}, root_node.size, (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), ())"
           },
           "add_joint": {
-            "Signature": "add_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], node_depth: int, logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]], node_depth: int, logical_path: Tuple[int, ...])",
             "Purpose": "Add a free, hinge, slide, or ball joint for one generated body.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node gene defining joint type."},
-              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection for hinge settings."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
-              "node_depth": {"Type": "int", "Description": "Recursive node depth."},
-              "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node gene defining joint type."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Default": "required", "Description": "Incoming connection for hinge settings."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Default": "required", "Description": "Possibly reflected articulated-joint axis."},
+              "incoming_neural_axes": {"Type": "Optional[Tuple[Tuple[float, float, float], ...]]", "Default": "required", "Description": "Neural output axes of the incoming connection, if any."},
+              "node_depth": {"Type": "int", "Default": "required", "Description": "Recursive node depth."},
+              "logical_path": {"Type": "Tuple[int, ...]", "Default": "required", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML and possibly controller list."},
             "Raises": ["RuntimeError"],
             "Example": "builder.add_joint(body, node, incoming_conn, axis, node_depth=1, logical_path=(0,))"
           },
           "add_articulated_joint": {
-            "Signature": "add_articulated_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], node_depth: int, logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_articulated_joint(parent_xml: ET.Element, node: NodeGene, incoming_conn: Optional[ConnectionGene], incoming_axis: Optional[Tuple[float, float, float]], incoming_neural_axes: Optional[Tuple[Tuple[float, float, float], ...]], node_depth: int, logical_path: Tuple[int, ...])",
             "Purpose": "Add a hinge, slide, or ball joint and optional motor for one generated body.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node gene defining fallback axis."},
-              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Incoming connection defining motor settings."},
-              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Description": "Possibly reflected articulated-joint axis."},
-              "node_depth": {"Type": "int", "Description": "Recursive node depth."},
-              "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node gene defining fallback axis."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Default": "required", "Description": "Incoming connection defining motor settings."},
+              "incoming_axis": {"Type": "Optional[Tuple[float, float, float]]", "Default": "required", "Description": "Possibly reflected articulated-joint axis."},
+              "incoming_neural_axes": {"Type": "Optional[Tuple[Tuple[float, float, float], ...]]", "Default": "required", "Description": "Neural output axes of the incoming connection, if any."},
+              "node_depth": {"Type": "int", "Default": "required", "Description": "Recursive node depth."},
+              "logical_path": {"Type": "Tuple[int, ...]", "Default": "required", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML and possibly controller list."},
             "Raises": ["RuntimeError"],
             "Example": "builder.add_articulated_joint(body, node, incoming_conn, axis, 2, (0,))"
           },
           "add_motor": {
-            "Signature": "add_motor(joint_name: str, joint_type: str, joint_axis: Sequence[float], incoming_conn: Optional[ConnectionGene], node_depth: int, logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_motor(joint_name: str, joint_type: str, joint_axis: Sequence[float], incoming_conn: Optional[ConnectionGene], neural_output_axes: Optional[Tuple[Tuple[float, float, float], ...]], node_depth: int, logical_path: Tuple[int, ...])",
             "Purpose": "Add a MuJoCo motor and append matching ActuatorController metadata.",
             "Parameters": {
-              "joint_name": {"Type": "str", "Description": "Joint receiving the motor."},
-              "joint_type": {"Type": "str", "Description": "Generated articulated joint type."},
-              "joint_axis": {"Type": "Sequence[float]", "Description": "Axis used to orient ball-joint motor gear."},
-              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Description": "Connection with motor and controller settings."},
-              "node_depth": {"Type": "int", "Description": "Recursive node depth for phase calculation."},
-              "logical_path": {"Type": "Tuple[int, ...]", "Description": "Path shared by corresponding mirrored actuators."}
+              "joint_name": {"Type": "str", "Default": "required", "Description": "Joint receiving the motor."},
+              "joint_type": {"Type": "str", "Default": "required", "Description": "Generated articulated joint type."},
+              "joint_axis": {"Type": "Sequence[float]", "Default": "required", "Description": "Axis used to orient ball-joint motor gear."},
+              "incoming_conn": {"Type": "Optional[ConnectionGene]", "Default": "required", "Description": "Connection with motor and controller settings."},
+              "neural_output_axes": {"Type": "Optional[Tuple[Tuple[float, float, float], ...]]", "Default": "required", "Description": "Output axes for neural ball-joint control."},
+              "node_depth": {"Type": "int", "Default": "required", "Description": "Recursive node depth for phase calculation."},
+              "logical_path": {"Type": "Tuple[int, ...]", "Default": "required", "Description": "Path shared by corresponding mirrored actuators."}
             },
             "Returns": {"Type": "None", "Description": "Mutates actuator XML and actuator_controllers."},
             "Raises": ["RuntimeError"],
             "Example": "builder.add_motor(\"tail_joint_1\", connection, 2, (0,))"
           },
           "add_geom": {
-            "Signature": "add_geom(parent_xml: ET.Element, size: Sequence[float], geom_center: Tuple[float, float, float]) -> None",
+            "Signature": "add_geom(parent_xml: ET.Element, node: NodeGene, size: Sequence[float], geom_center: tuple[float, float, float])",
             "Purpose": "Add a box geom to a generated body.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Body XML element."},
-              "size": {"Type": "Sequence[float]", "Description": "Effective scaled geom size."},
-              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Box center in the current body frame."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Body XML element."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node gene being expanded."},
+              "size": {"Type": "Sequence[float]", "Default": "required", "Description": "Effective scaled geom size."},
+              "geom_center": {"Type": "tuple[float, float, float]", "Default": "required", "Description": "Box center in the current body frame."}
             },
             "Returns": {"Type": "None", "Description": "Mutates the body XML element."},
             "Raises": [],
@@ -718,26 +709,26 @@
             "Signature": "next_depths(current_depths: Dict[str, int], node_name: str, node_depth: int) -> Dict[str, int]",
             "Purpose": "Return a copied recursive-depth map with the current node depth updated.",
             "Parameters": {
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Existing depth map."},
-              "node_name": {"Type": "str", "Description": "Node name being updated."},
-              "node_depth": {"Type": "int", "Description": "Depth value to store."}
+              "current_depths": {"Type": "Dict[str, int]", "Default": "required", "Description": "Existing depth map."},
+              "node_name": {"Type": "str", "Default": "required", "Description": "Node name being updated."},
+              "node_depth": {"Type": "int", "Default": "required", "Description": "Depth value to store."}
             },
             "Returns": {"Type": "Dict[str, int]", "Description": "Updated depth map copy."},
             "Raises": [],
             "Example": "depths = builder.next_depths({}, \"segment\", 1)"
           },
           "add_children": {
-            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int], connection_orders: Dict[int, int], effective_size: Tuple[float, float, float], geom_center: Tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...]) -> None",
+            "Signature": "add_children(parent_xml: ET.Element, node: NodeGene, current_depths: Dict[str, int], connection_orders: Dict[str, int], effective_size: Tuple[float, float, float], geom_center: tuple[float, float, float], reflection: Tuple[float, float, float], logical_path: Tuple[int, ...])",
             "Purpose": "Recursively add child bodies for each allowed outgoing connection.",
             "Parameters": {
-              "parent_xml": {"Type": "ET.Element", "Description": "Parent body XML element."},
-              "node": {"Type": "NodeGene", "Description": "Node whose children are expanded."},
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Depth map used to enforce recursive limits."},
-              "connection_orders": {"Type": "Dict[int, int]", "Description": "Current hierarchy order for each connection on this ancestry path."},
-              "effective_size": {"Type": "Tuple[float, float, float]", "Description": "Scaled parent size used for child attachment."},
-              "geom_center": {"Type": "Tuple[float, float, float]", "Description": "Parent box center in the current body frame."},
-              "reflection": {"Type": "Tuple[float, float, float]", "Description": "Accumulated subtree reflection signs."},
-              "logical_path": {"Type": "Tuple[int, ...]", "Description": "Symmetry-independent actuator path."}
+              "parent_xml": {"Type": "ET.Element", "Default": "required", "Description": "Parent body XML element."},
+              "node": {"Type": "NodeGene", "Default": "required", "Description": "Node whose children are expanded."},
+              "current_depths": {"Type": "Dict[str, int]", "Default": "required", "Description": "Depth map used to enforce recursive limits."},
+              "connection_orders": {"Type": "Dict[str, int]", "Default": "required", "Description": "Current hierarchy order for each connection on this ancestry path."},
+              "effective_size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Scaled parent size used for child attachment."},
+              "geom_center": {"Type": "tuple[float, float, float]", "Default": "required", "Description": "Parent box center in the current body frame."},
+              "reflection": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Accumulated subtree reflection signs."},
+              "logical_path": {"Type": "Tuple[int, ...]", "Default": "required", "Description": "Symmetry-independent actuator path."}
             },
             "Returns": {"Type": "None", "Description": "Mutates XML tree and controller list."},
             "Raises": ["KeyError", "RuntimeError", "PhenotypeNodeLimitExceeded"],
@@ -747,8 +738,8 @@
             "Signature": "can_add_child(child_node: NodeGene, current_depths: Dict[str, int]) -> bool",
             "Purpose": "Check whether a child node is still below its recursive limit.",
             "Parameters": {
-              "child_node": {"Type": "NodeGene", "Description": "Potential child node."},
-              "current_depths": {"Type": "Dict[str, int]", "Description": "Current depth map."}
+              "child_node": {"Type": "NodeGene", "Default": "required", "Description": "Potential child node."},
+              "current_depths": {"Type": "Dict[str, int]", "Default": "required", "Description": "Current depth map."}
             },
             "Returns": {"Type": "bool", "Description": "True when expansion may continue for this child node."},
             "Raises": [],
@@ -760,14 +751,23 @@
     },
     "Functions": {
       "vec_to_str": {
-        "Signature": "vec_to_str(v) -> str",
+        "Signature": "vec_to_str(v)",
         "Purpose": "Convert an iterable of values into a space-separated MuJoCo vector string.",
         "Parameters": {
-          "v": {"Type": "Iterable[Any]", "Default": "required", "Description": "Values to join."}
+          "v": {"Type": "Any", "Default": "required", "Description": "Values to join."}
         },
         "Returns": {"Type": "str", "Description": "Space-separated string representation."},
         "Raises": [],
         "Example": "axis = vec_to_str((0, 1, 0))"
+      },
+      "matrix_to_quat": {
+        "Signature": "matrix_to_quat(matrix: Sequence[Sequence[float]]) -> Tuple[float, float, float, float]",
+        "Purpose": "Convert a 3x3 rotation matrix to a (w, x, y, z) quaternion.",
+        "Parameters": {
+          "matrix": {"Type": "Sequence[Sequence[float]]", "Default": "required", "Description": "3x3 rotation matrix."}
+        },
+        "Returns": {"Type": "Tuple[float, float, float, float]", "Description": "Quaternion (w, x, y, z)."},
+        "Raises": []
       }
     },
     "Exceptions": {
@@ -778,11 +778,10 @@
   },
   "evc3d.evolution_tasks": {
     "Overview": {
-      "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, fitness and failure callbacks, rollout policy, and metadata; evaluation.evaluate_task owns model construction and rollout orchestration.",
+      "Purpose": "Package of task modules. A task string such as `walking_x` is the filename of its module, which evaluation.load_task_definition imports lazily. Every task module follows the same pattern: a `<Task>EvaluationConfig` dataclass (scoring and start-rule settings, extending shared.EvaluationConfig), a `<Task>EvaluationResult` dataclass (metrics, extending shared.EvaluationResult), `fitness_callback(config, metrics, passive_metrics)` returning the result, `failed_task_callback(config, reason)` returning a failure result, a `TASK_ENVIRONMENT` (shared.EnvironmentFamily), and a `TASK_DEFINITION` (shared.TaskDefinition) bundling them. Adding a task means adding one such module.",
       "Main_Use_Cases": [
-        "Evaluate a genotype's task-specific locomotion fitness",
-        "Return diagnostics such as distance, drift, energy, angular speed, and body count",
-        "Convert phenotype build failures or unstable simulations into failed evaluation results"
+        "Add a new locomotion task as a single module",
+        "Look up a task's config defaults and result metrics in its module entry"
       ],
       "Related_Modules": [
         "evc3d.evolution_tasks.swimming_x",
@@ -792,37 +791,871 @@
         "evc3d.evolution_tasks.flying_x",
         "evc3d.evolution_tasks.flying_away",
         "evc3d.evolution_tasks.shared",
-        "evc3d.genotype",
-        "evc3d.evaluation",
-        "evc3d.graph_analysis",
-        "evc3d.phenotype",
-        "evc3d.video"
+        "evc3d.evaluation"
       ]
+    },
+    "Classes": {},
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.video": {
+    "Overview": {
+      "Purpose": "Records a task episode to MP4 (`evc3d view --mp4`), using evc3d.scene for the same build, placement, and stepping as the interactive viewer.",
+      "Main_Use_Cases": [
+        "Record a genotype's task episode with optional root tracking, circling camera, and lighting options"
+      ],
+      "Related_Modules": ["evc3d.scene", "evc3d.viewer", "evc3d.cli"]
+    },
+    "Classes": {},
+    "Functions": {
+      "save_x_axis_video": {
+        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, definition: TaskDefinition, fps: int, width: int, height: int, track_root: bool = False, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = False, camera_circle_around: bool = False)",
+        "Purpose": "Render a selected-task episode to MP4 using MuJoCo's offscreen renderer and imageio.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
+          "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task definition containing the effective config and environment."},
+          "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
+          "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
+          "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."},
+          "track_root": {"Type": "bool", "Default": "false", "Description": "Track the creature root with the video camera."},
+          "speed": {"Type": "float", "Default": "1.0", "Description": "Video playback speed multiplier."},
+          "shadowsize": {"Type": "int", "Default": "4096", "Description": "Shadow-map texture width and height in pixels."},
+          "spotlight": {"Type": "bool", "Default": "false", "Description": "Use a shadow-casting spotlight instead of a directional light."},
+          "camera_circle_around": {"Type": "bool", "Default": "false", "Description": "Circle the camera around the creature during the episode."}
+        },
+        "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
+        "Raises": ["RuntimeError", "OSError"],
+        "Example": "save_x_axis_video(genotype, Path(\"locomotion.mp4\"), definition, fps=30, width=1280, height=720)"
+      }
+    },
+    "Exceptions": {
+      "RuntimeError": {"Description": "Raised when imageio/imageio-ffmpeg is unavailable, output writing fails, or phenotype generation fails before recording."}
+    }
+  },
+  "evc3d.viewer": {
+    "Overview": {
+      "Purpose": "Interactive MuJoCo window (`evc3d view`) that simulates a genotype in its task environment until closed, paced to real time, using evc3d.scene.",
+      "Main_Use_Cases": [
+        "Watch a creature perform its task interactively",
+        "Follow the creature with a tracking camera"
+      ],
+      "Related_Modules": ["evc3d.scene", "evc3d.video", "evc3d.cli"]
+    },
+    "Classes": {},
+    "Functions": {
+      "launch_viewer": {
+        "Signature": "launch_viewer(genotype: Genotype, definition: TaskDefinition, *, track_root: bool = False, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = False) -> None",
+        "Purpose": "Open a passive MuJoCo viewer, apply sine-wave controls each step, and synchronize until the viewer closes.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task definition (config, environment, callbacks) to build or evaluate for."},
+          "track_root": {"Type": "bool", "Default": "False", "Description": "Follow the creature's root body with the camera."},
+          "speed": {"Type": "float", "Default": "1.0", "Description": "Playback speed relative to simulated time."},
+          "shadowsize": {"Type": "int", "Default": "4096", "Description": "Shadow-map texture size in pixels."},
+          "spotlight": {"Type": "bool", "Default": "False", "Description": "Use a shadow-casting spotlight instead of a directional light."}
+        },
+        "Returns": {"Type": "None", "Description": "Runs until the viewer closes."},
+        "Raises": ["mujoco.FatalError", "RuntimeError"],
+        "Example": "launch_viewer(mjcf, builder.actuator_controllers)"
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.cli": {
+    "Overview": {
+      "Purpose": "The `evc3d` command (`evc3d <command>`, also `python -m evc3d`). Every subcommand module (`evc3d.cli.evolve`, `evaluate`, `mutate`, `build`, `view`) follows one pattern: `add_parser(subparsers)` defines its options from the shared groups in evc3d.cli.args, `validate(args)` raises ValueError for invalid combinations (reported as usage errors), `run(args)` does the work, and `parse_args(argv)` / `main(argv)` parse or run that subcommand alone. Use `evc3d <command> --help` for each command's options.",
+      "Main_Use_Cases": [
+        "Run evolution, evaluation, mutation, XML build, or viewing from the command line",
+        "Add a subcommand by writing one module with add_parser, validate, and run"
+      ],
+      "Related_Modules": ["evc3d.cli.args", "evc3d.evolve", "evc3d.evaluation", "evc3d.scene"]
+    },
+    "Classes": {},
+    "Functions": {
+      "build_parser": {
+        "Signature": "build_parser() -> argparse.ArgumentParser",
+        "Purpose": "Build the top-level evc3d parser with all subcommands registered.",
+        "Parameters": {},
+        "Returns": {"Type": "argparse.ArgumentParser", "Description": "Configured parser."},
+        "Raises": []
+      },
+      "main": {
+        "Signature": "main(argv: Sequence[str] | None = None) -> None",
+        "Purpose": "Entry point for the evc3d command: parse, validate, and run a subcommand.",
+        "Parameters": {
+          "argv": {"Type": "Sequence[str] | None", "Default": "None", "Description": "Command-line arguments; defaults to sys.argv[1:]."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; runs the subcommand."},
+        "Raises": []
+      },
+      "parse_args": {
+        "Signature": "parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace",
+        "Purpose": "Parse and validate `evc3d` arguments; invalid values exit with usage.",
+        "Parameters": {
+          "argv": {"Type": "Sequence[str] | None", "Default": "None", "Description": "Command-line arguments; defaults to sys.argv[1:]."}
+        },
+        "Returns": {"Type": "argparse.Namespace", "Description": "Validated arguments; invalid values exit with a usage error."},
+        "Raises": []
+      },
+      "user_options": {
+        "Signature": "user_options(args: argparse.Namespace) -> dict",
+        "Purpose": "Return parsed options without the internal dispatch entries.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "dict", "Description": "Parsed options without internal dispatch keys."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.cli.args": {
+    "Overview": {
+      "Purpose": "Option groups shared by subcommands, each with a validator: genotype (`--genotype`), environment (`--task`, fluid, `--self-collision`, `--max-node`), scoring (`--duration`, fitness weights, volume limits, `--upright-error`, `--disallow-collision`), and mutation (which mutations are allowed). Also resolves the task definition from parsed options.",
+      "Main_Use_Cases": [
+        "Add a task, environment, scoring, or mutation option once for all subcommands"
+      ],
+      "Related_Modules": ["evc3d.cli", "evc3d.evolution_tasks.shared"]
+    },
+    "Classes": {
+      "HelpFormatter": {
+        "Purpose": "Append concrete defaults unless the help text already states one.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "add_environment_arguments": {
+        "Signature": "add_environment_arguments(parser: argparse.ArgumentParser, task_help: str) -> None",
+        "Purpose": "Options that define the simulated world and the generated phenotype.",
+        "Parameters": {
+          "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."},
+          "task_help": {"Type": "str", "Default": "required", "Description": "Help text for --task in this subcommand."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; adds the 'environment' group."},
+        "Raises": []
+      },
+      "add_genotype_argument": {
+        "Signature": "add_genotype_argument(parser: argparse.ArgumentParser, help: str) -> None",
+        "Purpose": "Add the --genotype option with command-specific help text.",
+        "Parameters": {
+          "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."},
+          "help": {"Type": "str", "Default": "required", "Description": "Help text for --genotype in this subcommand."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; adds --genotype."},
+        "Raises": []
+      },
+      "add_mutation_arguments": {
+        "Signature": "add_mutation_arguments(parser: argparse.ArgumentParser) -> None",
+        "Purpose": "Options that restrict which genotype mutations may be applied.",
+        "Parameters": {
+          "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; adds the 'mutation' group."},
+        "Raises": []
+      },
+      "add_scoring_arguments": {
+        "Signature": "add_scoring_arguments(parser: argparse.ArgumentParser, duration_help: str) -> None",
+        "Purpose": "Options that only affect how an episode is scored.",
+        "Parameters": {
+          "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."},
+          "duration_help": {"Type": "str", "Default": "required", "Description": "Help text for --duration in this subcommand."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; adds the 'scoring' group."},
+        "Raises": []
+      },
+      "mutation_options": {
+        "Signature": "mutation_options(args: argparse.Namespace) -> dict",
+        "Purpose": "Keyword arguments for `Genotype.mutation` from the mutation group.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "dict", "Description": "Keyword arguments for Genotype.mutation()."},
+        "Raises": []
+      },
+      "resolve_task_definition": {
+        "Signature": "resolve_task_definition(args: argparse.Namespace) -> TaskDefinition",
+        "Purpose": "Return the task definition with CLI environment/scoring overrides applied.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "TaskDefinition", "Description": "Task definition with CLI overrides applied."},
+        "Raises": []
+      },
+      "validate_environment_arguments": {
+        "Signature": "validate_environment_arguments(args: argparse.Namespace) -> None",
+        "Purpose": "Raise ValueError for invalid environment options.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
+        "Raises": []
+      },
+      "validate_mutation_arguments": {
+        "Signature": "validate_mutation_arguments(args: argparse.Namespace) -> None",
+        "Purpose": "Raise ValueError for invalid mutation options.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
+        "Raises": []
+      },
+      "validate_scoring_arguments": {
+        "Signature": "validate_scoring_arguments(args: argparse.Namespace) -> None",
+        "Purpose": "Raise ValueError for invalid scoring options.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.constants": {
+    "Overview": {
+      "Purpose": "Constants shared across modules, such as the attachment-face normals used by gene validation and phenotype placement.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.genes", "evc3d.phenotype"]
+    },
+    "Classes": {},
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.control": {
+    "Overview": {
+      "Purpose": "Actuator controllers: the ActuatorController record built by PhenotypeBuilder, and apply_controller, the single entry point that drives sine or neural controllers each step.",
+      "Main_Use_Cases": [
+        "Drive a creature's motors each step",
+        "Validate or create neural controller weights"
+      ],
+      "Related_Modules": ["evc3d.phenotype", "evc3d.scene", "evc3d.evaluation"]
+    },
+    "Classes": {
+      "ActuatorController": {
+        "Purpose": "ActuatorController(motor_names: 'tuple[str, ...]', joint_name: 'str', joint_type: 'str', control_mode: 'str', ctrlranges: 'tuple[tuple[float, float], ...]', neural_w1: 'tuple[tuple[float, ...], ...]' = (), neural_b1: 'tuple[float, ...]' = (), neural_w2: 'tuple[tuple[float, ...], ...]' = (), neural_b2: 'tuple[float, ...]' = (), amp: 'float' = 0.0, freq: 'float' = 0.0, phase: 'float' = 0.0)",
+        "Constructor": {
+          "Signature": "ActuatorController(motor_names: tuple[str, ...], joint_name: str, joint_type: str, control_mode: str, ctrlranges: tuple[tuple[float, float], ...], neural_w1: tuple[tuple[float, ...], ...] = (), neural_b1: tuple[float, ...] = (), neural_w2: tuple[tuple[float, ...], ...] = (), neural_b2: tuple[float, ...] = (), amp: float = 0.0, freq: float = 0.0, phase: float = 0.0) -> None",
+          "Parameters": {
+            "motor_names": {"Type": "tuple[str, ...]", "Default": "required", "Description": "Generated MuJoCo motor names for this joint, one per actuated axis."},
+            "joint_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo joint name."},
+            "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."},
+            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural or sine."},
+            "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Default": "required", "Description": "Control range for each motor, in motor_names order."},
+            "neural_w1": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural hidden-layer weight matrix."},
+            "neural_b1": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural hidden-layer biases."},
+            "neural_w2": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural output-layer weight matrix."},
+            "neural_b2": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural output-layer biases."},
+            "amp": {"Type": "float", "Default": "0.0", "Description": "Sine control amplitude."},
+            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency."},
+            "phase": {"Type": "float", "Default": "0.0", "Description": "Sine phase offset."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "actuator_ids_for_controllers": {
+        "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
+        "Purpose": "Flat list of MuJoCo actuator IDs for all controllers' motors, in controller order.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+        },
+        "Returns": {"Type": "list[int]", "Description": "Actuator IDs."},
+        "Raises": []
+      },
+      "apply_controller": {
+        "Signature": "apply_controller(model: mujoco.MjModel, data: mujoco.MjData, actuator_controllers: list[ActuatorController]) -> None",
+        "Purpose": "Write this step's control values for every controller (sine or neural) into data.ctrl.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; mutates data.ctrl."},
+        "Raises": []
+      },
+      "normalized_neural_parameters": {
+        "Signature": "normalized_neural_parameters(joint_type: str, neural_w1: Sequence[Sequence[float]], neural_b1: Sequence[float], neural_w2: Sequence[Sequence[float]], neural_b2: Sequence[float]) -> tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]",
+        "Purpose": "Validate neural weights for a joint type, or return zero weights if none are given.",
+        "Parameters": {
+          "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."},
+          "neural_w1": {"Type": "Sequence[Sequence[float]]", "Default": "required", "Description": "Neural hidden-layer weight matrix."},
+          "neural_b1": {"Type": "Sequence[float]", "Default": "required", "Description": "Neural hidden-layer biases."},
+          "neural_w2": {"Type": "Sequence[Sequence[float]]", "Default": "required", "Description": "Neural output-layer weight matrix."},
+          "neural_b2": {"Type": "Sequence[float]", "Default": "required", "Description": "Neural output-layer biases."}
+        },
+        "Returns": {"Type": "tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]", "Description": "(w1, b1, w2, b2)."},
+        "Raises": []
+      },
+      "zero_neural_parameters": {
+        "Signature": "zero_neural_parameters(joint_type: str) -> tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]",
+        "Purpose": "Zero neural weights and biases sized for a joint type.",
+        "Parameters": {
+          "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."}
+        },
+        "Returns": {"Type": "tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]", "Description": "(w1, b1, w2, b2) of zeros."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.evaluation": {
+    "Overview": {
+      "Purpose": "Task loading and scoring: loads task modules by name, builds and places a creature, runs the scored episode, and returns the task's typed result.",
+      "Main_Use_Cases": [
+        "Score a genotype on a task",
+        "Prepare the episode start (placement, start rules, settling)",
+        "List and load task definitions"
+      ],
+      "Related_Modules": [
+        "evc3d.evolution_tasks",
+        "evc3d.evolution_tasks.shared",
+        "evc3d.phenotype",
+        "evc3d.scene"
+      ]
+    },
+    "Classes": {},
+    "Functions": {
+      "evaluate_task": {
+        "Signature": "evaluate_task(genotype: Genotype, definition: task_shared.TaskDefinition, config: task_shared.EvaluationConfig | None = None, environment: task_shared.EnvironmentFamily | None = None)",
+        "Purpose": "Build, initialize, simulate, and score a genotype using the config and environment owned by the selected task definition.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
+          "definition": {"Type": "task_shared.TaskDefinition", "Default": "required", "Description": "Selected task callbacks, rollout policy, effective config, environment, and metadata."},
+          "config": {"Type": "task_shared.EvaluationConfig | None", "Default": "None", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
+          "environment": {"Type": "task_shared.EnvironmentFamily | None", "Default": "None", "Description": "Physical environment (gravity, fluid, floor, placement)."}
+        },
+        "Returns": {"Type": "task-specific result", "Description": "Fitness and diagnostic metrics; build, initialization, rollout, and non-finite-fitness failures are represented as failed results."},
+        "Raises": ["TypeError", "ValueError"],
+        "Example": "definition = task_definition(\"swimming_x\").args_override(args); result = evaluate_task(genotype, definition)"
+      },
+      "initialize_model": {
+        "Signature": "initialize_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily, *, enforce_start_rules: bool = True) -> str | None",
+        "Purpose": "Prepare the episode start; return a failure reason, or None.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
+          "environment": {"Type": "task_shared.EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."},
+          "enforce_start_rules": {"Type": "bool", "Default": "True", "Description": "Apply the task's start rules (scoring); viewing passes False."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the episode can start."},
+        "Raises": []
+      },
+      "load_task_definition": {
+        "Signature": "load_task_definition(task: str) -> task_shared.TaskDefinition",
+        "Purpose": "Load a task whose name exactly matches its module filename.",
+        "Parameters": {
+          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
+        },
+        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition."},
+        "Raises": []
+      },
+      "place_creature": {
+        "Signature": "place_creature(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily) -> str | None",
+        "Purpose": "Apply the environment's floor clearance and initialization callback.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
+          "environment": {"Type": "task_shared.EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
+        "Raises": []
+      },
+      "settle_model": {
+        "Signature": "settle_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig) -> str | None",
+        "Purpose": "Let a walking creature fall onto the floor before controls and scoring.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
+        "Raises": []
+      },
+      "simulation_failure_reason": {
+        "Signature": "simulation_failure_reason(data: mujoco.MjData, previous_time: float, config: task_shared.EvaluationConfig) -> str | None",
+        "Purpose": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond the config's limits.",
+        "Parameters": {
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "previous_time": {"Type": "float", "Default": "required", "Description": "Simulation time before the last step."},
+          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when stable."},
+        "Raises": []
+      },
+      "start_rule_failure": {
+        "Signature": "start_rule_failure(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig) -> str | None",
+        "Purpose": "Check the task's rules for a valid start (floor contact, creature height).",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the start is valid."},
+        "Raises": []
+      },
+      "task_definition": {
+        "Signature": "task_definition(task: str) -> task_shared.TaskDefinition",
+        "Purpose": "Return canonical metadata for a task name.",
+        "Parameters": {
+          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
+        },
+        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition (shared object; copy before modifying)."},
+        "Raises": []
+      },
+      "task_names": {
+        "Signature": "task_names() -> tuple[str, ...]",
+        "Purpose": "Return registered task names in presentation order.",
+        "Parameters": {},
+        "Returns": {"Type": "tuple[str, ...]", "Description": "Task names in presentation order."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {
+      "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
+    },
+    "Internal_Functions": {"_normalized_target_direction": "Validates and normalizes a three-component target direction.", "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."}
+  },
+  "evc3d.evolution_tasks.shared": {
+    "Overview": {
+      "Purpose": "Building blocks shared by all tasks: EnvironmentFamily (physics and placement), EvaluationConfig and EvaluationResult (base scoring settings and metrics), RolloutPolicy, ResultField, and TaskDefinition, which bundles a task's config, result type, callbacks, and environment.",
+      "Main_Use_Cases": [
+        "Define a new task's config, result, and TASK_DEFINITION",
+        "Inspect default physics and scoring settings"
+      ],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evaluation"]
+    },
+    "Classes": {
+      "EnvironmentFamily": {
+        "Purpose": "Declarative MuJoCo physics and initial placement for one task.",
+        "Constructor": {
+          "Signature": "EnvironmentFamily(name: str = swimming, timestep: float = 0.01, gravity: float = 0.0, fluid_density: float | None = 1000.0, fluid_viscosity: float | None = 0.001, fluid_shape: str | None = None, fluid_coef: Sequence[float] | None = None, body_density: float = 500.0, body_friction: Sequence[float] = (1.0, 0.5, 0.5), creature_contype: int = 0, creature_conaffinity: int = 0, self_collision_contype: int = 2, self_collision_conaffinity: int = 2, floor_position: Sequence[float] = (0.0, 0.0, -0.05), floor_size: Sequence[float] = (5.0, 5.0, 0.1), floor_contype: int = 0, floor_conaffinity: int = 0, initial_root_position: Sequence[float] = (0.0, 0.0, 0.6), initial_floor_clearance: float | None = None, supports_scheduled_gravity: bool = False, initialization_callback: Callable | None = None) -> None",
+          "Parameters": {
+            "name": {"Type": "str", "Default": "'swimming'", "Description": "Gene or object name."},
+            "timestep": {"Type": "float", "Default": "0.01", "Description": "Physics timestep in seconds."},
+            "gravity": {"Type": "float", "Default": "0.0", "Description": "Vertical gravity in m/s^2."},
+            "fluid_density": {"Type": "float | None", "Default": "1000.0", "Description": "Fluid density in kg/m^3 (None for no fluid)."},
+            "fluid_viscosity": {"Type": "float | None", "Default": "0.001", "Description": "Fluid viscosity in Pa*s (None for no fluid)."},
+            "fluid_shape": {"Type": "str | None", "Default": "None", "Description": "MuJoCo fluid shape model for creature geoms (None for default)."},
+            "fluid_coef": {"Type": "Sequence[float] | None", "Default": "None", "Description": "Five MuJoCo fluid coefficients (None for default)."},
+            "body_density": {"Type": "float", "Default": "500.0", "Description": "Creature body density in kg/m^3."},
+            "body_friction": {"Type": "Sequence[float]", "Default": "(1.0, 0.5, 0.5)", "Description": "Creature geom friction (sliding, torsional, rolling)."},
+            "creature_contype": {"Type": "int", "Default": "0", "Description": "Creature geom contype without self-collision."},
+            "creature_conaffinity": {"Type": "int", "Default": "0", "Description": "Creature geom conaffinity without self-collision."},
+            "self_collision_contype": {"Type": "int", "Default": "2", "Description": "Creature geom contype with self-collision."},
+            "self_collision_conaffinity": {"Type": "int", "Default": "2", "Description": "Creature geom conaffinity with self-collision."},
+            "floor_position": {"Type": "Sequence[float]", "Default": "(0.0, 0.0, -0.05)", "Description": "Floor plane position."},
+            "floor_size": {"Type": "Sequence[float]", "Default": "(5.0, 5.0, 0.1)", "Description": "Floor plane size."},
+            "floor_contype": {"Type": "int", "Default": "0", "Description": "Floor contype."},
+            "floor_conaffinity": {"Type": "int", "Default": "0", "Description": "Floor conaffinity."},
+            "initial_root_position": {"Type": "Sequence[float]", "Default": "(0.0, 0.0, 0.6)", "Description": "Spawn position of the root body."},
+            "initial_floor_clearance": {"Type": "float | None", "Default": "None", "Description": "Lift the creature to this clearance above the floor at start (None to skip)."},
+            "supports_scheduled_gravity": {"Type": "bool", "Default": "False", "Description": "Whether evolve --gradual-gravity-change is allowed."},
+            "initialization_callback": {"Type": "Callable | None", "Default": "None", "Description": "Optional task-specific placement callback (model, data, config) -> failure or None."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "EvaluationConfig": {
+        "Purpose": "Common simulation, safety, and complexity settings for every task.",
+        "Constructor": {
+          "Signature": "EvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0) -> None",
+          "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.0", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'allow'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "EvaluationResult": {
+        "Purpose": "Metrics produced by every locomotion task.",
+        "Constructor": {
+          "Signature": "EvaluationResult(fitness: float, origin_distance: float, average_origin_speed: float, forward_distance: float, average_forward_speed: float, sideways_drift_speed: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float) -> None",
+          "Parameters": {
+            "fitness": {"Type": "float", "Default": "required", "Description": "Fitness score."},
+            "origin_distance": {"Type": "float", "Default": "required", "Description": "Distance from the start, in meters."},
+            "average_origin_speed": {"Type": "float", "Default": "required", "Description": "Average speed away from the start."},
+            "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
+            "average_forward_speed": {"Type": "float", "Default": "required", "Description": "Average speed along target_direction."},
+            "sideways_drift_speed": {"Type": "float", "Default": "required", "Description": "Average sideways speed."},
+            "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared control effort."},
+            "mean_angular_speed": {"Type": "float", "Default": "required", "Description": "Mean root angular speed."},
+            "simulated_seconds": {"Type": "float", "Default": "required", "Description": "Simulated episode length."},
+            "actuator_count": {"Type": "int", "Default": "required", "Description": "Number of actuators."},
+            "body_count": {"Type": "int", "Default": "required", "Description": "Number of creature bodies."},
+            "total_volume": {"Type": "float", "Default": "required", "Description": "Creature volume in cubic meters."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "ResultField": {
+        "Purpose": "One task-specific result value printed by the evaluation CLI.",
+        "Constructor": {
+          "Signature": "ResultField(label: str, attribute: str, format_spec: str = .6f, none_text: str | None = None) -> None",
+          "Parameters": {
+            "label": {"Type": "str", "Default": "required", "Description": "Printed label."},
+            "attribute": {"Type": "str", "Default": "required", "Description": "Result attribute to print."},
+            "format_spec": {"Type": "str", "Default": "'.6f'", "Description": "Format spec for the value."},
+            "none_text": {"Type": "str | None", "Default": "None", "Description": "Text printed when the value is None."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "RolloutPolicy": {
+        "Purpose": "Declarative simulation behavior used by the shared evaluation engine.",
+        "Constructor": {
+          "Signature": "RolloutPolicy(passive_baseline: bool = False, track_floor_contact: bool = False, track_root_upright: bool = False, horizontal_origin_distance: bool = False) -> None",
+          "Parameters": {
+            "passive_baseline": {"Type": "bool", "Default": "False", "Description": "Also run a zero-control episode for a fitness-gain comparison."},
+            "track_floor_contact": {"Type": "bool", "Default": "False", "Description": "Measure distance until first floor contact."},
+            "track_root_upright": {"Type": "bool", "Default": "False", "Description": "Track the root's upright error."},
+            "horizontal_origin_distance": {"Type": "bool", "Default": "False", "Description": "Ignore vertical displacement in distances."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "TaskDefinition": {
+        "Purpose": "Complete public definition exported by one task module.",
+        "Constructor": {
+          "Signature": "TaskDefinition(name: str, config_type: type, result_type: type, fitness_callback: Callable, failed_task_callback: Callable, rollout_policy: RolloutPolicy, environment: EnvironmentFamily, title: str, result_fields: tuple[ResultField, ...], order: int, config: EvaluationConfig | None = None) -> None",
+          "Parameters": {
+            "name": {"Type": "str", "Default": "required", "Description": "Gene or object name."},
+            "config_type": {"Type": "type", "Default": "required", "Description": "Task config dataclass."},
+            "result_type": {"Type": "type", "Default": "required", "Description": "Task result dataclass."},
+            "fitness_callback": {"Type": "Callable", "Default": "required", "Description": "(config, metrics, passive_metrics) -> result."},
+            "failed_task_callback": {"Type": "Callable", "Default": "required", "Description": "(config, reason) -> failure result."},
+            "rollout_policy": {"Type": "RolloutPolicy", "Default": "required", "Description": "What the episode measures."},
+            "environment": {"Type": "EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."},
+            "title": {"Type": "str", "Default": "required", "Description": "Printed task title."},
+            "result_fields": {"Type": "tuple[ResultField, ...]", "Default": "required", "Description": "Task-specific fields printed by evaluate."},
+            "order": {"Type": "int", "Default": "required", "Description": "Sort order in task listings."},
+            "config": {"Type": "EvaluationConfig | None", "Default": "None", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "excess_volume": {
+        "Signature": "excess_volume(total_volume: float, cutoff: float) -> float",
+        "Purpose": "Return the creature volume above the unpenalized cutoff.",
+        "Parameters": {
+          "total_volume": {"Type": "float", "Default": "required", "Description": "Creature volume in cubic meters."},
+          "cutoff": {"Type": "float", "Default": "required", "Description": "Volume allowed without penalty, in cubic meters."}
+        },
+        "Returns": {"Type": "float", "Description": "Volume above cutoff, or 0."},
+        "Raises": []
+      },
+      "failure_flags": {
+        "Signature": "failure_flags(reason: str) -> dict",
+        "Purpose": "Result flags for a failure reason: disqualified for disallowed collisions, otherwise build_failed.",
+        "Parameters": {
+          "reason": {"Type": "str", "Default": "required", "Description": "Failure reason message."}
+        },
+        "Returns": {"Type": "dict", "Description": "build_failed, disqualified, and failure_reason values."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.evolve": {
+    "Overview": {
+      "Purpose": "Population helpers for mutation-based evolution: evaluate a population in worker processes, select elites and tournament winners, mutate children (flagging those that actually changed), summarize generations, and save run artifacts.",
+      "Main_Use_Cases": [
+        "Build initial and next populations",
+        "Summarize a generation for metrics.jsonl"
+      ],
+      "Related_Modules": ["evc3d.cli", "evc3d.evaluation", "evc3d.genotype"]
+    },
+    "Classes": {
+      "EvaluatedCreature": {
+        "Purpose": "A genotype paired with its typed task evaluation result.",
+        "Constructor": {
+          "Signature": "EvaluatedCreature(genotype: Genotype, result: EvaluationResult, changed_by_mutation: bool = False) -> None",
+          "Parameters": {
+            "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
+            "result": {"Type": "EvaluationResult", "Default": "required", "Description": "Typed task evaluation result."},
+            "changed_by_mutation": {"Type": "bool", "Default": "False", "Description": "Whether the genotype differs from its parent's."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "best_of": {
+        "Signature": "best_of(current_best: EvaluatedCreature | None, candidate: EvaluatedCreature) -> EvaluatedCreature",
+        "Purpose": "Return the higher-fitness creature, keeping the incumbent when tied or better.",
+        "Parameters": {
+          "current_best": {"Type": "EvaluatedCreature | None", "Default": "required", "Description": "Best creature so far, or None."},
+          "candidate": {"Type": "EvaluatedCreature", "Default": "required", "Description": "Newly evaluated creature."}
+        },
+        "Returns": {"Type": "EvaluatedCreature", "Description": "The better creature (copied if it is the candidate)."},
+        "Raises": []
+      },
+      "default_thread_count": {
+        "Signature": "default_thread_count() -> int",
+        "Purpose": "Use half of the CPU cores available to this process, with a minimum of one.",
+        "Parameters": {},
+        "Returns": {"Type": "int", "Description": "Worker process count."},
+        "Raises": []
+      },
+      "generation_summary": {
+        "Signature": "generation_summary(generation: int, evaluated: list[EvaluatedCreature], best_so_far: EvaluatedCreature, record_mutant_types: bool = False, mutant_baseline_fitness: float | None = None) -> dict[str, Any]",
+        "Purpose": "Summarize generation fitness statistics for logging and metrics output.",
+        "Parameters": {
+          "generation": {"Type": "int", "Default": "required", "Description": "Generation index (0 = initial population)."},
+          "evaluated": {"Type": "list[EvaluatedCreature]", "Default": "required", "Description": "Evaluated creatures of the current generation, sorted by fitness (best first)."},
+          "best_so_far": {"Type": "EvaluatedCreature", "Default": "required", "Description": "Best creature across all generations so far."},
+          "record_mutant_types": {"Type": "bool", "Default": "False", "Description": "Include fitter/neutral/less-fit mutant counts."},
+          "mutant_baseline_fitness": {"Type": "float | None", "Default": "None", "Description": "Previous generation's best fitness (None for generation 0)."}
+        },
+        "Returns": {"Type": "dict[str, Any]", "Description": "JSON-ready summary dict."},
+        "Raises": []
+      },
+      "initial_population": {
+        "Signature": "initial_population(seed_genotype: Genotype, population_size: int, initial_mutations: int, rng: random.Random, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> list[Genotype]",
+        "Purpose": "Build the starting population from the seed genotype and random mutations.",
+        "Parameters": {
+          "seed_genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype the initial population is derived from."},
+          "population_size": {"Type": "int", "Default": "required", "Description": "Number of creatures per generation."},
+          "initial_mutations": {"Type": "int", "Default": "required", "Description": "Mutations applied to each initial variant of the seed."},
+          "rng": {"Type": "random.Random", "Default": "required", "Description": "Random number generator; pass a seeded one for reproducible results."},
+          "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Allow mutations that add, remove, or relink genes."},
+          "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+          "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+          "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
+        },
+        "Returns": {"Type": "list[Genotype]", "Description": "Initial genotypes."},
+        "Raises": []
+      },
+      "mutate_quietly": {
+        "Signature": "mutate_quietly(genotype: Genotype, mutation_count: int, rng: random.Random, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> None",
+        "Purpose": "Apply genotype mutations while suppressing mutation log output.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
+          "mutation_count": {"Type": "int", "Default": "required", "Description": "Number of mutations to apply."},
+          "rng": {"Type": "random.Random", "Default": "required", "Description": "Random number generator; pass a seeded one for reproducible results."},
+          "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Allow mutations that add, remove, or relink genes."},
+          "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+          "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+          "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; mutates the genotype in place."},
+        "Raises": []
+      },
+      "next_population": {
+        "Signature": "next_population(evaluated: list[EvaluatedCreature], population_size: int, elite_count: int, tournament_size: int, min_mutations: int, max_mutations: int, rng: random.Random, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> list[Genotype]",
+        "Purpose": "Select elites and tournament winners, then mutate them into the next generation.",
+        "Parameters": {
+          "evaluated": {"Type": "list[EvaluatedCreature]", "Default": "required", "Description": "Evaluated creatures of the current generation, sorted by fitness (best first)."},
+          "population_size": {"Type": "int", "Default": "required", "Description": "Number of creatures per generation."},
+          "elite_count": {"Type": "int", "Default": "required", "Description": "Number of top creatures copied unchanged."},
+          "tournament_size": {"Type": "int", "Default": "required", "Description": "Candidates sampled per parent-selection tournament."},
+          "min_mutations": {"Type": "int", "Default": "required", "Description": "Minimum mutations per child."},
+          "max_mutations": {"Type": "int", "Default": "required", "Description": "Maximum mutations per child."},
+          "rng": {"Type": "random.Random", "Default": "required", "Description": "Random number generator; pass a seeded one for reproducible results."},
+          "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Allow mutations that add, remove, or relink genes."},
+          "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+          "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+          "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
+        },
+        "Returns": {"Type": "list[Genotype]", "Description": "Next generation's genotypes."},
+        "Raises": []
+      },
+      "next_population_with_mutation_flags": {
+        "Signature": "next_population_with_mutation_flags(evaluated: list[EvaluatedCreature], population_size: int, elite_count: int, tournament_size: int, min_mutations: int, max_mutations: int, rng: random.Random, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> tuple[list[Genotype], list[bool]]",
+        "Purpose": "Select the next generation and flag children that changed by mutation.",
+        "Parameters": {
+          "evaluated": {"Type": "list[EvaluatedCreature]", "Default": "required", "Description": "Evaluated creatures of the current generation, sorted by fitness (best first)."},
+          "population_size": {"Type": "int", "Default": "required", "Description": "Number of creatures per generation."},
+          "elite_count": {"Type": "int", "Default": "required", "Description": "Number of top creatures copied unchanged."},
+          "tournament_size": {"Type": "int", "Default": "required", "Description": "Candidates sampled per parent-selection tournament."},
+          "min_mutations": {"Type": "int", "Default": "required", "Description": "Minimum mutations per child."},
+          "max_mutations": {"Type": "int", "Default": "required", "Description": "Maximum mutations per child."},
+          "rng": {"Type": "random.Random", "Default": "required", "Description": "Random number generator; pass a seeded one for reproducible results."},
+          "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Allow mutations that add, remove, or relink genes."},
+          "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+          "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+          "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
+        },
+        "Returns": {"Type": "tuple[list[Genotype], list[bool]]", "Description": "Next generation's genotypes and a parallel list of changed_by_mutation flags."},
+        "Raises": []
+      },
+      "tournament_select": {
+        "Signature": "tournament_select(evaluated: list[EvaluatedCreature], tournament_size: int, rng: random.Random) -> EvaluatedCreature",
+        "Purpose": "Pick the fittest creature from a random subset of the population.",
+        "Parameters": {
+          "evaluated": {"Type": "list[EvaluatedCreature]", "Default": "required", "Description": "Evaluated creatures of the current generation, sorted by fitness (best first)."},
+          "tournament_size": {"Type": "int", "Default": "required", "Description": "Candidates sampled per parent-selection tournament."},
+          "rng": {"Type": "random.Random", "Default": "required", "Description": "Random number generator; pass a seeded one for reproducible results."}
+        },
+        "Returns": {"Type": "EvaluatedCreature", "Description": "Selected parent."},
+        "Raises": []
+      },
+      "write_json": {
+        "Signature": "write_json(path: Path, data: Any) -> None",
+        "Purpose": "Write a JSON-serializable object to `path`, creating parent directories.",
+        "Parameters": {
+          "path": {"Type": "Path", "Default": "required", "Description": "Output file path."},
+          "data": {"Type": "Any", "Default": "required", "Description": "MuJoCo simulation state for the model."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; writes the file."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.scene": {
+    "Overview": {
+      "Purpose": "Shared display setup for the interactive viewer and MP4 recording: builds a creature for a task, places and settles it like the scored episode (without scoring rules), tunes lighting and the floor, and advances one controlled step with the evaluation's instability checks.",
+      "Main_Use_Cases": [
+        "Prepare a creature for viewing or recording",
+        "Step the controlled simulation with failure checks"
+      ],
+      "Related_Modules": ["evc3d.viewer", "evc3d.video", "evc3d.evaluation"]
+    },
+    "Classes": {
+      "Scene": {
+        "Purpose": "Scene(model: 'mujoco.MjModel', data: 'mujoco.MjData', controllers: 'list[ActuatorController]', root_body_id: 'int', floor_geom_id: 'int')",
+        "Constructor": {
+          "Signature": "Scene(model: mujoco.MjModel, data: mujoco.MjData, controllers: list[ActuatorController], root_body_id: int, floor_geom_id: int) -> None",
+          "Parameters": {
+            "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+            "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+            "controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."},
+            "root_body_id": {"Type": "int", "Default": "required", "Description": "MuJoCo body ID of the creature's root."},
+            "floor_geom_id": {"Type": "int", "Default": "required", "Description": "MuJoCo geom ID of the floor, or -1."}
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {}
+      },
+      "SceneBuildError": {
+        "Purpose": "The phenotype could not be built for display.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      },
+      "SceneInitializationError": {
+        "Purpose": "The task's initialization rejected the creature.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "prepare_scene": {
+        "Signature": "prepare_scene(genotype: Genotype, definition: TaskDefinition, *, shadowsize: int = 4096, spotlight: bool = False, offscreen_size: tuple[int, int] | None = None) -> Scene",
+        "Purpose": "Build, light, and place a creature exactly as the scored rollout starts.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task definition (config, environment, callbacks) to build or evaluate for."},
+          "shadowsize": {"Type": "int", "Default": "4096", "Description": "Shadow-map texture size in pixels."},
+          "spotlight": {"Type": "bool", "Default": "False", "Description": "Use a shadow-casting spotlight instead of a directional light."},
+          "offscreen_size": {"Type": "tuple[int, int] | None", "Default": "None", "Description": "Optional (width, height) for offscreen rendering buffers."}
+        },
+        "Returns": {"Type": "Scene", "Description": "Prepared Scene; raises SceneBuildError or SceneInitializationError."},
+        "Raises": []
+      },
+      "step_scene": {
+        "Signature": "step_scene(scene: Scene, definition: TaskDefinition) -> str | None",
+        "Purpose": "Apply the controller and advance one step; return a failure reason, if any.",
+        "Parameters": {
+          "scene": {"Type": "Scene", "Default": "required", "Description": "Prepared display scene."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task definition (config, environment, callbacks) to build or evaluate for."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
+        "Raises": []
+      },
+      "track_root": {
+        "Signature": "track_root(camera: mujoco.MjvCamera, scene: Scene) -> None",
+        "Purpose": "Point a camera at the creature's root body and follow it.",
+        "Parameters": {
+          "camera": {"Type": "mujoco.MjvCamera", "Default": "required", "Description": "MuJoCo camera to configure."},
+          "scene": {"Type": "Scene", "Default": "required", "Description": "Prepared display scene."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; configures the camera."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.swimming_x": {
+    "Overview": {
+      "Purpose": "Task module for `swimming_x`: Swim in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
     },
     "Classes": {
       "SwimmingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for x-axis swimming.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationConfig(episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = false, disallow_collision: bool = false, target_direction: Sequence[float] = (1.0, 0.0, 0.0), forward_speed_weight: float = 1.0, energy_weight: float = 0.001, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0)",
+          "Signature": "SwimmingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, forward_speed_weight: float = 1.0, energy_weight: float = 1e-06, sideways_drift_weight: float = 0.1, vertical_drift_weight: float = 0.1, angular_speed_weight: float = 0.01) -> None",
           "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.0", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'allow'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
             "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Maximum simulation duration."},
             "max_node": {"Type": "int", "Default": "500", "Description": "Phenotype node budget used by PhenotypeBuilder."},
             "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable collision between non-parent creature bodies."},
             "disallow_collision": {"Type": "bool", "Default": "false", "Description": "Assign failure fitness when a non-parent collision occurs."},
             "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction used to measure forward progress."},
-            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average forward speed."},
-            "energy_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for control energy."},
-            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for y-axis drift."},
-            "vertical_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for z-axis drift."},
-            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."},
             "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Penalty multiplier for generated body count."},
             "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Linear penalty multiplier for volume above volume_penalty_cutoff."},
             "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Generated volume in cubic meters allowed without a volume penalty."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0", "Description": "Minimum total volume, in cubic meters."},
             "max_volume": {"Type": "float", "Default": "1.0", "Description": "Hard maximum generated creature volume in cubic meters; larger phenotypes receive failure fitness."},
             "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned when build or simulation fails."},
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Position/state magnitude threshold used to detect numerical instability."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Absolute generalized-velocity limit used to reject unstable simulations."},
-            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Absolute generalized-acceleration limit used to reject unstable simulations before MuJoCo resets state."}
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Absolute generalized-acceleration limit used to reject unstable simulations before MuJoCo resets state."},
+            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average forward speed."},
+            "energy_weight": {"Type": "float", "Default": "1e-06", "Description": "Penalty multiplier for control energy."},
+            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for y-axis drift."},
+            "vertical_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Penalty multiplier for z-axis drift."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Penalty multiplier for tumbling/angular speed."}
           },
           "Raises": []
         },
@@ -852,21 +1685,24 @@
       "SwimmingEvaluationResult": {
         "Purpose": "Frozen dataclass containing final fitness and diagnostic metrics.",
         "Constructor": {
-          "Signature": "SwimmingEvaluationResult(fitness: float, forward_distance: float, average_forward_speed: float, sideways_drift_speed: float, vertical_drift_speed: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None)",
+          "Signature": "SwimmingEvaluationResult(fitness: float, origin_distance: float, average_origin_speed: float, forward_distance: float, average_forward_speed: float, sideways_drift_speed: float, control_energy: float, mean_angular_speed: float, simulated_seconds: float, actuator_count: int, body_count: int, total_volume: float, vertical_drift_speed: float, build_failed: bool = False, disqualified: bool = False, failure_reason: str | None = None) -> None",
           "Parameters": {
             "fitness": {"Type": "float", "Default": "required", "Description": "Final scalar fitness."},
+            "origin_distance": {"Type": "float", "Default": "required", "Description": "Distance from the start, in meters."},
+            "average_origin_speed": {"Type": "float", "Default": "required", "Description": "Average speed away from the start."},
             "forward_distance": {"Type": "float", "Default": "required", "Description": "Distance along target_direction."},
             "average_forward_speed": {"Type": "float", "Default": "required", "Description": "Forward distance divided by simulated seconds."},
             "sideways_drift_speed": {"Type": "float", "Default": "required", "Description": "Absolute y-axis lateral drift divided by simulated seconds."},
-            "vertical_drift_speed": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement divided by simulated seconds."},
             "control_energy": {"Type": "float", "Default": "required", "Description": "Integrated squared commanded joint effort, including motor gear magnitude."},
             "mean_angular_speed": {"Type": "float", "Default": "required", "Description": "Mean root angular speed."},
             "simulated_seconds": {"Type": "float", "Default": "required", "Description": "Actual simulated duration."},
             "actuator_count": {"Type": "int", "Default": "required", "Description": "Number of generated actuators used."},
             "body_count": {"Type": "int", "Default": "required", "Description": "Number of generated bodies excluding world."},
+            "total_volume": {"Type": "float", "Default": "required", "Description": "Creature volume in cubic meters."},
+            "vertical_drift_speed": {"Type": "float", "Default": "required", "Description": "Absolute z-axis displacement divided by simulated seconds."},
             "build_failed": {"Type": "bool", "Default": "False", "Description": "Whether this result represents a build or simulation failure."},
             "disqualified": {"Type": "bool", "Default": "False", "Description": "Whether a prohibited non-parent collision assigned failure fitness."},
-            "failure_reason": {"Type": "str | None", "Default": "None", "Description": "Failure detail when build_failed is True."}
+            "failure_reason": {"Type": "Union", "Default": "None", "Description": "Failure detail when build_failed is True."}
           },
           "Raises": []
         },
@@ -887,38 +1723,139 @@
         },
         "Methods": {},
         "Example": "if result.build_failed: print(result.failure_reason)"
-      },
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.swimming_away": {
+    "Overview": {
+      "Purpose": "Task module for `swimming_away`: Swim away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
+    },
+    "Classes": {
       "SwimmingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for swimming_away distance-from-origin fitness.",
         "Constructor": {
-          "Signature": "SwimmingAwayEvaluationConfig(..., speed_weight: float = 1.0)",
+          "Signature": "SwimmingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 1.0, energy_weight: float = 1e-06, angular_speed_weight: float = 0.01) -> None",
           "Parameters": {
-            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."}
+            "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.0", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'allow'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
+            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
+            "energy_weight": {"Type": "float", "Default": "1e-06", "Description": "Fitness penalty per unit control energy."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."}
           },
           "Raises": []
         },
         "Attributes": {},
         "Methods": {},
         "Example": "config = SwimmingAwayEvaluationConfig(episode_seconds=6.0)"
-      },
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.walking_x": {
+    "Overview": {
+      "Purpose": "Task module for `walking_x`: Walk in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
+    },
+    "Classes": {
       "WalkingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_x land locomotion.",
         "Constructor": {
-          "Signature": "WalkingEvaluationConfig(..., settle_seconds: float = 1.0, forward_speed_weight: float = 1.0)",
-          "Parameters": {},
+          "Signature": "WalkingEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = penetration, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, forward_speed_weight: float = 1.0, energy_weight: float = 1e-07, sideways_drift_weight: float = 0.1, angular_speed_weight: float = 0.01, upright_weight: float = 0.0, height_loss_weight: float = 0.2) -> None",
+          "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "10.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.5", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'penetration'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
+            "forward_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Fitness weight on average forward speed."},
+            "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
+            "sideways_drift_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness penalty per unit sideways drift speed."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
+            "upright_weight": {"Type": "float", "Default": "0.0", "Description": "Fitness penalty per unit mean upright error (enabled by --upright-error)."},
+            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."}
+          },
           "Raises": []
         },
         "Attributes": {},
         "Methods": {},
         "Example": "config = WalkingEvaluationConfig(episode_seconds=6.0, settle_seconds=1.0)"
-      },
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.walking_away": {
+    "Overview": {
+      "Purpose": "Task module for `walking_away`: Walk away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
+    },
+    "Classes": {
       "WalkingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_away distance-from-origin fitness in the land environment.",
         "Constructor": {
-          "Signature": "WalkingAwayEvaluationConfig(..., settle_seconds: float = 1.0, speed_weight: float = 1.0)",
+          "Signature": "WalkingAwayEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = penetration, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 1.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Unscored time used to let the creature settle onto the floor."},
-            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."}
+            "max_creature_height": {"Type": "float", "Default": "10.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.5", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'penetration'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
+            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
+            "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
+            "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."}
           },
           "Raises": []
         },
@@ -931,23 +1868,99 @@
         "Constructor": {"Signature": "WalkingAwayEvaluationResult(...)"},
         "Attributes": {},
         "Methods": {}
-      },
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.flying_x": {
+    "Overview": {
+      "Purpose": "Task module for `flying_x`: Fly in the positive x direction. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
+    },
+    "Classes": {
       "FlyingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_x.",
         "Constructor": {
-          "Signature": "FlyingEvaluationConfig(..., distance_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
-          "Parameters": {},
+          "Signature": "FlyingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, distance_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.0", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'contact'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0001", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
+            "distance_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average forward speed."},
+            "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
+            "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},
+            "ground_touch_weight": {"Type": "float", "Default": "0.0", "Description": "Penalty scale for touching the ground early."},
+            "no_ground_touch_bonus": {"Type": "float", "Default": "10", "Description": "Bonus when the creature never touches the ground."},
+            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."}
+          },
           "Raises": []
         },
         "Attributes": {},
         "Methods": {},
         "Example": "config = FlyingEvaluationConfig(episode_seconds=6.0)"
-      },
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.evolution_tasks.flying_away": {
+    "Overview": {
+      "Purpose": "Task module for `flying_away`: Fly away from the starting point. Exports its config and result dataclasses, `fitness_callback`, `failed_task_callback`, `TASK_ENVIRONMENT`, and `TASK_DEFINITION` (see evc3d.evolution_tasks for the pattern).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.evolution_tasks", "evc3d.evolution_tasks.shared", "evc3d.evaluation"]
+    },
+    "Classes": {
       "FlyingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_away.",
         "Constructor": {
-          "Signature": "FlyingAwayEvaluationConfig(..., speed_weight: float = 0.1, height_loss_weight: float = 1.0, ground_touch_weight: float = 1.0, no_ground_touch_bonus: float = 1.0)",
-          "Parameters": {},
+          "Signature": "FlyingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_node: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Parameters": {
+            "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
+            "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
+            "min_center_height_fraction": {"Type": "float", "Default": "0.0", "Description": "Start rule: minimum center height as a fraction of creature height."},
+            "initial_floor_contact_policy": {"Type": "str", "Default": "'contact'", "Description": "Start rule: allow, penetration (reject floor penetration), or contact (reject any floor contact)."},
+            "episode_seconds": {"Type": "float", "Default": "10.0", "Description": "Scored episode length in simulated seconds."},
+            "max_node": {"Type": "int", "Default": "500", "Description": "Maximum phenotype body count."},
+            "self_collision": {"Type": "bool", "Default": "False", "Description": "Let non-parent body parts collide."},
+            "disallow_collision": {"Type": "bool", "Default": "False", "Description": "Disqualify creatures whose non-parent parts collide."},
+            "target_direction": {"Type": "Sequence[float]", "Default": "(1.0, 0.0, 0.0)", "Description": "Direction of forward progress."},
+            "body_count_weight": {"Type": "float", "Default": "0.001", "Description": "Fitness penalty per body."},
+            "volume_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per cubic meter above volume_penalty_cutoff."},
+            "volume_penalty_cutoff": {"Type": "float", "Default": "0.1", "Description": "Volume allowed without penalty, in cubic meters."},
+            "min_body_volume": {"Type": "float", "Default": "1e-06", "Description": "Minimum volume per body part, in cubic meters."},
+            "min_total_volume": {"Type": "float", "Default": "0.0001", "Description": "Minimum total volume, in cubic meters."},
+            "max_volume": {"Type": "float", "Default": "1.0", "Description": "Maximum total volume, in cubic meters."},
+            "build_failure_fitness": {"Type": "float", "Default": "-1000.0", "Description": "Fitness assigned to failed or disqualified creatures."},
+            "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
+            "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
+            "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
+            "speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average speed away from the start."},
+            "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
+            "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
+            "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},
+            "ground_touch_weight": {"Type": "float", "Default": "0.0", "Description": "Penalty scale for touching the ground early."},
+            "no_ground_touch_bonus": {"Type": "float", "Default": "10", "Description": "Bonus when the creature never touches the ground."},
+            "fitness_gain_fraction": {"Type": "float", "Default": "0.5", "Description": "Blend between controlled-minus-passive fitness gain (1) and controlled fitness (0)."}
+          },
           "Raises": []
         },
         "Attributes": {},
@@ -961,108 +1974,7 @@
         "Methods": {}
       }
     },
-    "Functions": {
-      "evaluate_task": {
-        "Signature": "evaluate_task(genotype: Genotype, definition: TaskDefinition) -> task-specific result",
-        "Purpose": "Build, initialize, simulate, and score a genotype using the config and environment owned by the selected task definition.",
-        "Parameters": {
-          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and simulate."},
-          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task callbacks, rollout policy, effective config, environment, and metadata."}
-        },
-        "Returns": {"Type": "task-specific result", "Description": "Fitness and diagnostic metrics; build, initialization, rollout, and non-finite-fitness failures are represented as failed results."},
-        "Raises": ["TypeError", "ValueError"],
-        "Example": "definition = task_definition(\"swimming_x\").args_override(args); result = evaluate_task(genotype, definition)"
-      }
-    },
-    "Internal_Functions": {
-      "_failed_evaluation": "Builds a SwimmingEvaluationResult with build_failed=True and fallback fitness.",
-      "_normalized_target_direction": "Validates and normalizes a three-component target direction.",
-      "simulation_failure_reason": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond configured limits.",
-      "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."
-    },
-    "Exceptions": {
-      "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
-    }
-  },
-  "evc3d.video": {
-    "Overview": {
-      "Purpose": "Renders selected swimming, walking, or flying simulations to MP4 video and exposes controller helpers shared with rendering.",
-      "Main_Use_Cases": [
-        "Build a genotype phenotype and record a selected-task episode",
-        "Map generated actuator controllers to MuJoCo actuator IDs",
-        "Apply open-loop sine controls during video rendering"
-      ],
-      "Related_Modules": [
-        "evc3d.evaluation",
-        "evc3d.genotype",
-        "evc3d.graph_analysis",
-        "evc3d.phenotype"
-      ]
-    },
-    "Classes": {},
-    "Functions": {
-      "save_x_axis_video": {
-        "Signature": "save_x_axis_video(genotype: Genotype, output_path: Path, definition: TaskDefinition, fps: int, width: int, height: int, track_root: bool = false, speed: float = 1.0, shadowsize: int = 4096, spotlight: bool = false, camera_circle_around: bool = false) -> None",
-        "Purpose": "Render a selected-task episode to MP4 using MuJoCo's offscreen renderer and imageio.",
-        "Parameters": {
-          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build and render."},
-          "output_path": {"Type": "Path", "Default": "required", "Description": "Destination MP4 path."},
-          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Selected task definition containing the effective config and environment."},
-          "fps": {"Type": "int", "Default": "required", "Description": "Output video frames per second."},
-          "width": {"Type": "int", "Default": "required", "Description": "Rendered frame width in pixels."},
-          "height": {"Type": "int", "Default": "required", "Description": "Rendered frame height in pixels."},
-          "track_root": {"Type": "bool", "Default": "false", "Description": "Track the creature root with the video camera."},
-          "speed": {"Type": "float", "Default": "1.0", "Description": "Video playback speed multiplier."},
-          "shadowsize": {"Type": "int", "Default": "4096", "Description": "Shadow-map texture width and height in pixels."},
-          "spotlight": {"Type": "bool", "Default": "false", "Description": "Use a shadow-casting spotlight instead of a directional light."},
-          "camera_circle_around": {"Type": "bool", "Default": "false", "Description": "Circle the camera around the creature during the episode."}
-        },
-        "Returns": {"Type": "None", "Description": "Writes video frames to output_path."},
-        "Raises": ["RuntimeError", "OSError"],
-        "Example": "save_x_axis_video(genotype, Path(\"locomotion.mp4\"), definition, fps=30, width=1280, height=720)"
-      },
-      "actuator_ids_for_controllers": {
-        "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
-        "Purpose": "Resolve generated controller motor names to MuJoCo actuator IDs.",
-        "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "MuJoCo model containing actuators."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller metadata from PhenotypeBuilder."}
-        },
-        "Returns": {"Type": "list[int]", "Description": "Actuator IDs in the same order as actuator_controllers."},
-        "Raises": [],
-        "Example": "actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)"
-      }
-    },
-    "Exceptions": {
-      "RuntimeError": {"Description": "Raised when imageio/imageio-ffmpeg is unavailable, output writing fails, or phenotype generation fails before recording."}
-    }
-  },
-  "evc3d.viewer": {
-    "Overview": {
-      "Purpose": "Launches an interactive passive MuJoCo viewer and applies generated open-loop actuator controls while it runs.",
-      "Main_Use_Cases": [
-        "Inspect generated MJCF creatures interactively",
-        "Preview open-loop controller behavior in MuJoCo"
-      ],
-      "Related_Modules": [
-        "evc3d.phenotype",
-        "evc3d.video"
-      ]
-    },
-    "Classes": {},
-    "Functions": {
-      "launch_viewer": {
-        "Signature": "launch_viewer(mjcf: str, actuator_controllers: list[ActuatorController]) -> None",
-        "Purpose": "Open a passive MuJoCo viewer, apply sine-wave controls each step, and synchronize until the viewer closes.",
-        "Parameters": {
-          "mjcf": {"Type": "str", "Default": "required", "Description": "MuJoCo MJCF XML string."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller metadata generated by PhenotypeBuilder."}
-        },
-        "Returns": {"Type": "None", "Description": "Runs until the viewer closes."},
-        "Raises": ["mujoco.FatalError", "RuntimeError"],
-        "Example": "launch_viewer(mjcf, builder.actuator_controllers)"
-      }
-    },
+    "Functions": {},
     "Exceptions": {}
   }
 }
