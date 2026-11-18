@@ -31,8 +31,9 @@ The code is split by responsibility:
 - `evc3d/run_artifacts.py`: the files `evc3d evolve` writes into a run directory.
 - `evc3d/graph_analysis.py`: graph validation and node-count checks.
 - `evc3d/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
-- `evc3d/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.
-- `evc3d/evolution_tasks/`: task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
+- `evc3d/evaluation.py`: scoring: `evaluate_task`, the scoring rules (volume limits, start rules, collision disqualification), and the metric rollout.
+- `evc3d/simulation.py`: mechanics shared by scoring and viewing: episode start (placement, settling), state copy, floor and height geometry, and the instability and self-collision checks.
+- `evc3d/evolution_tasks/`: the task registry (`task_definition`, `task_names`) in `__init__.py`, plus task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
 - `evc3d/scene.py`: shared display setup: builds a creature for a task, places and settles it like the scored rollout (without enforcing scoring rules such as start rules or volume limits), tunes lighting and floor, and steps the controlled simulation with evaluation's failure checks.
 - `evc3d/video.py`: MP4 recording on top of `scene.py` (`evc3d view --mp4`).
 - `evc3d/viewer.py`: interactive MuJoCo window on top of `scene.py` (`evc3d view`), running until closed.

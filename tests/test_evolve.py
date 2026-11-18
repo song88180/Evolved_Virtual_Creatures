@@ -12,7 +12,7 @@ import mujoco
 import pytest
 
 from evc3d import evolution, run_artifacts
-from evc3d.evaluation import task_definition
+from evc3d.evolution_tasks import task_definition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
 from evc3d.genotype_io import build_genotype

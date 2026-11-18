@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..evaluation import task_definition, task_names
+from ..evolution_tasks import task_definition, task_names
 from ..evolution_tasks.shared import TaskDefinition
 from ..genotype import Genotype
 

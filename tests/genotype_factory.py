@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Dict, Iterable, List, Mapping, Union
 
-from evc3d.evaluation import task_definition
+from evc3d.evolution_tasks import task_definition
 from evc3d.evolution_tasks.shared import EnvironmentFamily, TaskDefinition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype

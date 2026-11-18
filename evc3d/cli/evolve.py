@@ -12,7 +12,7 @@ import random
 import sys
 from typing import Sequence
 
-from ..evaluation import task_definition
+from ..evolution_tasks import task_definition
 from ..evolution_tasks.shared import EnvironmentFamily
 from ..evolution import (
     EvaluatedCreature,

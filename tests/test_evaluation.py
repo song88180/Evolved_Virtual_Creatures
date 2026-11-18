@@ -13,20 +13,22 @@ import pytest
 
 import evc3d.evaluation as evaluation
 from evc3d.control import apply_controller
+import evc3d.simulation as simulation
 from evc3d.evaluation import (
-    NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
     MAXIMUM_CREATURE_HEIGHT_REASON,
     WALKING_CENTER_HEIGHT_DROP_REASON,
-    load_task_definition,
-    task_definition,
-    task_names,
-    _has_nonparent_self_collision,
     _run_episode,
     _creature_volume,
     evaluate_task,
     initialize_model,
+)
+from evc3d.evolution_tasks import load_task_definition, task_definition, task_names
+from evc3d.simulation import (
+    NUMERICAL_INSTABILITY_REASON,
+    has_nonparent_self_collision,
     simulation_failure_reason,
+    start_episode,
 )
 from evc3d.evolution_tasks.shared import (
     DEFAULT_ENVIRONMENT,
@@ -173,10 +175,10 @@ def test_shared_evaluation_engine_has_no_task_specific_airborne_terms():
 
 def test_evaluation_module_lazily_loads_builtin_tasks():
     script = (
-        "import evc3d.evaluation as evaluation; "
+        "import evc3d.evolution_tasks as tasks; "
         "from evc3d.evolution_tasks import shared; "
         "assert not shared.TASK_REGISTRY; "
-        "assert evaluation.task_names() == "
+        "assert tasks.task_names() == "
         "('swimming_x', 'swimming_away', 'walking_x', 'walking_away', "
         "'flying_x', 'flying_away')"
     )
@@ -1024,7 +1026,7 @@ def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
     )
     monkeypatch.setattr(
         evaluation,
-        "_has_floor_contact",
+        "has_floor_contact",
         lambda *_args: next(floor_contacts),
     )
 
@@ -1150,7 +1152,7 @@ def test_shared_evaluator_initializes_swimming_tasks():
 def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
     from evc3d import evaluation
 
-    monkeypatch.setattr(evaluation, "_has_floor_penetration", lambda *_args: True)
+    monkeypatch.setattr(evaluation, "has_floor_penetration", lambda *_args: True)
     result = evaluate_task(
         load_genotype_from_json("examples/single_root.json"),
         WALKING_X_TASK,
@@ -1188,7 +1190,7 @@ def test_detects_nonparent_contact_but_parent_filter_remains_enabled():
     mujoco.mj_forward(model, data)
 
     assert data.ncon == 1
-    assert _has_nonparent_self_collision(model, data)
+    assert has_nonparent_self_collision(model, data)
 
 
 def test_disallowed_collision_assigns_low_fitness(monkeypatch):
@@ -1196,7 +1198,7 @@ def test_disallowed_collision_assigns_low_fitness(monkeypatch):
 
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     monkeypatch.setattr(
-        evaluation, "_has_nonparent_self_collision", lambda _model, _data: True
+        evaluation, "has_nonparent_self_collision", lambda _model, _data: True
     )
     result = evaluate_task(
         genotype,
@@ -1658,7 +1660,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
         volume_weight=0.0,
         fitness_gain_fraction=0.5,
     )
-    monkeypatch.setattr(evaluation, "_copy_simulation_state", lambda *_args: object())
+    monkeypatch.setattr(evaluation, "copy_simulation_state", lambda *_args: object())
     monkeypatch.setattr(evaluation, "_run_episode", fake_run)
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), SimpleNamespace(root_body_name="body_1")))
@@ -1707,21 +1709,17 @@ def test_start_rules_are_enforced_for_scoring_and_skipped_for_viewing():
     assert failure.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
 
     model, data = _placed_walker(definition)
-    assert initialize_model(
-        model, data, definition.config, definition.environment,
-        enforce_start_rules=False,
+    assert start_episode(
+        model, data, definition.config, definition.environment
     ) is None
 
 
 def test_skipping_start_rules_does_not_change_the_start_state():
     definition = make_definition("walking_x")
     states = []
-    for enforce in (True, False):
+    for start in (initialize_model, start_episode):  # scored start vs viewing start
         model, data = _placed_walker(definition)
-        assert initialize_model(
-            model, data, definition.config, definition.environment,
-            enforce_start_rules=enforce,
-        ) is None
+        assert start(model, data, definition.config, definition.environment) is None
         states.append((data.time, data.qpos.copy(), data.qvel.copy()))
 
     assert states[0][0] == states[1][0]
@@ -1756,7 +1754,7 @@ def test_floor_clearance_without_free_root_joint_reports_reason():
     )
     environment = replace(WALKING_X_ENVIRONMENT, initial_floor_clearance=0.05)
 
-    failure = evaluation.place_creature(
+    failure = simulation.place_creature(
         model, mujoco.MjData(model), WalkingEvaluationConfig(), environment
     )
 

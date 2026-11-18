@@ -21,7 +21,9 @@ Use this map to choose files before broad searches:
 - `evc3d/controller_spec.py`: MuJoCo-free controller sizes, the `ActuatorController` record, and neural-weight helpers. Genotype modules import this, never `control.py`, so genotype loading does not need MuJoCo.
 - `evc3d/control.py`: applies controllers to a running simulation (`apply_controller`, actuator ID lookup). Edit for per-step sine or neural control.
 - `evc3d/graph_analysis.py`: graph validity and generated body-count analysis. Edit for recursion, terminal-only, missing-node, or max-body-count validation rules.
-- `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
+- `evc3d/evaluation.py`: scoring (`evaluate_task`): scoring rules (volume limits, start rules, collision disqualification) and the metric rollout. Edit for metrics or scoring rules.
+- `evc3d/simulation.py`: mechanics shared by scoring and viewing (`start_episode` placement and settling, state copy, floor/height geometry, instability and self-collision checks). Edit for anything evaluation, the viewer, and MP4 recording must do identically.
+- `evc3d/evolution_tasks/__init__.py`: task registry (`task_definition`, `task_names`, `load_task_definition`); task modules live alongside. Task-specific configs, environments, and fitness functions are in `evolution_tasks/<task>.py` and `shared.py`.
 - `evc3d/evolution.py`: population helpers (evaluate a population, elite/tournament selection, mutation of children, generation summaries). Edit for selection, population initialization, or mutation scheduling.
 - `evc3d/run_artifacts.py`: files written into an evolve run directory (config, best genotypes, metrics, best XML, generation checkpoints). Edit for run output layout.
 - `evc3d/scene.py`: shared display setup for viewer and video (build for a task, placement and settling without scoring rules, lighting, floor, one controlled step with failure checks). Edit for anything both display modes should share.

@@ -1,7 +1,7 @@
 """Shared simulation setup for watching a creature (MP4 video or live viewer).
 
 ``prepare_scene`` builds a genotype into a MuJoCo model for a task, places and
-settles it exactly as the scored rollout does (``initialize_model``), and tunes
+settles it exactly as the scored rollout does (``simulation.start_episode``), and tunes
 lighting and the floor for display. Scoring rules are not applied: the task's
 start rules and volume limits decide fitness, not whether a creature can be
 shown, so any creature that can be built is viewable. ``step_scene`` advances one controlled
@@ -17,15 +17,15 @@ import mujoco
 
 from .control import apply_controller
 from .controller_spec import ActuatorController
-from .evaluation import (
-    _has_nonparent_self_collision,
-    initialize_model,
-    simulation_failure_reason,
-)
 from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON, TaskDefinition
 from .genotype import Genotype
 from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import PhenotypeBuilder
+from .simulation import (
+    has_nonparent_self_collision,
+    simulation_failure_reason,
+    start_episode,
+)
 
 SUN_LIGHT_POS = (0.0, 0.0, 5.0)
 SUN_LIGHT_DIR = (0.3, 0.2, -1.0)
@@ -86,9 +86,7 @@ def prepare_scene(
         model.vis.global_.offheight = max(model.vis.global_.offheight, height)
 
     data = mujoco.MjData(model)
-    failure = initialize_model(
-        model, data, config, environment, enforce_start_rules=False
-    )
+    failure = start_episode(model, data, config, environment)
     if failure is not None:
         raise SceneInitializationError(failure)
 
@@ -111,7 +109,7 @@ def step_scene(scene: Scene, definition: TaskDefinition) -> str | None:
     previous_time = float(scene.data.time)
     apply_controller(scene.model, scene.data, scene.controllers)
     mujoco.mj_step(scene.model, scene.data)
-    if config.disallow_collision and _has_nonparent_self_collision(
+    if config.disallow_collision and has_nonparent_self_collision(
         scene.model, scene.data
     ):
         return DISALLOWED_COLLISION_REASON

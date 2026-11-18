@@ -778,7 +778,7 @@
   },
   "evc3d.evolution_tasks": {
     "Overview": {
-      "Purpose": "Package of task modules. A task string such as `walking_x` is the filename of its module, which evaluation.load_task_definition imports lazily. Every task module follows the same pattern: a `<Task>EvaluationConfig` dataclass (scoring and start-rule settings, extending shared.EvaluationConfig), a `<Task>EvaluationResult` dataclass (metrics, extending shared.EvaluationResult), `fitness_callback(config, metrics, passive_metrics)` returning the result, `failed_task_callback(config, reason)` returning a failure result, a `TASK_ENVIRONMENT` (shared.EnvironmentFamily), and a `TASK_DEFINITION` (shared.TaskDefinition) bundling them. Adding a task means adding one such module.",
+      "Purpose": "Package of task modules. A task string such as `walking_x` is the filename of its module, which load_task_definition (in this package) imports lazily. Every task module follows the same pattern: a `<Task>EvaluationConfig` dataclass (scoring and start-rule settings, extending shared.EvaluationConfig), a `<Task>EvaluationResult` dataclass (metrics, extending shared.EvaluationResult), `fitness_callback(config, metrics, passive_metrics)` returning the result, `failed_task_callback(config, reason)` returning a failure result, a `TASK_ENVIRONMENT` (shared.EnvironmentFamily), and a `TASK_DEFINITION` (shared.TaskDefinition) bundling them. Adding a task means adding one such module.",
       "Main_Use_Cases": [
         "Add a new locomotion task as a single module",
         "Look up a task's config defaults and result metrics in its module entry"
@@ -795,7 +795,33 @@
       ]
     },
     "Classes": {},
-    "Functions": {},
+    "Functions": {
+      "load_task_definition": {
+        "Signature": "load_task_definition(task: str) -> shared.TaskDefinition",
+        "Purpose": "Load a task whose name exactly matches its module filename.",
+        "Parameters": {
+          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
+        },
+        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition."},
+        "Raises": []
+      },
+      "task_definition": {
+        "Signature": "task_definition(task: str) -> shared.TaskDefinition",
+        "Purpose": "Return canonical metadata for a task name.",
+        "Parameters": {
+          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
+        },
+        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition (shared object; copy before modifying)."},
+        "Raises": []
+      },
+      "task_names": {
+        "Signature": "task_names() -> tuple[str, ...]",
+        "Purpose": "Return registered task names in presentation order.",
+        "Parameters": {},
+        "Returns": {"Type": "tuple[str, ...]", "Description": "Task names in presentation order."},
+        "Raises": []
+      }
+    },
     "Exceptions": {}
   },
   "evc3d.video": {
@@ -1126,17 +1152,16 @@
   },
   "evc3d.evaluation": {
     "Overview": {
-      "Purpose": "Task loading and scoring: loads task modules by name, builds and places a creature, runs the scored episode, and returns the task's typed result.",
+      "Purpose": "Scores a genotype on a task: evaluate_task builds the creature, enforces the task's scoring rules (volume limits, start rules, collision disqualification), runs the metric rollout, and returns the task's typed result. Shared mechanics live in evc3d.simulation; task loading in evc3d.evolution_tasks.",
       "Main_Use_Cases": [
         "Score a genotype on a task",
-        "Prepare the episode start (placement, start rules, settling)",
-        "List and load task definitions"
+        "Prepare the scored episode start (placement, start rules, settling)"
       ],
       "Related_Modules": [
+        "evc3d.simulation",
         "evc3d.evolution_tasks",
         "evc3d.evolution_tasks.shared",
-        "evc3d.phenotype",
-        "evc3d.scene"
+        "evc3d.phenotype"
       ]
     },
     "Classes": {},
@@ -1155,59 +1180,15 @@
         "Example": "definition = task_definition(\"swimming_x\").args_override(args); result = evaluate_task(genotype, definition)"
       },
       "initialize_model": {
-        "Signature": "initialize_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily, *, enforce_start_rules: bool = True) -> str | None",
-        "Purpose": "Prepare the episode start; return a failure reason, or None.",
-        "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
-          "environment": {"Type": "task_shared.EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."},
-          "enforce_start_rules": {"Type": "bool", "Default": "True", "Description": "Apply the task's start rules (scoring); viewing passes False."}
-        },
-        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the episode can start."},
-        "Raises": []
-      },
-      "load_task_definition": {
-        "Signature": "load_task_definition(task: str) -> task_shared.TaskDefinition",
-        "Purpose": "Load a task whose name exactly matches its module filename.",
-        "Parameters": {
-          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
-        },
-        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition."},
-        "Raises": []
-      },
-      "place_creature": {
-        "Signature": "place_creature(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily) -> str | None",
-        "Purpose": "Apply the environment's floor clearance and initialization callback.",
+        "Signature": "initialize_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily) -> str | None",
+        "Purpose": "Prepare the scored episode start: place the creature, enforce the task's start rules, and settle (simulation.start_episode with start_rule_failure). Viewing uses simulation.start_episode without the start rules.",
         "Parameters": {
           "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
           "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
           "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
           "environment": {"Type": "task_shared.EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."}
         },
-        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
-        "Raises": []
-      },
-      "settle_model": {
-        "Signature": "settle_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig) -> str | None",
-        "Purpose": "Let a walking creature fall onto the floor before controls and scoring.",
-        "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
-        },
-        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
-        "Raises": []
-      },
-      "simulation_failure_reason": {
-        "Signature": "simulation_failure_reason(data: mujoco.MjData, previous_time: float, config: task_shared.EvaluationConfig) -> str | None",
-        "Purpose": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond the config's limits.",
-        "Parameters": {
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "previous_time": {"Type": "float", "Default": "required", "Description": "Simulation time before the last step."},
-          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
-        },
-        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when stable."},
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the episode can start."},
         "Raises": []
       },
       "start_rule_failure": {
@@ -1220,28 +1201,126 @@
         },
         "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the start is valid."},
         "Raises": []
-      },
-      "task_definition": {
-        "Signature": "task_definition(task: str) -> task_shared.TaskDefinition",
-        "Purpose": "Return canonical metadata for a task name.",
-        "Parameters": {
-          "task": {"Type": "str", "Default": "required", "Description": "Task name, e.g. walking_x."}
-        },
-        "Returns": {"Type": "task_shared.TaskDefinition", "Description": "Registered task definition (shared object; copy before modifying)."},
-        "Raises": []
-      },
-      "task_names": {
-        "Signature": "task_names() -> tuple[str, ...]",
-        "Purpose": "Return registered task names in presentation order.",
-        "Parameters": {},
-        "Returns": {"Type": "tuple[str, ...]", "Description": "Task names in presentation order."},
-        "Raises": []
       }
     },
     "Exceptions": {
       "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
     },
-    "Internal_Functions": {"_normalized_target_direction": "Validates and normalizes a three-component target direction.", "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."}
+    "Internal_Functions": {"_normalized_target_direction": "Validates and normalizes a three-component target direction."}
+  },
+  "evc3d.simulation": {
+    "Overview": {
+      "Purpose": "Simulation mechanics shared by scoring and viewing: placing and settling a creature at the episode start (start_episode), copying simulation state, floor and height geometry, and the physics safety checks (numerical instability, non-parent self-collision). evc3d.evaluation adds scoring rules and metrics on top; evc3d.scene uses these directly, so evaluation, the viewer, and MP4 recording start and step identically.",
+      "Main_Use_Cases": [
+        "Start an episode with or without a task's start rules",
+        "Check a step for numerical instability or self-collision"
+      ],
+      "Related_Modules": ["evc3d.evaluation", "evc3d.scene", "evc3d.evolution_tasks.shared"]
+    },
+    "Classes": {},
+    "Functions": {
+      "place_creature": {
+        "Signature": "place_creature(model: mujoco.MjModel, data: mujoco.MjData, config: EvaluationConfig, environment: EnvironmentFamily) -> str | None",
+        "Purpose": "Apply the environment's floor clearance and initialization callback.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
+          "environment": {"Type": "EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
+        "Raises": []
+      },
+      "settle_model": {
+        "Signature": "settle_model(model: mujoco.MjModel, data: mujoco.MjData, config: EvaluationConfig) -> str | None",
+        "Purpose": "Let a walking creature fall onto the floor before controls and scoring.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None."},
+        "Raises": []
+      },
+      "simulation_failure_reason": {
+        "Signature": "simulation_failure_reason(data: mujoco.MjData, previous_time: float, config: EvaluationConfig) -> str | None",
+        "Purpose": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond the config's limits.",
+        "Parameters": {
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "previous_time": {"Type": "float", "Default": "required", "Description": "Simulation time before the last step."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when stable."},
+        "Raises": []
+      },
+      "copy_simulation_state": {
+        "Signature": "copy_simulation_state(model: mujoco.MjModel, source: mujoco.MjData) -> mujoco.MjData",
+        "Purpose": "Copy the dynamic MuJoCo state for an independent rollout.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "source": {"Type": "mujoco.MjData", "Default": "required", "Description": "Simulation state to copy."}
+        },
+        "Returns": {"Type": "mujoco.MjData", "Description": "Independent MjData with the same time, positions, velocities, and controls."},
+        "Raises": []
+      },
+      "creature_height": {
+        "Signature": "creature_height(model: mujoco.MjModel, data: mujoco.MjData) -> float",
+        "Purpose": "Vertical extent of all creature geoms (top minus bottom), in meters.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."}
+        },
+        "Returns": {"Type": "float", "Description": "Height in meters (0 for no geoms)."},
+        "Raises": []
+      },
+      "has_floor_contact": {
+        "Signature": "has_floor_contact(model: mujoco.MjModel, data: mujoco.MjData, floor_id: int) -> bool",
+        "Purpose": "Whether any creature geom touches the floor.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "floor_id": {"Type": "int", "Default": "required", "Description": "MuJoCo geom ID of the floor."}
+        },
+        "Returns": {"Type": "bool", "Description": "True if touching."},
+        "Raises": []
+      },
+      "has_floor_penetration": {
+        "Signature": "has_floor_penetration(model: mujoco.MjModel, data: mujoco.MjData, floor_id: int) -> bool",
+        "Purpose": "Whether any contact with the floor has negative distance (penetration).",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "floor_id": {"Type": "int", "Default": "required", "Description": "MuJoCo geom ID of the floor."}
+        },
+        "Returns": {"Type": "bool", "Description": "True if penetrating."},
+        "Raises": []
+      },
+      "has_nonparent_self_collision": {
+        "Signature": "has_nonparent_self_collision(model: mujoco.MjModel, data: mujoco.MjData) -> bool",
+        "Purpose": "Whether two creature bodies that are not parent and child are in contact.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."}
+        },
+        "Returns": {"Type": "bool", "Description": "True if colliding."},
+        "Raises": []
+      },
+      "start_episode": {
+        "Signature": "start_episode(model: mujoco.MjModel, data: mujoco.MjData, config: EvaluationConfig, environment: EnvironmentFamily, start_check: Callable[[mujoco.MjModel, mujoco.MjData, EvaluationConfig], str | None] | None = None) -> str | None",
+        "Purpose": "Prepare the episode start; return a failure reason, or None.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "config": {"Type": "EvaluationConfig", "Default": "required", "Description": "Task evaluation config (settling and stability settings)."},
+          "environment": {"Type": "EnvironmentFamily", "Default": "required", "Description": "Physical environment (floor clearance, initialization callback)."},
+          "start_check": {"Type": "Callable[[mujoco.MjModel, mujoco.MjData, EvaluationConfig], str | None] | None", "Default": "None", "Description": "Optional read-only check run on the placed state, (model, data, config) -> failure or None; scoring passes its start rules."}
+        },
+        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the episode can start (time reset to 0)."},
+        "Raises": []
+      }
+    },
+    "Internal_Functions": {"_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."},
+    "Exceptions": {}
   },
   "evc3d.evolution_tasks.shared": {
     "Overview": {

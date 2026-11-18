@@ -1,24 +1,39 @@
+"""Score a genotype on a task.
+
+``evaluate_task`` builds the creature, enforces the task's scoring rules
+(volume limits, start rules, collision disqualification), runs the metric
+rollout, and returns the task's typed result. Shared mechanics (placement,
+settling, safety checks) live in ``evc3d.simulation``; task loading lives in
+``evc3d.evolution_tasks``.
+"""
+
 from __future__ import annotations
 
-from importlib import import_module
 import math
-from pkgutil import iter_modules
 from typing import Sequence
 
 import mujoco
 import numpy as np
 
-from .genotype import Genotype
-from .evolution_tasks import shared as task_shared
-from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     actuator_ids_for_controllers,
     apply_controller,
 )
+from .evolution_tasks import shared as task_shared
+from .genotype import Genotype
+from .graph_analysis import PhenotypeBuildAbort
 from .phenotype import PhenotypeBuilder
+from .simulation import (
+    copy_simulation_state,
+    creature_height,
+    has_floor_contact,
+    has_floor_penetration,
+    has_nonparent_self_collision,
+    simulation_failure_reason,
+    start_episode,
+)
 
 
-NUMERICAL_INSTABILITY_REASON = "Simulation became numerically unstable."
 INITIAL_FLOOR_OVERLAP_REASON = "Creature overlaps the floor at initialization."
 MINIMUM_BODY_VOLUME_REASON = "Creature body volume is below the minimum allowed volume."
 MINIMUM_TOTAL_VOLUME_REASON = (
@@ -29,65 +44,6 @@ WALKING_CENTER_HEIGHT_DROP_REASON = (
 )
 MAXIMUM_CREATURE_HEIGHT_REASON = "Creature height exceeds the maximum allowed height."
 DEFAULT_UPRIGHT_ERROR_WEIGHT = task_shared.DEFAULT_UPRIGHT_ERROR_WEIGHT
-
-
-def _cache_task_definition(
-    definition: task_shared.TaskDefinition,
-) -> task_shared.TaskDefinition:
-    existing = task_shared.TASK_REGISTRY.get(definition.name)
-    if existing is not None and existing is not definition:
-        raise ValueError(f"Task name {definition.name!r} is already loaded")
-    task_shared.TASK_REGISTRY[definition.name] = definition
-    return definition
-
-
-def _task_module_names() -> tuple[str, ...]:
-    package = import_module(".evolution_tasks", package=__package__)
-    return tuple(
-        module.name
-        for module in sorted(iter_modules(package.__path__), key=lambda item: item.name)
-        if module.name != "shared" and not module.name.startswith("_")
-    )
-
-
-def load_task_definition(task: str) -> task_shared.TaskDefinition:
-    """Load a task whose name exactly matches its module filename."""
-    if not task.isidentifier() or task.startswith("_"):
-        raise KeyError(f"Unknown task: {task!r}")
-    existing = task_shared.TASK_REGISTRY.get(task)
-    if existing is not None:
-        return existing
-    expected_module = f"{__package__}.evolution_tasks.{task}"
-    try:
-        module = import_module(f".evolution_tasks.{task}", package=__package__)
-    except ModuleNotFoundError as error:
-        if error.name != expected_module:
-            raise
-        raise KeyError(f"Unknown task: {task!r}") from error
-    try:
-        definition = module.TASK_DEFINITION
-    except AttributeError as error:
-        raise ValueError(f"Task module {task!r} does not define TASK_DEFINITION") from error
-    if not isinstance(definition, task_shared.TaskDefinition):
-        raise TypeError(f"Task module {task!r} has an invalid TASK_DEFINITION")
-    if definition.name != task:
-        raise ValueError(
-            f"Task module {task!r} declares name {definition.name!r}"
-        )
-    return _cache_task_definition(definition)
-
-
-def _load_builtin_tasks() -> None:
-    """Load and validate every built-in task module once."""
-    if not task_shared._BUILTIN_TASKS_LOADED:
-        for task in _task_module_names():
-            load_task_definition(task)
-        task_shared._BUILTIN_TASKS_LOADED = True
-
-
-def task_definition(task: str) -> task_shared.TaskDefinition:
-    """Return canonical metadata for a task name."""
-    return load_task_definition(task)
 
 
 def evaluate_task(
@@ -123,7 +79,7 @@ def evaluate_task(
     policy = definition.rollout_policy
     initial_state = data
     if policy.passive_baseline:
-        initial_state = _copy_simulation_state(model, data)
+        initial_state = copy_simulation_state(model, data)
     controlled_metrics = _run_episode(
         model,
         initial_state,
@@ -139,7 +95,7 @@ def evaluate_task(
     if policy.passive_baseline:
         passive_metrics = _run_episode(
             model,
-            _copy_simulation_state(model, data),
+            copy_simulation_state(model, data),
             builder,
             config,
             policy,
@@ -156,95 +112,17 @@ def evaluate_task(
     return result
 
 
-def task_names() -> tuple[str, ...]:
-    """Return registered task names in presentation order."""
-    _load_builtin_tasks()
-    return tuple(
-        definition.name
-        for definition in sorted(
-            task_shared.TASK_REGISTRY.values(),
-            key=lambda definition: (definition.order, definition.name),
-        )
-    )
-
-
-def _copy_simulation_state(
-    model: mujoco.MjModel, source: mujoco.MjData
-) -> mujoco.MjData:
-    """Copy the dynamic MuJoCo state for an independent rollout."""
-    copied = mujoco.MjData(model)
-    copied.time = source.time
-    copied.qpos[:] = source.qpos
-    copied.qvel[:] = source.qvel
-    copied.ctrl[:] = source.ctrl
-    if copied.act.size:
-        copied.act[:] = source.act
-    if copied.mocap_pos.size:
-        copied.mocap_pos[:] = source.mocap_pos
-    if copied.mocap_quat.size:
-        copied.mocap_quat[:] = source.mocap_quat
-    mujoco.mj_forward(model, copied)
-    return copied
-
-
 def initialize_model(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     config: task_shared.EvaluationConfig,
     environment: task_shared.EnvironmentFamily,
-    *,
-    enforce_start_rules: bool = True,
 ) -> str | None:
-    """Prepare the episode start; return a failure reason, or None.
+    """Prepare the scored episode start: place, enforce start rules, and settle.
 
-    Steps, in order: place the creature (``place_creature``), check the task's
-    start rules (``start_rule_failure``), then settle. Scoring enforces the
-    start rules; viewing passes ``enforce_start_rules=False`` so any creature
-    that can be built is shown, from the same start state. The start-rule
-    checks only read the state, so skipping them does not move the creature.
+    Viewing uses ``simulation.start_episode`` without the start rules.
     """
-    failure = place_creature(model, data, config, environment)
-    if failure is not None:
-        return failure
-    if enforce_start_rules:
-        failure = start_rule_failure(model, data, config)
-        if failure is not None:
-            return failure
-    failure = settle_model(model, data, config)
-    if failure is None:
-        data.time = 0.0
-    return failure
-
-
-def place_creature(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    config: task_shared.EvaluationConfig,
-    environment: task_shared.EnvironmentFamily,
-) -> str | None:
-    """Apply the environment's floor clearance and initialization callback."""
-    mujoco.mj_forward(model, data)
-    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-    clearance = environment.initial_floor_clearance
-    if floor_id >= 0 and clearance is not None:
-        free_joint_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
-        if free_joint_ids.size == 0:
-            return f"{environment.name} creature has no free root joint."
-        root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
-        creature_geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] != 0]
-        floor_z = float(data.geom_xpos[floor_id, 2])
-        lowest_z = min(_geom_lowest_world_z(model, data, i) for i in creature_geoms)
-        required_shift = floor_z + clearance - lowest_z
-        if required_shift > 0.0:
-            data.qpos[root_qpos_adr + 2] += required_shift
-        mujoco.mj_forward(model, data)
-    callback = environment.initialization_callback
-    if callback is not None:
-        failure = callback(model, data, config)
-        if failure is not None:
-            return failure
-        mujoco.mj_forward(model, data)
-    return None
+    return start_episode(model, data, config, environment, start_check=start_rule_failure)
 
 
 def start_rule_failure(
@@ -261,8 +139,8 @@ def start_rule_failure(
     if contact_policy not in {"allow", "penetration", "contact"}:
         raise ValueError(f"Unknown initial floor contact policy: {contact_policy!r}")
     if floor_id >= 0 and (
-        (contact_policy == "penetration" and _has_floor_penetration(model, data, floor_id))
-        or (contact_policy == "contact" and _has_floor_contact(model, data, floor_id))
+        (contact_policy == "penetration" and has_floor_penetration(model, data, floor_id))
+        or (contact_policy == "contact" and has_floor_contact(model, data, floor_id))
     ):
         return INITIAL_FLOOR_OVERLAP_REASON
     return _walking_height_failure_reason(model, data, config)
@@ -276,109 +154,13 @@ def _walking_height_failure_reason(
     max_height = getattr(config, "max_creature_height", 0.0)
     if max_height <= 0.0:
         return None
-    height = _creature_height(model, data)
+    height = creature_height(model, data)
     if height <= max_height:
         return None
     return (
         f"{MAXIMUM_CREATURE_HEIGHT_REASON} Creature height is "
         f"{height:.6f} m; maximum is {max_height:.6f} m."
     )
-
-
-def _creature_height(model: mujoco.MjModel, data: mujoco.MjData) -> float:
-    creature_geom_ids = [
-        geom_id
-        for geom_id in range(model.ngeom)
-        if model.geom_bodyid[geom_id] != 0
-    ]
-    if not creature_geom_ids:
-        return 0.0
-    lowest_z = min(
-        _geom_lowest_world_z(model, data, geom_id)
-        for geom_id in creature_geom_ids
-    )
-    highest_z = max(
-        _geom_highest_world_z(model, data, geom_id)
-        for geom_id in creature_geom_ids
-    )
-    return max(0.0, highest_z - lowest_z)
-
-
-def _geom_highest_world_z(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    geom_id: int,
-) -> float:
-    return float(data.geom_xpos[geom_id, 2]) + _geom_vertical_half_extent(
-        model, data, geom_id
-    )
-
-
-def _geom_vertical_half_extent(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    geom_id: int,
-) -> float:
-    rotation = data.geom_xmat[geom_id].reshape(3, 3)
-    geom_type = model.geom_type[geom_id]
-    size = model.geom_size[geom_id]
-    if geom_type in {
-        mujoco.mjtGeom.mjGEOM_BOX,
-        mujoco.mjtGeom.mjGEOM_ELLIPSOID,
-    }:
-        return float(np.abs(rotation[2]) @ size[:3])
-    if geom_type in {
-        mujoco.mjtGeom.mjGEOM_CAPSULE,
-        mujoco.mjtGeom.mjGEOM_CYLINDER,
-    }:
-        radius = float(size[0])
-        half_length = float(size[1])
-        axis_vertical = float(rotation[2, 2])
-        radial_vertical = math.sqrt(max(0.0, 1.0 - axis_vertical * axis_vertical))
-        return abs(axis_vertical) * half_length + radius * radial_vertical
-    return float(np.max(size[:3]))
-
-
-def _geom_lowest_world_z(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    geom_id: int,
-) -> float:
-    return float(data.geom_xpos[geom_id, 2]) - _geom_vertical_half_extent(
-        model, data, geom_id
-    )
-
-
-def _has_floor_penetration(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    floor_id: int,
-) -> bool:
-    for contact in data.contact:
-        if floor_id in contact.geom and float(contact.dist) < 0.0:
-            return True
-    return False
-
-
-def settle_model(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    config: task_shared.EvaluationConfig,
-) -> str | None:
-    """Let a walking creature fall onto the floor before controls and scoring."""
-    settle_steps = max(0, math.ceil(getattr(config, "settle_seconds", 0.0) / model.opt.timestep))
-    for _ in range(settle_steps):
-        previous_time = float(data.time)
-        mujoco.mj_step(model, data)
-        if (
-            config.disallow_collision
-            and _has_nonparent_self_collision(model, data)
-        ):
-            return task_shared.DISALLOWED_COLLISION_REASON
-        failure = simulation_failure_reason(data, previous_time, config)
-        if failure is not None:
-            return f"{failure} while settling."
-    return None
 
 
 def _build_model(
@@ -436,7 +218,7 @@ def _run_episode(
     sample_count = 0
     first_ground_contact_time = None
     distance_measurement_position = None
-    if floor_id >= 0 and _has_floor_contact(model, data, floor_id):
+    if floor_id >= 0 and has_floor_contact(model, data, floor_id):
         first_ground_contact_time = 0.0
         distance_measurement_position = initial_center_of_mass.copy()
     root_body_id = -1
@@ -455,13 +237,13 @@ def _run_episode(
         mujoco.mj_step(model, data)
         if (
             config.disallow_collision
-            and _has_nonparent_self_collision(model, data)
+            and has_nonparent_self_collision(model, data)
         ):
             return task_shared.DISALLOWED_COLLISION_REASON
         if (
             floor_id >= 0
             and first_ground_contact_time is None
-            and _has_floor_contact(model, data, floor_id)
+            and has_floor_contact(model, data, floor_id)
         ):
             first_ground_contact_time = float(data.time)
             distance_measurement_position = _creature_center_of_mass(model, data)
@@ -565,19 +347,6 @@ def _creature_center_of_mass(
     return (data.xipos[body_ids] * masses[:, None]).sum(axis=0) / total_mass
 
 
-def _has_floor_contact(
-    model: mujoco.MjModel, data: mujoco.MjData, floor_id: int
-) -> bool:
-    for contact in data.contact:
-        if floor_id not in contact.geom:
-            continue
-        first_geom, second_geom = map(int, contact.geom)
-        other_geom = second_geom if first_geom == floor_id else first_geom
-        if other_geom >= 0 and model.geom_bodyid[other_geom] != 0:
-            return True
-    return False
-
-
 def _creature_volume(model: mujoco.MjModel) -> float:
     return sum(_creature_body_volumes(model).values())
 
@@ -640,43 +409,3 @@ def _creature_volume_failure_reason(
             f"{total_volume:.6g} m^3; minimum is {min_total_volume:.6g} m^3."
         )
     return None
-
-
-def _has_nonparent_self_collision(
-    model: mujoco.MjModel, data: mujoco.MjData
-) -> bool:
-    for contact in data.contact:
-        first_geom, second_geom = map(int, contact.geom)
-        if first_geom < 0 or second_geom < 0:
-            continue
-        first_body = int(model.geom_bodyid[first_geom])
-        second_body = int(model.geom_bodyid[second_geom])
-        if first_body == 0 or second_body == 0 or first_body == second_body:
-            continue
-        if (
-            model.body_parentid[first_body] == second_body
-            or model.body_parentid[second_body] == first_body
-        ):
-            continue
-        return True
-    return False
-
-
-def simulation_failure_reason(
-    data: mujoco.MjData,
-    previous_time: float,
-    config: task_shared.EvaluationConfig,
-) -> str | None:
-    if not math.isfinite(float(data.time)) or data.time <= previous_time:
-        return NUMERICAL_INSTABILITY_REASON
-    if not _array_is_stable(data.qpos, config.max_abs_state_value):
-        return NUMERICAL_INSTABILITY_REASON
-    if not _array_is_stable(data.qvel, config.max_abs_velocity):
-        return NUMERICAL_INSTABILITY_REASON
-    if not _array_is_stable(data.qacc, config.max_abs_acceleration):
-        return NUMERICAL_INSTABILITY_REASON
-    return None
-
-
-def _array_is_stable(values, max_abs_value: float):
-    return bool(np.all(np.isfinite(values)) and np.all(np.abs(values) <= max_abs_value))
