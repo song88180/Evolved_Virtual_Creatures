@@ -11,8 +11,14 @@ from .control import (
     ActuatorController,
     normalized_neural_parameters,
 )
-from .genes import ATTACHMENT_FACES, SYMMETRY_PLANES, euler_degrees_to_matrix
-from .genotype import ConnectionGene, Genotype, NodeGene
+from .genes import (
+    ATTACHMENT_FACES,
+    SYMMETRY_PLANES,
+    ConnectionGene,
+    NodeGene,
+    euler_degrees_to_matrix,
+)
+from .genotype import Genotype
 from .graph_analysis import (
     GenotypeGraphAnalyzer,
     PhenotypeBodyLimitExceeded,
