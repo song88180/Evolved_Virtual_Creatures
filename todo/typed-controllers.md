@@ -67,7 +67,7 @@ topology mutation (which creates and copies connections), and JSON loading.
 - `control.py`: `ActuatorController` construction from controller dataclasses.
 - `examples/*.json`, `README.md`, `docs/`, `CODE_EXPLANATION.md`: schema updates.
 - Tests: most tests touching `control_amp` / `neural_*` need updating
-  (`test_genotype_mutation.py`, `test_surface_attachment.py`, `test_symmetry.py`,
+  (`test_genotype_mutation.py`, `test_phenotype.py`, `test_symmetry.py`,
   `test_evaluation.py`).
 
 ## Decisions to make

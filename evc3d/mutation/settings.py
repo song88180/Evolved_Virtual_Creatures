@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import ClassVar, Tuple
 
 
-
-
 class MutationSettings:
     """Class-level mutation constants (standard deviations, harmonics, field lists)."""
 
