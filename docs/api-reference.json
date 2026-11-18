@@ -1266,18 +1266,6 @@
         "Raises": ["TypeError", "ValueError"],
         "Example": "definition = task_definition(\"swimming_x\").args_override(args); result = evaluate_task(genotype, definition)"
       },
-      "initialize_model": {
-        "Signature": "initialize_model(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig, environment: task_shared.EnvironmentFamily) -> str | None",
-        "Purpose": "Prepare the scored episode start: place the creature, enforce the task's start rules, and settle (simulation.start_episode with start_rule_failure). Viewing uses simulation.start_episode without the start rules.",
-        "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "config": {"Type": "task_shared.EvaluationConfig", "Default": "required", "Description": "Task evaluation config (scoring, start-rule, and stability settings)."},
-          "environment": {"Type": "task_shared.EnvironmentFamily", "Default": "required", "Description": "Physical environment (gravity, fluid, floor, placement)."}
-        },
-        "Returns": {"Type": "str | None", "Description": "Failure reason, or None when the episode can start."},
-        "Raises": []
-      },
       "start_rule_failure": {
         "Signature": "start_rule_failure(model: mujoco.MjModel, data: mujoco.MjData, config: task_shared.EvaluationConfig) -> str | None",
         "Purpose": "Check the task's rules for a valid start (floor contact, creature height).",

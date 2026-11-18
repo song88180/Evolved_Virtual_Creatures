@@ -22,7 +22,7 @@ from evc3d.evaluation import (
     _run_episode,
     _creature_volume,
     evaluate_task,
-    initialize_model,
+    start_rule_failure,
 )
 import evc3d.evaluation as evaluation
 from evc3d.evolution_tasks import load_task_definition, task_definition, task_names
@@ -936,7 +936,7 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
     }
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), SimpleNamespace(root_body_name="body_1")))
-    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "start_episode", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
@@ -985,7 +985,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
     }
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), SimpleNamespace(root_body_name="body_1")))
-    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "start_episode", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
 
@@ -1024,7 +1024,9 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
 
-    assert initialize_model(model, data, config, environment) is None
+    assert start_episode(
+        model, data, config, environment, start_check=start_rule_failure
+    ) is None
     data.qvel[0] = 10.0
 
     metrics = _run_episode(
@@ -1117,7 +1119,9 @@ def test_generic_initialization_runs_environment_callback():
     builder = PhenotypeBuilder(genotype, make_definition(max_body_count=500, environment=environment))
     model = mujoco.MjModel.from_xml_string(builder.build())
 
-    assert initialize_model(model, mujoco.MjData(model), config, environment) == (
+    assert start_episode(
+        model, mujoco.MjData(model), config, environment, start_check=start_rule_failure
+    ) == (
         "custom initialization rejected model"
     )
 
@@ -1645,7 +1649,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     monkeypatch.setattr(evaluation, "_run_episode", fake_run)
 
     monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), SimpleNamespace(root_body_name="body_1")))
-    monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
+    monkeypatch.setattr(evaluation, "start_episode", lambda *_args, **_kwargs: None)
     result = evaluate_task(object(), FLYING_X_TASK, config)
 
     assert result.controlled_fitness == pytest.approx(2.0)
@@ -1678,7 +1682,10 @@ def test_start_rules_are_enforced_for_scoring_and_skipped_for_viewing():
     definition = make_definition("walking_x", max_creature_height=0.01)
 
     model, data = placed_walker(definition)
-    failure = initialize_model(model, data, definition.config, definition.environment)
+    failure = start_episode(
+        model, data, definition.config, definition.environment,
+        start_check=start_rule_failure,
+    )
     assert failure.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
 
     model, data = placed_walker(definition)

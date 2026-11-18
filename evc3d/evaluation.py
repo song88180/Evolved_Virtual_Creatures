@@ -81,7 +81,11 @@ def evaluate_task(
     if isinstance(built, str):
         return failed(built)
     model, data, builder = built
-    failure = initialize_model(model, data, config, environment)
+    # Scored start: place, enforce the start rules, and settle. Viewing calls
+    # start_episode without start_check, so both start from the same state.
+    failure = start_episode(
+        model, data, config, environment, start_check=start_rule_failure
+    )
     if failure is not None:
         return failed(failure)
 
@@ -119,19 +123,6 @@ def evaluate_task(
     if not math.isfinite(result.fitness):
         return failed("Simulation produced a non-finite fitness.")
     return result
-
-
-def initialize_model(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    config: task_shared.EvaluationConfig,
-    environment: task_shared.EnvironmentFamily,
-) -> str | None:
-    """Prepare the scored episode start: place, enforce start rules, and settle.
-
-    Viewing uses ``simulation.start_episode`` without the start rules.
-    """
-    return start_episode(model, data, config, environment, start_check=start_rule_failure)
 
 
 def start_rule_failure(

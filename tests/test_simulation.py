@@ -1,12 +1,13 @@
 """Tests for evc3d.simulation: episode start (placement and settling) and shared mechanics."""
 
 from dataclasses import replace
+from functools import partial
 
 import mujoco
 import numpy as np
 import pytest
 
-from evc3d.evaluation import initialize_model
+from evc3d.evaluation import start_rule_failure
 from evc3d.evolution_tasks.flying_x import (
     FlyingEvaluationConfig,
     TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT,
@@ -42,8 +43,9 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     data = mujoco.MjData(model)
 
-    assert initialize_model(
-        model, data, FlyingEvaluationConfig(), FLYING_X_ENVIRONMENT
+    assert start_episode(
+        model, data, FlyingEvaluationConfig(), FLYING_X_ENVIRONMENT,
+        start_check=start_rule_failure,
     ) is None
 
     floor_id = mujoco.mj_name2id(
@@ -74,8 +76,9 @@ def test_walking_initialization_raises_low_creature_above_floor():
     )
     data = mujoco.MjData(model)
 
-    assert initialize_model(
-        model, data, WalkingEvaluationConfig(), WALKING_X_ENVIRONMENT
+    assert start_episode(
+        model, data, WalkingEvaluationConfig(), WALKING_X_ENVIRONMENT,
+        start_check=start_rule_failure,
     ) is None
 
     floor_id = mujoco.mj_name2id(
@@ -91,7 +94,8 @@ def test_walking_initialization_raises_low_creature_above_floor():
 def test_skipping_start_rules_does_not_change_the_start_state():
     definition = make_definition("walking_x")
     states = []
-    for start in (initialize_model, start_episode):  # scored start vs viewing start
+    scored_start = partial(start_episode, start_check=start_rule_failure)
+    for start in (scored_start, start_episode):  # scored start vs viewing start
         model, data = placed_walker(definition)
         assert start(model, data, definition.config, definition.environment) is None
         states.append((data.time, data.qpos.copy(), data.qvel.copy()))
