@@ -284,6 +284,35 @@ def test_gradual_gravity_change_interpolates_across_generations():
     assert evolve_cli._gravity_for_generation((-1.0, -9.0), 4, 4) == pytest.approx(-9.0)
 
 
+def test_evolve_best_creature_xml_uses_gravity_the_best_was_scored_in(
+    monkeypatch, tmp_path
+):
+    # Generation 0 (gravity -1) produces the all-time best; later generations
+    # are worse, so best_creature.xml must keep generation 0's gravity.
+    fitness_by_generation = iter([10.0, 1.0, 1.0])
+
+    def fake_evaluate_population(population, definition, executor, changed_by_mutation=None):
+        fitness = next(fitness_by_generation)
+        return [make_creature(genotype, fitness) for genotype in population]
+
+    monkeypatch.setattr(evolve_cli, "evaluate_population", fake_evaluate_population)
+    evolve_cli.main(
+        [
+            "--task", "flying_x",
+            "--generations", "2",
+            "--population-size", "2",
+            "--elite-count", "1",
+            "--tournament-size", "2",
+            "--threads", "1",
+            "--gradual-gravity-change=-1.0,-9.0",
+            "--output-dir", str(tmp_path),
+        ]
+    )
+
+    option = ET.parse(tmp_path / "best_creature.xml").getroot().find("option")
+    assert option.get("gravity") == "0 0 -1"
+
+
 def test_generation_environment_applies_gradual_flying_gravity():
     args = argparse.Namespace(
         gradual_gravity_change=(-1.0, -9.0),

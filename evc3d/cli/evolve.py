@@ -258,6 +258,9 @@ def run(args: argparse.Namespace) -> None:
     )
 
     best_so_far: EvaluatedCreature | None = None
+    # Environment best_so_far was scored in; with --gradual-gravity-change it
+    # can differ from the current generation's, and best_creature.xml must match it.
+    best_environment = base_environment
     changed_by_mutation = [False] * len(population)
     # Best fitness of the previous generation; baseline for --record-mutant-type.
     previous_best_fitness: float | None = None
@@ -288,7 +291,10 @@ def run(args: argparse.Namespace) -> None:
             )
             evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
             best = evaluated[0]
-            best_so_far = best_of(best_so_far, best)
+            new_best = best_of(best_so_far, best)
+            if new_best is not best_so_far:
+                best_environment = generation_environment
+            best_so_far = new_best
 
             summary = generation_summary(
                 generation,
@@ -304,7 +310,7 @@ def run(args: argparse.Namespace) -> None:
                 generation,
                 best,
                 best_so_far,
-                definition,
+                replace(definition, environment=best_environment),
                 save_generation_history=_should_save_generation_history(
                     generation,
                     args.save_genotype_every_n,
