@@ -27,6 +27,11 @@ class FlyingAwayEvaluationConfig(EvaluationConfig):
     fitness_gain_fraction: float = 0.5
     min_total_volume: float = DEFAULT_FLYING_MIN_TOTAL_VOLUME
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not 0.0 <= self.fitness_gain_fraction <= 1.0:
+            raise ValueError("fitness_gain_fraction must be between 0 and 1")
+
 
 @dataclass(frozen=True)
 class FlyingAwayEvaluationResult(EvaluationResult):

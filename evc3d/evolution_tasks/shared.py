@@ -180,9 +180,6 @@ class EvaluationConfig:
         for name in ("max_abs_state_value", "max_abs_velocity", "max_abs_acceleration"):
             if getattr(self, name) <= 0.0:
                 raise ValueError(f"{name} must be greater than zero")
-        fraction = getattr(self, "fitness_gain_fraction", None)
-        if fraction is not None and not 0.0 <= fraction <= 1.0:
-            raise ValueError("fitness_gain_fraction must be between 0 and 1")
 
 
 @dataclass(frozen=True)
