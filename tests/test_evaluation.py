@@ -1,5 +1,6 @@
 """Tests for evc3d.evaluation and task modules: scoring rules, task physics, metrics, and results."""
 
+import dataclasses
 from dataclasses import replace
 import importlib
 import math
@@ -48,6 +49,7 @@ from evc3d.evolution_tasks.shared import (
     ResultField,
     TASK_REGISTRY,
     TaskDefinition,
+    UNBOUNDED_LIMIT_FIELDS,
 )
 from evc3d.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
@@ -1662,8 +1664,13 @@ INVALID_CONFIG_VALUES = [
     ({"max_volume": 0.1, "volume_penalty_cutoff": 0.5}, "max_volume must be greater than volume_penalty_cutoff"),
     ({"settle_seconds": -1.0}, "settle_seconds must be non-negative"),
     ({"initial_floor_contact_policy": "sometimes"}, "initial_floor_contact_policy must be one of"),
-    ({"target_direction": (0.0, 0.0, 0.0)}, "target_direction must have three components"),
-    ({"target_direction": (1.0, 0.0)}, "target_direction must have three components"),
+    ({"target_direction": (0.0, 0.0, 0.0)}, "target_direction must have three finite components"),
+    ({"target_direction": (1.0, 0.0)}, "target_direction must have three finite components"),
+    ({"target_direction": (1.0, math.nan, 0.0)}, "target_direction must have three finite components"),
+    ({"episode_seconds": math.inf}, "episode_seconds must be finite"),
+    ({"settle_seconds": math.inf}, "settle_seconds must be finite"),
+    ({"volume_weight": math.inf}, "volume_weight must be finite"),
+    ({"max_volume": -math.inf}, "max_volume must be finite"),
     ({"max_abs_velocity": 0.0}, "max_abs_velocity must be greater than zero"),
 ]
 ALL_TASK_CONFIGS = [
@@ -1681,6 +1688,30 @@ ALL_TASK_CONFIGS = [
 def test_task_configs_reject_invalid_values_when_built_in_code(config_type, values, message):
     with pytest.raises(ValueError, match=message):
         config_type(**values)
+
+
+def _float_field_names(config_type):
+    config = config_type()
+    return [
+        item.name
+        for item in dataclasses.fields(config)
+        if isinstance(getattr(config, item.name), float)
+    ]
+
+
+@pytest.mark.parametrize("config_type", ALL_TASK_CONFIGS)
+def test_task_configs_reject_nan_in_every_float_field(config_type):
+    names = _float_field_names(config_type)
+    assert "volume_weight" in names and "max_volume" in names
+    for name in names:
+        with pytest.raises(ValueError, match=f"{name} must be a number, not NaN"):
+            config_type(**{name: math.nan})
+
+
+@pytest.mark.parametrize("config_type", ALL_TASK_CONFIGS)
+@pytest.mark.parametrize("name", sorted(UNBOUNDED_LIMIT_FIELDS))
+def test_task_configs_accept_infinite_upper_limits(config_type, name):
+    assert getattr(config_type(**{name: math.inf}), name) == math.inf
 
 
 @pytest.mark.parametrize("config_type", [FlyingEvaluationConfig, FlyingAwayEvaluationConfig])

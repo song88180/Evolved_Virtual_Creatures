@@ -90,6 +90,19 @@ CONFIG_FIELD_OPTIONS = {
 ENVIRONMENT_FIELD_OPTIONS = ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef")
 
 
+# Upper limits where +inf is a meaningful "no limit"; every other float config
+# field must be finite. NaN is rejected everywhere.
+UNBOUNDED_LIMIT_FIELDS = frozenset(
+    {
+        "max_volume",
+        "max_creature_height",
+        "max_abs_state_value",
+        "max_abs_velocity",
+        "max_abs_acceleration",
+    }
+)
+
+
 @dataclass(frozen=True)
 class EvaluationConfig:
     """Common simulation, safety, and complexity settings for every task."""
@@ -121,7 +134,15 @@ class EvaluationConfig:
         CLI or directly in code. Messages name config fields; the CLI rewords
         them with option names via CONFIG_FIELD_OPTIONS.
         """
-        if not math.isfinite(self.episode_seconds) or self.episode_seconds <= 0.0:
+        for item in fields(self):
+            value = getattr(self, item.name)
+            if not isinstance(value, float) or math.isfinite(value):
+                continue
+            if math.isnan(value):
+                raise ValueError(f"{item.name} must be a number, not NaN")
+            if not (value > 0.0 and item.name in UNBOUNDED_LIMIT_FIELDS):
+                raise ValueError(f"{item.name} must be finite")
+        if self.episode_seconds <= 0.0:
             raise ValueError("episode_seconds must be greater than zero")
         if self.settle_seconds < 0.0:
             raise ValueError("settle_seconds must be non-negative")
@@ -146,8 +167,14 @@ class EvaluationConfig:
                 f"initial_floor_contact_policy must be one of "
                 f"{', '.join(INITIAL_FLOOR_CONTACT_POLICIES)}"
             )
-        if len(self.target_direction) != 3 or not any(self.target_direction):
-            raise ValueError("target_direction must have three components, not all zero")
+        if (
+            len(self.target_direction) != 3
+            or not any(self.target_direction)
+            or not all(math.isfinite(value) for value in self.target_direction)
+        ):
+            raise ValueError(
+                "target_direction must have three finite components, not all zero"
+            )
         for name in ("max_abs_state_value", "max_abs_velocity", "max_abs_acceleration"):
             if getattr(self, name) <= 0.0:
                 raise ValueError(f"{name} must be greater than zero")
