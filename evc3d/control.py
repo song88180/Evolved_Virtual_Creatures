@@ -110,17 +110,6 @@ def apply_controller(
             raise ValueError(f"Unknown control mode: {controller.control_mode!r}")
 
 
-def apply_open_loop_controller(
-    data: mujoco.MjData,
-    actuator_ids: list[int],
-    actuator_controllers: list[ActuatorController],
-) -> None:
-    for actuator_id, controller in zip(actuator_ids, actuator_controllers):
-        data.ctrl[actuator_id] = controller.amp * math.sin(
-            controller.freq * data.time + controller.phase
-        )
-
-
 def _apply_sine_controller(
     data: mujoco.MjData,
     actuator_ids: list[int],

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import mujoco
@@ -9,15 +8,7 @@ from .evolution_tasks.shared import (
     DISALLOWED_COLLISION_REASON,
     TaskDefinition,
 )
-from .evolution_tasks.swimming_x import (
-    SwimmingEvaluationConfig,
-    TASK_DEFINITION as SWIMMING_X_TASK,
-)
 from .genotype import Genotype
-from .control import (
-    ActuatorController,
-    apply_open_loop_controller as _apply_open_loop_controller,
-)
 from .scene import (
     SceneBuildError,
     SceneInitializationError,
@@ -123,40 +114,3 @@ def save_x_axis_video(
         iio.imwrite(output_path, frames, fps=fps)
     except OSError as error:
         raise RuntimeError(_IMAGEIO_REQUIRED) from error
-
-
-def save_x_axis_swimming_video(
-    genotype: Genotype,
-    output_path: Path,
-    config: SwimmingEvaluationConfig,
-    fps: int,
-    width: int,
-    height: int,
-    track_root: bool = False,
-    speed: float = 1.0,
-    shadowsize: int = 4096,
-    spotlight: bool = False,
-    camera_circle_around: bool = False,
-):
-    """Compatibility wrapper for callers that explicitly render swimming."""
-    return save_x_axis_video(
-        genotype,
-        output_path,
-        replace(SWIMMING_X_TASK, config=config),
-        fps,
-        width,
-        height,
-        track_root,
-        speed,
-        shadowsize,
-        spotlight,
-        camera_circle_around,
-    )
-
-
-def apply_open_loop_controller(
-    data: mujoco.MjData,
-    actuator_ids: list[int],
-    actuator_controllers: list[ActuatorController],
-):
-    _apply_open_loop_controller(data, actuator_ids, actuator_controllers)

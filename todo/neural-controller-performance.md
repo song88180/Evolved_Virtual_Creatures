@@ -58,5 +58,3 @@ Sine mode is already cheap, but steps 2 and 4 apply to it too.
   point (or update all three callers together).
 - Overlaps with `todo/typed-controllers.md` (sine vs neural parameter
   ownership); do that refactor first or design the compiled form to fit it.
-- The obsolete open-loop helper (`apply_open_loop_controller`, report.md
-  "Script/module redundancy #4") is not part of this; remove it separately.

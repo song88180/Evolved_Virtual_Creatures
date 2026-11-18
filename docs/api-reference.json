@@ -977,10 +977,8 @@
     "Internal_Functions": {
       "_failed_evaluation": "Builds a SwimmingEvaluationResult with build_failed=True and fallback fitness.",
       "_normalized_target_direction": "Validates and normalizes a three-component target direction.",
-      "_actuator_ids": "Maps ActuatorController motor names to MuJoCo actuator IDs.",
       "simulation_failure_reason": "Rejects non-advancing simulation time and position, velocity, or acceleration values beyond configured limits.",
-      "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude.",
-      "_apply_open_loop_controller": "Writes sine-wave control values to MuJoCo actuator slots."
+      "_array_is_stable": "Checks one numeric array for finite values below a maximum absolute magnitude."
     },
     "Exceptions": {
       "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
@@ -1033,18 +1031,6 @@
         "Returns": {"Type": "list[int]", "Description": "Actuator IDs in the same order as actuator_controllers."},
         "Raises": [],
         "Example": "actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)"
-      },
-      "apply_open_loop_controller": {
-        "Signature": "apply_open_loop_controller(data: mujoco.MjData, actuator_ids: list[int], actuator_controllers: list[ActuatorController]) -> None",
-        "Purpose": "Write amp * sin(freq * data.time + phase) into each actuator control slot.",
-        "Parameters": {
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "Simulation data whose ctrl array is updated."},
-          "actuator_ids": {"Type": "list[int]", "Default": "required", "Description": "Actuator IDs to control."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controller parameters for each actuator."}
-        },
-        "Returns": {"Type": "None", "Description": "Mutates data.ctrl."},
-        "Raises": [],
-        "Example": "apply_open_loop_controller(data, actuator_ids, builder.actuator_controllers)"
       }
     },
     "Exceptions": {

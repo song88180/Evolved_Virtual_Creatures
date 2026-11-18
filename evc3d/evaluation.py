@@ -12,10 +12,8 @@ from .genotype import Genotype
 from .evolution_tasks import shared as task_shared
 from .graph_analysis import PhenotypeBuildAbort
 from .control import (
-    ActuatorController,
     actuator_ids_for_controllers,
     apply_controller,
-    apply_open_loop_controller,
 )
 from .phenotype import PhenotypeBuilder
 
@@ -682,11 +680,3 @@ def simulation_failure_reason(
 
 def _array_is_stable(values, max_abs_value: float):
     return bool(np.all(np.isfinite(values)) and np.all(np.abs(values) <= max_abs_value))
-
-
-def _apply_open_loop_controller(
-    data: mujoco.MjData,
-    actuator_ids: list[int],
-    actuator_controllers: list[ActuatorController],
-):
-    apply_open_loop_controller(data, actuator_ids, actuator_controllers)
