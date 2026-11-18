@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import mujoco
 
-from .evaluation import (
-    _has_nonparent_self_collision,
-    initialize_model,
-    simulation_failure_reason,
-)
 from .evolution_tasks.shared import (
     DISALLOWED_COLLISION_REASON,
     TaskDefinition,
@@ -20,64 +14,22 @@ from .evolution_tasks.swimming_x import (
     TASK_DEFINITION as SWIMMING_X_TASK,
 )
 from .genotype import Genotype
-from .graph_analysis import PhenotypeBuildAbort
 from .control import (
     ActuatorController,
-    apply_controller,
     apply_open_loop_controller as _apply_open_loop_controller,
 )
-from .phenotype import PhenotypeBuilder
+from .scene import (
+    SceneBuildError,
+    SceneInitializationError,
+    prepare_scene,
+    step_scene,
+    track_root as _track_root_camera,
+)
 
-_VIDEO_SUN_LIGHT_POS = (0.0, 0.0, 5.0)
-_VIDEO_SUN_LIGHT_DIR = (0.3, 0.2, -1.0)
-_VIDEO_SUN_LIGHT_DIFFUSE = (0.9, 0.85, 0.75)
-_VIDEO_SUN_LIGHT_AMBIENT = (0.15, 0.15, 0.18)
-_VIDEO_FLOOR_TEXTURE_SCALE = 0.25
-
-
-def _configure_video_light(
-    model: mujoco.MjModel,
-    shadowsize: int,
-    spotlight: bool,
-) -> None:
-    if model.nlight < 1:
-        return
-
-    light_id = 0
-    model.light_type[light_id] = (
-        mujoco.mjtLightType.mjLIGHT_SPOT
-        if spotlight
-        else mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
-    )
-    model.light_castshadow[light_id] = 1
-    model.light_pos[light_id] = _VIDEO_SUN_LIGHT_POS
-    model.light_dir[light_id] = _VIDEO_SUN_LIGHT_DIR
-    model.light_diffuse[light_id] = _VIDEO_SUN_LIGHT_DIFFUSE
-    model.light_ambient[light_id] = _VIDEO_SUN_LIGHT_AMBIENT
-    model.vis.quality.shadowsize = shadowsize
-
-
-def _track_video_light(
-    mjcf: str,
-    root_body_name: str,
-    spotlight: bool,
-) -> str:
-    """Attach the video light to the root while keeping its direction global."""
-    xml_root = ET.fromstring(mjcf)
-    worldbody = xml_root.find("worldbody")
-    root_body = xml_root.find(f"./worldbody/body[@name='{root_body_name}']")
-    light = worldbody.find("light") if worldbody is not None else None
-    if worldbody is None or root_body is None or light is None:
-        return mjcf
-
-    worldbody.remove(light)
-    light.set("mode", "track")
-    light.set("directional", "false" if spotlight else "true")
-    light.set("castshadow", "true")
-    light.set("pos", " ".join(map(str, _VIDEO_SUN_LIGHT_POS)))
-    light.set("dir", " ".join(map(str, _VIDEO_SUN_LIGHT_DIR)))
-    root_body.insert(0, light)
-    return ET.tostring(xml_root, encoding="unicode")
+_IMAGEIO_REQUIRED = (
+    "Saving MP4 video requires imageio and imageio-ffmpeg. Install them with:\n"
+    "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
+)
 
 
 def _prevent_floor_shadow_casting(
@@ -110,95 +62,47 @@ def save_x_axis_video(
     spotlight: bool = False,
     camera_circle_around: bool = False,
 ):
-    """Render a selected swimming, walking, or flying task episode to MP4."""
+    """Render a selected swimming, walking, or flying task episode to MP4.
+
+    The recording lasts ``definition.config.episode_seconds`` of simulated time.
+    """
     config = definition.config
-    environment = definition.environment
     try:
         import imageio.v3 as iio
     except ImportError as error:
-        raise RuntimeError(
-            "Saving MP4 video requires imageio and imageio-ffmpeg. Install them with:\n"
-            "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
-        ) from error
+        raise RuntimeError(_IMAGEIO_REQUIRED) from error
 
     try:
-        builder = PhenotypeBuilder(
+        scene = prepare_scene(
             genotype,
-            max_node=config.max_node,
-            environment=environment,
-            self_collision=(
-                config.self_collision or config.disallow_collision
-            ),
+            definition,
+            shadowsize=shadowsize,
+            spotlight=spotlight,
+            offscreen_size=(width, height),
         )
-        mjcf = builder.build()
-    except PhenotypeBuildAbort as error:
+    except SceneBuildError as error:
         raise RuntimeError(
             f"Cannot record video because phenotype build failed: {error}"
         ) from error
-
-    root_body_name = f"{genotype.root}_1"
-    mjcf = _track_video_light(mjcf, root_body_name, spotlight)
-    model = mujoco.MjModel.from_xml_string(mjcf)
-    _configure_video_light(model, shadowsize, spotlight)
-    floor_geom_id = mujoco.mj_name2id(
-        model,
-        mujoco.mjtObj.mjOBJ_GEOM,
-        "floor",
-    )
-    if floor_geom_id >= 0:
-        floor_material_id = model.geom_matid[floor_geom_id]
-        if floor_material_id >= 0:
-            model.mat_texrepeat[floor_material_id] *= _VIDEO_FLOOR_TEXTURE_SCALE
-        # Zero plane extents make MuJoCo render the floor to the horizon.
-        # This model exists only for video generation.
-        model.geom_size[floor_geom_id, :2] = 0.0
-    model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)
-    model.vis.global_.offheight = max(model.vis.global_.offheight, height)
-    data = mujoco.MjData(model)
-    failure = initialize_model(model, data, config, environment)
-    if failure is not None:
-        raise RuntimeError(f"Cannot record video: {failure}")
-
-    # Match the scored rollout's initialization before the controller observes
-    # derived state such as body transforms and joint-related quantities.  A
-    # fresh MjData does not have all of that state populated until mj_forward
-    # (or a step) runs; applying neural controls first can therefore put the
-    # video on a different, potentially unstable trajectory from evaluation.
-    mujoco.mj_forward(model, data)
+    except SceneInitializationError as error:
+        raise RuntimeError(f"Cannot record video: {error}") from error
 
     frames = []
     next_frame_time = 0.0
     frame_interval = speed / fps
     camera = -1
-
-    root_body_id = mujoco.mj_name2id(
-        model,
-        mujoco.mjtObj.mjOBJ_BODY,
-        root_body_name,
-    )
-    if root_body_id < 0:
-        raise RuntimeError(
-            f"Cannot render video because {root_body_name!r} was not found."
-        )
-
     if track_root or camera_circle_around:
         camera = mujoco.MjvCamera()
-        mujoco.mjv_defaultFreeCamera(model, camera)
-        camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-        camera.trackbodyid = root_body_id
+        mujoco.mjv_defaultFreeCamera(scene.model, camera)
+        _track_root_camera(camera, scene)
         initial_camera_azimuth = float(camera.azimuth)
 
-    with mujoco.Renderer(model, height=height, width=width) as renderer:
+    data = scene.data
+    with mujoco.Renderer(scene.model, height=height, width=width) as renderer:
         while data.time < config.episode_seconds:
-            previous_time = float(data.time)
-            apply_controller(model, data, builder.actuator_controllers)
-            mujoco.mj_step(model, data)
-            if (
-                config.disallow_collision
-                and _has_nonparent_self_collision(model, data)
-            ):
-                raise RuntimeError(DISALLOWED_COLLISION_REASON)
-            failure = simulation_failure_reason(data, previous_time, config)
+            failure = step_scene(scene, definition)
+            if failure == DISALLOWED_COLLISION_REASON:
+                raise RuntimeError(failure)
             if failure is not None:
                 raise RuntimeError(f"Cannot record video: {failure}")
             if data.time >= next_frame_time:
@@ -207,10 +111,10 @@ def save_x_axis_video(
                         360.0 * data.time / config.episode_seconds
                     )
                 renderer.update_scene(data, camera=camera)
-                if floor_geom_id >= 0:
+                if scene.floor_geom_id >= 0:
                     _prevent_floor_shadow_casting(
                         renderer.scene,
-                        floor_geom_id,
+                        scene.floor_geom_id,
                     )
                 frames.append(renderer.render())
                 next_frame_time += frame_interval
@@ -218,10 +122,7 @@ def save_x_axis_video(
     try:
         iio.imwrite(output_path, frames, fps=fps)
     except OSError as error:
-        raise RuntimeError(
-            "Saving MP4 video requires imageio and imageio-ffmpeg. Install them with:\n"
-            "conda run -n mujoco --no-capture-output python -m pip install imageio imageio-ffmpeg"
-        ) from error
+        raise RuntimeError(_IMAGEIO_REQUIRED) from error
 
 
 def save_x_axis_swimming_video(

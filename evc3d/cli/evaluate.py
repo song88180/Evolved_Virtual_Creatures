@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
 from typing import Sequence
 
@@ -20,7 +19,6 @@ from .args import (
 )
 
 NAME = "evaluate"
-_DEFAULT_VIDEO_SENTINEL = Path("__task_default_video__")
 
 __all__ = ["DEFAULT_UPRIGHT_ERROR_WEIGHT", "parse_args", "run"]
 
@@ -37,71 +35,12 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     add_genotype_argument(parser, "Genotype JSON path.")
     add_environment_arguments(parser, "Locomotion task to evaluate.")
     add_scoring_arguments(parser, "Measured episode duration in seconds.")
-
-    group = parser.add_argument_group("video")
-    group.add_argument(
-        "--video",
-        nargs="?",
-        const=_DEFAULT_VIDEO_SENTINEL,
-        type=Path,
-        help=(
-            "Optional MP4 path; without a path uses example_<task>.mp4. "
-            "(default: disabled)"
-        ),
-    )
-    group.add_argument(
-        "--fps", type=int, default=30, help="Video frames per second."
-    )
-    group.add_argument(
-        "--width", type=int, default=960, help="Video width in pixels."
-    )
-    group.add_argument(
-        "--height", type=int, default=544, help="Video height in pixels."
-    )
-    group.add_argument(
-        "--track-root",
-        action="store_true",
-        help="Keep the video camera centered on the creature's root body.",
-    )
-    group.add_argument(
-        "--camera-circle-around",
-        action="store_true",
-        help=(
-            "Circle the video camera 360 degrees around the creature "
-            "during the episode."
-        ),
-    )
-    group.add_argument(
-        "--speed",
-        type=float,
-        default=1.0,
-        help="Video playback speed multiplier (for example, 1.25 or 0.8).",
-    )
-    group.add_argument(
-        "--shadowsize",
-        type=int,
-        default=4096,
-        help="Shadow-map texture width and height in pixels.",
-    )
-    group.add_argument(
-        "--spotlight",
-        action="store_true",
-        help="Use a shadow-casting spotlight instead of a directional light.",
-    )
     return parser
 
 
 def validate(args: argparse.Namespace) -> None:
     validate_environment_arguments(args)
     validate_scoring_arguments(args)
-    if args.fps < 1:
-        raise ValueError("--fps must be at least 1")
-    if args.width < 1 or args.height < 1:
-        raise ValueError("--width and --height must be at least 1")
-    if args.shadowsize < 1:
-        raise ValueError("--shadowsize must be greater than zero")
-    if args.speed <= 0.0:
-        raise ValueError("--speed must be greater than zero")
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -153,27 +92,3 @@ def run(args: argparse.Namespace) -> None:
     print(f"Total volume: {result.total_volume:.6f}")
     print(f"Bodies: {result.body_count}")
 
-    if args.video:
-        from ..video import save_x_axis_video
-
-        video_path = args.video
-        if video_path == _DEFAULT_VIDEO_SENTINEL:
-            video_path = Path(f"example_{args.task}.mp4")
-        try:
-            save_x_axis_video(
-                genotype=genotype,
-                output_path=video_path,
-                definition=definition,
-                fps=args.fps,
-                width=args.width,
-                height=args.height,
-                track_root=args.track_root,
-                speed=args.speed,
-                shadowsize=args.shadowsize,
-                spotlight=args.spotlight,
-                camera_circle_around=args.camera_circle_around,
-            )
-        except RuntimeError as error:
-            print(error)
-            return
-        print(f"Saved video: {video_path}")

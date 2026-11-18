@@ -1,12 +1,14 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import FrozenInstanceError, dataclass, replace
+from pathlib import Path
 import random
 import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+import mujoco
 import pytest
 
 from evc3d import evolve as evolve_lib
@@ -27,6 +29,7 @@ from evc3d.cli import build as build_cli
 from evc3d.cli import evaluate
 from evc3d.cli import evolve as evolve_cli
 from evc3d.cli import mutate as mutate_cli
+from evc3d.cli import view as view_cli
 
 
 @dataclass(frozen=True)
@@ -227,28 +230,24 @@ def test_evaluate_accepts_flying_fluid_options(monkeypatch):
     assert args.fitness_gain_fraction == pytest.approx(0.8)
 
 
-def test_evaluate_accepts_shadow_rendering_options(monkeypatch):
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "evaluate.py",
-            "--shadowsize",
-            "8192",
-            "--spotlight",
-            "--camera-circle-around",
-        ],
+def test_view_accepts_shadow_rendering_options():
+    args = view_cli.parse_args(
+        ["--mp4", "--shadowsize", "8192", "--spotlight", "--camera-circle-around"]
     )
-    args = evaluate.parse_args()
     assert args.shadowsize == 8192
     assert args.spotlight
     assert args.camera_circle_around
 
 
-def test_evaluate_rejects_nonpositive_shadowsize(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--shadowsize", "0"])
+def test_view_rejects_nonpositive_shadowsize(capsys):
     with pytest.raises(SystemExit, match="2"):
-        evaluate.parse_args()
+        view_cli.parse_args(["--shadowsize", "0"])
+    assert "--shadowsize must be greater than zero" in capsys.readouterr().err
+
+
+def test_evaluate_no_longer_records_video():
+    with pytest.raises(SystemExit, match="2"):
+        evaluate.parse_args(["--video"])
 
 
 def test_evolve_accepts_walking_and_thread_override(monkeypatch):
@@ -1038,8 +1037,18 @@ def test_default_run_directory_uses_task_name(monkeypatch):
                 "default: swimming_x",
                 "default: examples/example_genotype.json",
                 "default: 10.0",
-                "default: disabled",
+                "default: 500",
+            ),
+        ),
+        (
+            view_cli.parse_args,
+            (
+                "default: swimming_x",
+                "default: examples/example_genotype.json",
+                "default: interactive window",
+                "default: 10.0",
                 "default: 30",
+                "default: 960",
                 "default: 4096",
             ),
         ),
@@ -1352,3 +1361,99 @@ def test_build_writes_task_environment(tmp_path):
     option = ET.parse(output).getroot().find("option")
     assert option.get("gravity") == "0 0 -9.81"
     assert option.get("density") == "0"
+
+
+def test_view_defaults_to_interactive_with_mp4_defaults_unset():
+    args = view_cli.parse_args([])
+    assert args.mp4 is None
+    assert args.duration is None and args.fps is None
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["--duration", "3"], ["--fps", "10"], ["--width", "100"], ["--camera-circle-around"]],
+)
+def test_view_rejects_mp4_options_without_mp4(argv, capsys):
+    with pytest.raises(SystemExit, match="2"):
+        view_cli.parse_args(argv)
+    assert "only applies with --mp4" in capsys.readouterr().err
+
+
+def test_view_mp4_fills_video_defaults():
+    args = view_cli.parse_args(["--mp4", "out.mp4"])
+    assert args.mp4 == Path("out.mp4")
+    assert (args.duration, args.fps, args.width, args.height) == (10.0, 30, 960, 544)
+
+
+def test_view_mp4_without_path_uses_task_default(monkeypatch, tmp_path):
+    recorded = {}
+
+    def fake_video(**kwargs):
+        recorded.update(kwargs)
+
+    monkeypatch.setattr("evc3d.video.save_x_axis_video", fake_video)
+    monkeypatch.chdir(tmp_path)
+    cli.main(["view", "--task", "walking_x", "--mp4", "--duration", "2"])
+
+    assert recorded["output_path"] == Path("example_walking_x.mp4")
+    assert recorded["definition"].config.episode_seconds == 2.0
+
+
+class _FakeViewer:
+    """Stands in for mujoco.viewer.launch_passive; runs a fixed number of frames."""
+
+    def __init__(self, frames):
+        self.frames = frames
+        self.syncs = 0
+        self.cam = mujoco.MjvCamera()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def is_running(self):
+        return self.syncs < self.frames
+
+    def sync(self):
+        self.syncs += 1
+
+
+def test_interactive_view_steps_past_episode_and_tracks_root(monkeypatch):
+    import evc3d.viewer as viewer_module
+
+    fake = _FakeViewer(frames=5)
+    started = {}
+
+    def fake_launch(model, data):
+        started["time"] = float(data.time)
+        started["data"] = data
+        return fake
+
+    monkeypatch.setattr(viewer_module.mujoco.viewer, "launch_passive", fake_launch)
+    monkeypatch.setattr(viewer_module.time, "sleep", lambda _seconds: None)
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    definition = task_definition("swimming_x")
+    definition.config = SwimmingEvaluationConfig(episode_seconds=0.02)
+
+    viewer_module.launch_viewer(genotype, definition, track_root=True, speed=1000.0)
+
+    assert fake.syncs == 5
+    # Five control steps are taken even though the episode is only two steps long.
+    timestep = definition.environment.timestep
+    assert started["data"].time == pytest.approx(started["time"] + 5 * timestep)
+    assert fake.cam.type == mujoco.mjtCamera.mjCAMERA_TRACKING
+    assert fake.cam.trackbodyid >= 1
+
+
+def test_interactive_view_reports_unbuildable_creature(monkeypatch, capsys):
+    from evc3d.scene import SceneBuildError
+
+    def fail(*_args, **_kwargs):
+        raise SceneBuildError("too many nodes")
+
+    monkeypatch.setattr("evc3d.viewer.launch_viewer", fail)
+    with pytest.raises(SystemExit, match="1"):
+        cli.main(["view"])
+    assert "Cannot view creature: too many nodes" in capsys.readouterr().out

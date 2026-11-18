@@ -6,6 +6,7 @@ Usage::
     evc3d evaluate [options]   # score one genotype on a task
     evc3d mutate   [options]   # write a randomly mutated copy of a genotype
     evc3d build    [options]   # write the MuJoCo XML for a genotype
+    evc3d view     [options]   # watch a genotype live, or record it with --mp4
 
 Each subcommand lives in its own module (``evc3d.cli.<command>``) and exposes
 ``add_parser``, ``validate`` and ``run``. Shared option groups are in
@@ -24,13 +25,13 @@ INTERNAL_KEYS = ("command", "_run", "_validate", "_parser")
 
 
 def _configure_rendering_backend(argv: Sequence[str]) -> None:
-    """Use headless EGL rendering on Linux when a video is requested.
+    """Use headless EGL rendering on Linux when an MP4 is requested.
 
     MuJoCo reads ``MUJOCO_GL`` when it is first imported, so this must run
     before any subcommand module is imported.
     """
     video_requested = any(
-        argument == "--video" or argument.startswith("--video=")
+        argument == "--mp4" or argument.startswith("--mp4=")
         for argument in argv
     )
     if sys.platform.startswith("linux") and video_requested:
@@ -38,18 +39,18 @@ def _configure_rendering_backend(argv: Sequence[str]) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import build, evaluate, evolve, mutate
+    from . import build, evaluate, evolve, mutate, view
 
     parser = argparse.ArgumentParser(
         prog="evc3d",
-        description="Evolve, evaluate, mutate, and build 3D virtual creatures.",
+        description="Evolve, evaluate, mutate, build, and view 3D virtual creatures.",
     )
     subparsers = parser.add_subparsers(
         dest="command",
         required=True,
         metavar="COMMAND",
     )
-    for module in (evolve, evaluate, mutate, build):
+    for module in (evolve, evaluate, mutate, build, view):
         subparser = module.add_parser(subparsers)
         subparser.set_defaults(
             _run=module.run,

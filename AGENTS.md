@@ -21,14 +21,16 @@ Use this map to choose files before broad searches:
 - `evc3d/graph_analysis.py`: graph validity and phenotype node-count analysis. Edit for recursion, terminal-only, missing-node, or max-node validation rules.
 - `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
 - `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
-- `evc3d/video.py`: video rendering helpers used by evaluation output. Edit for camera, lighting, floor rendering, or tracked-body video behavior.
-- `evc3d/viewer.py`: interactive MuJoCo viewer loop. Edit for manual visualization and live controller stepping.
+- `evc3d/scene.py`: shared display setup for viewer and video (build for a task, task initialization, lighting, floor, one controlled step with failure checks). Edit for anything both display modes should share.
+- `evc3d/video.py`: MP4 recording loop (`evc3d view --mp4`). Edit for frame capture, video camera motion, or shadow tweaks.
+- `evc3d/viewer.py`: interactive MuJoCo window loop (`evc3d view`). Edit for live stepping, pacing, or viewer camera.
 - `evc3d/cli/__init__.py`: the `evc3d` command entry point (`evc3d <command>`, also `python -m evc3d`); subcommand registration, parsing, and usage-error handling.
 - `evc3d/cli/args.py`: option groups shared by subcommands (genotype, environment, scoring, mutation) and their validation. Edit when adding a task, environment, scoring, or mutation option.
 - `evc3d/cli/evolve.py`: `evc3d evolve`, population-based evolution and run artifacts.
-- `evc3d/cli/evaluate.py`: `evc3d evaluate`, scoring one genotype and optionally rendering video.
+- `evc3d/cli/evaluate.py`: `evc3d evaluate`, scoring one genotype and printing metrics.
 - `evc3d/cli/mutate.py`: `evc3d mutate`, writing a randomly mutated copy of a genotype.
 - `evc3d/cli/build.py`: `evc3d build`, writing the MuJoCo XML scene for a genotype.
+- `evc3d/cli/view.py`: `evc3d view`, watching a genotype in an interactive window or recording it with `--mp4`.
 - `pyproject.toml`: package metadata and the `evc3d` console script (`pip install -e .`).
 - `examples/*.json`: seed genotype recipes used by CLIs and tests.
 - `tests/test_surface_attachment.py`: tests for JSON migration, attachment placement, joint/body XML, symmetry attachment, and orientation constraints.

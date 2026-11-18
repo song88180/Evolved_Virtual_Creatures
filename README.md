@@ -25,7 +25,7 @@ Check this [video](https://www.youtube.com/watch?v=vstG57H8ZOY) here!
 - [Conda](https://docs.conda.io/) or another Python environment manager
 - Python 3.11 or newer
 
-An available graphical display is needed for the interactive MuJoCo viewer. On Linux, `evc3d evaluate` automatically selects EGL when an MP4 video is requested, so video rendering can also work on a headless machine with a compatible graphics driver.
+An available graphical display is needed for the interactive MuJoCo viewer (`evc3d view`). On Linux, `evc3d view --mp4` automatically selects EGL, so video rendering can also work on a headless machine with a compatible graphics driver.
 
 ### Installation
 
@@ -67,6 +67,7 @@ evc3d evolve --help
 | `evc3d evaluate` | Score one genotype on a task and print its metrics. |
 | `evc3d mutate` | Write a randomly mutated copy of a genotype. |
 | `evc3d build` | Write the MuJoCo XML scene for a genotype. |
+| `evc3d view` | Watch a genotype perform its task in an interactive window, or record it with `--mp4`. |
 
 Options are grouped by purpose in each command's `--help`: *environment* (task, fluid, collision, size limit), *scoring* (episode duration and fitness penalties), and *mutation* (which mutations are allowed).
 
@@ -137,21 +138,34 @@ evc3d evaluate \
   --genotype runs/readme_swimming_example/best_genotype.json
 ```
 
-Generate a video while evaluating a creature:
+The input is a genotype JSON file, and the results are written to the terminal. To watch the creature, use `evc3d view`.
+
+### Watching a creature
+
+`evc3d view` simulates a genotype in its task environment, starting exactly like the scored episode (same initialization and controller). By default it opens an interactive MuJoCo window that keeps simulating until you close it, paced to real time (scaled by `--speed`):
 
 ```bash
-evc3d evaluate \
+evc3d view \
   --task swimming_x \
   --genotype runs/readme_swimming_example/best_genotype.json \
+  --track-root
+```
+
+Add `--mp4 PATH` to record the episode to a video file instead of opening a window:
+
+```bash
+evc3d view \
+  --task swimming_x \
+  --genotype runs/readme_swimming_example/best_genotype.json \
+  --mp4 videos/best_swimmer.mp4 \
   --duration 10 \
-  --video videos/best_swimmer.mp4 \
   --track-root \
   --fps 30 \
   --width 960 \
   --height 544
 ```
 
-The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the current directory. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `evc3d evaluate --help`.
+Passing `--mp4` without a path writes `example_<task>.mp4` in the current directory. `--track-root`, `--speed`, `--spotlight`, and `--shadowsize` apply to both modes; `--duration`, `--fps`, `--width`, `--height`, and `--camera-circle-around` only apply with `--mp4`. See `evc3d view --help` for all options.
 
 ### Evolution tasks
 

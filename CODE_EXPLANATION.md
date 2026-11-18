@@ -1,6 +1,6 @@
 # Python Code Explanation
 
-This project turns a small graph-like genotype into a MuJoCo creature model. The runnable entrypoint is the `evc3d` command (`evc3d/cli/`), with subcommands to evolve, evaluate, mutate, and build creatures. For example, `evc3d mutate` applies random mutations to a genotype and `evc3d build` writes the generated MJCF XML to `generated_creature.xml`:
+This project turns a small graph-like genotype into a MuJoCo creature model. The runnable entrypoint is the `evc3d` command (`evc3d/cli/`), with subcommands to evolve, evaluate, mutate, build, and view creatures. For example, `evc3d mutate` applies random mutations to a genotype and `evc3d build` writes the generated MJCF XML to `generated_creature.xml`:
 
 ```bash
 conda run -n mujoco --no-capture-output evc3d mutate --output mutated.json --mutations 3 --seed 42
@@ -20,7 +20,7 @@ This mirrors evolutionary robotics terminology. The genotype is the recipe, and 
 
 The code is split by responsibility:
 
-- `evc3d/cli/`: the `evc3d` command. `args.py` defines the option groups shared by subcommands (genotype, environment, scoring, mutation); `evolve.py`, `evaluate.py`, `mutate.py`, and `build.py` each define one subcommand. `evc3d/__main__.py` enables `python -m evc3d`.
+- `evc3d/cli/`: the `evc3d` command. `args.py` defines the option groups shared by subcommands (genotype, environment, scoring, mutation); `evolve.py`, `evaluate.py`, `mutate.py`, `build.py`, and `view.py` each define one subcommand. `evc3d/__main__.py` enables `python -m evc3d`.
 - `evc3d/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
 - `evc3d/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
 - `evc3d/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
@@ -29,8 +29,9 @@ The code is split by responsibility:
 - `evc3d/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
 - `evc3d/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.
 - `evc3d/evolution_tasks/`: task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
-- `evc3d/video.py`: optional evaluation video rendering helpers.
-- `evc3d/viewer.py`: MuJoCo simulation and viewer loop.
+- `evc3d/scene.py`: shared display setup: builds a creature for a task, applies the scored rollout's initialization, tunes lighting and floor, and steps the controlled simulation with evaluation's failure checks.
+- `evc3d/video.py`: MP4 recording on top of `scene.py` (`evc3d view --mp4`).
+- `evc3d/viewer.py`: interactive MuJoCo window on top of `scene.py` (`evc3d view`), running until closed.
 
 ## Genotype Data Structures
 
