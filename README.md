@@ -25,7 +25,7 @@ Check this [video](https://www.youtube.com/watch?v=vstG57H8ZOY) here!
 - [Conda](https://docs.conda.io/) or another Python environment manager
 - Python 3.11 or newer
 
-An available graphical display is needed for the interactive MuJoCo viewer. On Linux, `evaluate.py` automatically selects EGL when an MP4 video is requested, so video rendering can also work on a headless machine with a compatible graphics driver.
+An available graphical display is needed for the interactive MuJoCo viewer. On Linux, `evc3d evaluate` automatically selects EGL when an MP4 video is requested, so video rendering can also work on a headless machine with a compatible graphics driver.
 
 ### Installation
 
@@ -43,24 +43,38 @@ conda create --name evol-virtual-creature python=3.11 pip
 conda activate evol-virtual-creature
 ```
 
-Install the runtime dependencies:
+Install the runtime dependencies and the `evc3d` package in editable mode (code changes take effect without reinstalling):
 
 ```bash
 python -m pip install mujoco numpy imageio imageio-ffmpeg
+python -m pip install -e .
 ```
 
-Confirm that the command-line programs load correctly:
+This provides the `evc3d` command. Confirm that it loads correctly:
 
 ```bash
-python evolve.py --help
-python evaluate.py --help
+evc3d --help
+evc3d evolve --help
 ```
+
+`python -m evc3d ...` works the same way without the editable install.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `evc3d evolve` | Run mutation-based evolution and write a run directory. |
+| `evc3d evaluate` | Score one genotype on a task and print its metrics. |
+| `evc3d mutate` | Write a randomly mutated copy of a genotype. |
+| `evc3d build` | Write the MuJoCo XML scene for a genotype. |
+
+Options are grouped by purpose in each command's `--help`: *environment* (task, fluid, collision, size limit), *scoring* (episode duration and fitness penalties), and *mutation* (which mutations are allowed).
 
 ## Usage
 
 ### Evolving creatures
 
-`evolve.py` creates an initial population from a seed genotype, mutates and evaluates the population, selects fitter creatures, and repeats this process for the requested number of generations.
+`evc3d evolve` creates an initial population from a seed genotype, mutates and evaluates the population, selects fitter creatures, and repeats this process for the requested number of generations.
 
 The controller family for the run comes from the seed genotype's top-level `control_mode`. `neural` uses an evolved two-layer neural network that reacts to simulation observations, while `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase. If `--control-mode` is given and differs from the seed's mode, the run stops with an error. Add `--override-control-mode` to convert the seed instead: the old controller's parameters are discarded and the new controller starts motionless (zero neural weights, or zero sine amplitude).
 
@@ -83,7 +97,7 @@ Its main inputs are:
 For a small swimming run with the default neural controller:
 
 ```bash
-python evolve.py \
+evc3d evolve \
   --task swimming_x \
   --genotype examples/single_root.json \
   --population-size 10 \
@@ -109,16 +123,16 @@ Evolution prints a progress line for every generation. The output directory cont
 | `best_creature.xml` | MuJoCo MJCF phenotype generated from the all-time best genotype. |
 | `generation_bests/generation_NNNN.json` | Generation-best checkpoints, unless `--latest-best-only` is used. |
 
-Use `python evolve.py --help` to see mutation, selection, environment, collision, volume, and checkpoint options.
+Use `evc3d evolve --help` to see mutation, selection, environment, collision, volume, and checkpoint options.
 
 ### Evaluating a creature
 
-`evaluate.py` builds and simulates one genotype on a selected task. It prints fitness together with movement, energy, angular-speed, body-count, actuator-count, and volume measurements. Invalid builds or disqualified creatures instead report their failure reason and assigned fitness.
+`evc3d evaluate` builds and simulates one genotype on a selected task. It prints fitness together with movement, energy, angular-speed, body-count, actuator-count, and volume measurements. Invalid builds or disqualified creatures instead report their failure reason and assigned fitness.
 
 Evaluate the winner of the example evolution run:
 
 ```bash
-python evaluate.py \
+evc3d evaluate \
   --task swimming_x \
   --genotype runs/readme_swimming_example/best_genotype.json
 ```
@@ -126,7 +140,7 @@ python evaluate.py \
 Generate a video while evaluating a creature:
 
 ```bash
-python evaluate.py \
+evc3d evaluate \
   --task swimming_x \
   --genotype runs/readme_swimming_example/best_genotype.json \
   --duration 10 \
@@ -137,7 +151,7 @@ python evaluate.py \
   --height 544
 ```
 
-The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the repository root. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `python evaluate.py --help`. Run commands from the repository root.
+The input is a genotype JSON file. Evaluation results are written to the terminal, and `--video PATH` additionally writes an MP4 to `PATH`. Passing `--video` without a path uses `example_<task>.mp4` in the current directory. Camera rotation, playback speed, lighting, resolution, and other rendering settings are available through `evc3d evaluate --help`.
 
 ### Evolution tasks
 
@@ -154,18 +168,30 @@ The available locomotion tasks are:
 
 You can customize new tasks by adding task-specifying .py files in [`evc3d/evolution_tasks/`](evc3d/evolution_tasks)
 
-### Generating a phenotype
+### Mutating a genotype
 
-`generate_model.py` is a direct genotype-to-phenotype utility. It optionally mutates a genotype, writes the expanded MJCF XML, and opens the model in the interactive MuJoCo viewer.
+`evc3d mutate` applies random mutations to a genotype and saves the result as a new genotype file. The same `--seed` always produces the same result, and `--output` must differ from `--genotype`, so the source is never overwritten.
 
 ```bash
-python generate_model.py \
+evc3d mutate \
   --genotype examples/example_genotype.json \
-  --output generated_creature.xml \
-  --mutations 0
+  --output mutated.json \
+  --mutations 3 \
+  --seed 42
 ```
 
-The input genotype is not modified on disk. The generated XML is written to the path given by `--output`; closing the viewer ends the program.
+The mutation options (`--allow-slide-joint`, `--disallow-topology-mutations`, `--disallow-root-mutation`, `--topology-mutation-rate-min`) match those of `evc3d evolve`.
+
+### Generating a phenotype
+
+`evc3d build` expands a genotype into the MuJoCo MJCF XML scene. The scene contains the creature and the selected task's physical environment (gravity, fluid, floor collision); it does not contain the controller, which runs in Python.
+
+```bash
+evc3d build \
+  --genotype mutated.json \
+  --task walking_x \
+  --output generated_creature.xml
+```
 
 ## File Formats
 
@@ -278,4 +304,4 @@ The generated document includes:
 
 Phenotype XML is generated output, not the genetic material mutated during evolution. To continue an evolutionary run or reproduce a creature under another task, use its genotype JSON. Use the XML when inspecting or loading the already-expanded MuJoCo model.
 
-`generate_model.py` writes `generated_creature.xml` by default, while `evolve.py` writes the current all-time winner to `best_creature.xml` inside the run directory.
+`evc3d build` writes `generated_creature.xml` by default, while `evc3d evolve` writes the current all-time winner to `best_creature.xml` inside the run directory.

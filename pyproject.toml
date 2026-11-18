@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evc3d"
+version = "0.1.0"
+description = "Evolved 3D virtual creatures simulated in MuJoCo."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["mujoco", "numpy"]
+
+[project.optional-dependencies]
+video = ["imageio", "imageio-ffmpeg"]
+
+[project.scripts]
+evc3d = "evc3d.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["evc3d*"]

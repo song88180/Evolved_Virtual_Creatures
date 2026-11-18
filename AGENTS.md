@@ -23,15 +23,19 @@ Use this map to choose files before broad searches:
 - `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
 - `evc3d/video.py`: video rendering helpers used by evaluation output. Edit for camera, lighting, floor rendering, or tracked-body video behavior.
 - `evc3d/viewer.py`: interactive MuJoCo viewer loop. Edit for manual visualization and live controller stepping.
-- `generate_model.py`: CLI for loading, mutating, building, writing, and viewing one creature.
-- `evaluate.py`: CLI for scoring one genotype and optionally rendering video.
-- `evolve.py`: CLI for running population-based evolution and writing run artifacts.
+- `evc3d/cli/__init__.py`: the `evc3d` command entry point (`evc3d <command>`, also `python -m evc3d`); subcommand registration, parsing, and usage-error handling.
+- `evc3d/cli/args.py`: option groups shared by subcommands (genotype, environment, scoring, mutation) and their validation. Edit when adding a task, environment, scoring, or mutation option.
+- `evc3d/cli/evolve.py`: `evc3d evolve`, population-based evolution and run artifacts.
+- `evc3d/cli/evaluate.py`: `evc3d evaluate`, scoring one genotype and optionally rendering video.
+- `evc3d/cli/mutate.py`: `evc3d mutate`, writing a randomly mutated copy of a genotype.
+- `evc3d/cli/build.py`: `evc3d build`, writing the MuJoCo XML scene for a genotype.
+- `pyproject.toml`: package metadata and the `evc3d` console script (`pip install -e .`).
 - `examples/*.json`: seed genotype recipes used by CLIs and tests.
 - `tests/test_surface_attachment.py`: tests for JSON migration, attachment placement, joint/body XML, symmetry attachment, and orientation constraints.
 - `tests/test_genotype_mutation.py`: tests for mutation registration, field mutation effects, topology mutation behavior, and mutation invariants.
 - `tests/test_symmetry.py`: tests for symmetry validation, JSON round trips, mirrored child generation, and reflected joint axes.
 - `tests/test_evaluation.py`: tests for task physics, MuJoCo compilation, collision settings, volume checks, and evaluation metrics.
-- `tests/test_evolve.py`: tests for evolution CLI parsing, task config forwarding, population helpers, and run artifact behavior.
+- `tests/test_evolve.py`: tests for `evc3d` CLI parsing and subcommands, evolution task config forwarding, population helpers, and run artifact behavior.
 - `docs/`: static GitHub Pages documentation site. Update `docs/index.html` for user-facing concepts and `docs/api-reference.json` for generated API reference content.
 - `CODE_EXPLANATION.md`: narrative architecture walkthrough for humans and agents.
 

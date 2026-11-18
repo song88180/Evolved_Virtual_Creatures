@@ -79,16 +79,17 @@
           </p>
           <div class="code-grid">
             <figure>
-              <figcaption>Generate and view a creature</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python generate_model.py</code></pre>
+              <figcaption>Mutate a genotype and build its MuJoCo XML</figcaption>
+              <pre><code>conda run -n mujoco --no-capture-output evc3d mutate --output mutated.json --mutations 3 --seed 42
+conda run -n mujoco --no-capture-output evc3d build --genotype mutated.json --task walking_x</code></pre>
             </figure>
             <figure>
               <figcaption>Evaluate locomotion fitness</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evaluate.py --task walking_x --video</code></pre>
+              <pre><code>conda run -n mujoco --no-capture-output evc3d evaluate --task walking_x --video</code></pre>
             </figure>
             <figure>
               <figcaption>Run evolution</figcaption>
-              <pre><code>conda run -n mujoco --no-capture-output python evolve.py --task flying_away \
+              <pre><code>conda run -n mujoco --no-capture-output evc3d evolve --task flying_away \
   --population-size 100 \
   --generations 100 \
   --seed 7</code></pre>
@@ -208,17 +209,22 @@
               </thead>
               <tbody>
                 <tr>
-                  <td><code>generate_model.py</code></td>
-                  <td>Load, mutate, build, save, and view one MuJoCo creature.</td>
-                  <td>Uses <code>examples/example_genotype.json</code> and writes <code>generated_creature.xml</code>.</td>
+                  <td><code>evc3d mutate</code></td>
+                  <td>Write a randomly mutated copy of a genotype.</td>
+                  <td><code>--genotype</code>, <code>--output</code> (required), <code>--mutations</code>, <code>--seed</code>, <code>--allow-slide-joint</code>.</td>
                 </tr>
                 <tr>
-                  <td><code>evaluate.py</code></td>
+                  <td><code>evc3d build</code></td>
+                  <td>Write the MuJoCo XML scene (creature plus task environment) for a genotype.</td>
+                  <td><code>--genotype</code>, <code>--task</code>, <code>--output</code> (default <code>generated_creature.xml</code>), <code>--max-node</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>evc3d evaluate</code></td>
                   <td>Score one genotype on the selected swimming or walking task variant.</td>
                   <td><code>--task</code> (<code>swimming_x</code>, <code>swimming_away</code>, <code>walking_x</code>, <code>walking_away</code>, <code>flying_x</code>, <code>flying_away</code>), <code>--genotype</code>, <code>--duration</code>, <code>--body-count-weight</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--video</code>.</td>
                 </tr>
                 <tr>
-                  <td><code>evolve.py</code></td>
+                  <td><code>evc3d evolve</code></td>
                   <td>Run population-based mutation search for the selected task.</td>
                   <td><code>--task</code>, <code>--population-size</code>, <code>--generations</code>, <code>--elite-count</code>, <code>--self-collision</code>, <code>--disallow-collision</code>, <code>--allow-slide-joint</code>, <code>--seed</code>, <code>--max-node</code>.</td>
                 </tr>

@@ -52,7 +52,7 @@ Sine mode is already cheap, but steps 2 and 4 apply to it too.
 ## Constraints and checks
 
 - Results must stay numerically identical (or within float tolerance) to the
-  current controller: compare `metrics.jsonl` from small seeded `evolve.py`
+  current controller: compare `metrics.jsonl` from small seeded `evc3d evolve`
   runs before/after, as done for report.md Var 6.
 - `video.py` and `viewer.py` call `apply_controller` directly; keep that entry
   point (or update all three callers together).

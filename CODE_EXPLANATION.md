@@ -1,11 +1,10 @@
 # Python Code Explanation
 
-This project turns a small graph-like genotype into a MuJoCo creature model. The runnable entrypoint is `generate_model.py`, which loads the genotype, applies random mutations, writes the generated MJCF XML to `generated_creature.xml`, loads that XML into MuJoCo, and opens a viewer where the creature is animated with a simple sinusoidal controller.
-
-The correct command is:
+This project turns a small graph-like genotype into a MuJoCo creature model. The runnable entrypoint is the `evc3d` command (`evc3d/cli/`), with subcommands to evolve, evaluate, mutate, and build creatures. For example, `evc3d mutate` applies random mutations to a genotype and `evc3d build` writes the generated MJCF XML to `generated_creature.xml`:
 
 ```bash
-conda run -n mujoco --no-capture-output python generate_model.py
+conda run -n mujoco --no-capture-output evc3d mutate --output mutated.json --mutations 3 --seed 42
+conda run -n mujoco --no-capture-output evc3d build --genotype mutated.json
 ```
 
 ## Main Idea
@@ -21,9 +20,7 @@ This mirrors evolutionary robotics terminology. The genotype is the recipe, and 
 
 The code is split by responsibility:
 
-- `generate_model.py`: command-line entrypoint for loading, mutating, building, saving, and viewing one creature.
-- `evaluate.py`: command-line entrypoint for scoring one genotype on a locomotion task.
-- `evolve.py`: command-line entrypoint for population-based mutation search.
+- `evc3d/cli/`: the `evc3d` command. `args.py` defines the option groups shared by subcommands (genotype, environment, scoring, mutation); `evolve.py`, `evaluate.py`, `mutate.py`, and `build.py` each define one subcommand. `evc3d/__main__.py` enables `python -m evc3d`.
 - `evc3d/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
 - `evc3d/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
 - `evc3d/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
@@ -472,4 +469,4 @@ The current script is intentionally minimal, but it leaves several natural place
 
 ## Summary
 
-`generate_model.py` demonstrates the core loop of genotype mutation, genotype-to-phenotype generation, and MuJoCo simulation for an evolutionary virtual creature. A small recursive graph describes reusable body parts and controller parameters, `Genotype.mutation()` randomly perturbs that recipe while printing what changed, `PhenotypeBuilder` expands the mutated graph into MJCF XML, and MuJoCo loads the result for simulation.
+The `evc3d` subcommands demonstrate the core loop of genotype mutation, genotype-to-phenotype generation, and MuJoCo simulation for an evolutionary virtual creature. A small recursive graph describes reusable body parts and controller parameters, `Genotype.mutation()` randomly perturbs that recipe while printing what changed, `PhenotypeBuilder` expands the mutated graph into MJCF XML, and MuJoCo loads the result for simulation.

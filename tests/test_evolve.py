@@ -2,18 +2,19 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import FrozenInstanceError, dataclass, replace
 import random
+import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
 import pytest
 
-import evaluate
-import evolve as evolve_cli
 from evc3d import evolve as evolve_lib
 from evc3d.evaluation import task_definition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
 from evc3d.genotype_io import build_genotype
+from evc3d.phenotype import PhenotypeBuilder
 from evc3d.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
 from evc3d.evolution_tasks.flying_x import FlyingEvaluationConfig
 from evc3d.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
@@ -21,7 +22,11 @@ from evc3d.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
 from evc3d.evolution_tasks.swimming_x import SwimmingEvaluationConfig
 from evc3d.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
 from evc3d.evolution_tasks.walking_x import WalkingEvaluationConfig
-import generate_model
+from evc3d import cli
+from evc3d.cli import build as build_cli
+from evc3d.cli import evaluate
+from evc3d.cli import evolve as evolve_cli
+from evc3d.cli import mutate as mutate_cli
 
 
 @dataclass(frozen=True)
@@ -120,10 +125,11 @@ def test_evolve_accepts_sine_control_mode(monkeypatch):
     assert evolve_cli.parse_args().control_mode == "sine"
 
 
-def test_evolve_override_control_mode_requires_control_mode(monkeypatch):
+def test_evolve_override_control_mode_requires_control_mode(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--override-control-mode"])
-    with pytest.raises(ValueError, match="requires --control-mode"):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("requires --control-mode", capsys.readouterr().err)
 
 
 def _sine_seed_genotype():
@@ -316,17 +322,15 @@ def test_evolve_accepts_gradual_gravity_change_for_flying(monkeypatch):
     assert args.gradual_gravity_change == pytest.approx((-1.0, -9.81))
 
 
-def test_evolve_rejects_gradual_gravity_change_for_non_flying(monkeypatch):
+def test_evolve_rejects_gradual_gravity_change_for_non_flying(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
         ["evolve.py", "--gradual-gravity-change=-1.0,-9.81"],
     )
-    with pytest.raises(
-        ValueError,
-        match="--gradual-gravity-change is only supported for flying tasks",
-    ):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("--gradual-gravity-change is only supported for flying tasks", capsys.readouterr().err)
 
 
 def test_gradual_gravity_change_interpolates_across_generations():
@@ -446,32 +450,6 @@ def test_task_definition_config_overrides_reset_to_task_defaults():
 
 
 def test_cli_preserves_explicit_task_parameter_overrides(monkeypatch, module):
-    class TaskDefaults:
-        body_count_weight = 0.012
-        volume_weight = 0.034
-        volume_penalty_cutoff = 0.056
-        min_body_volume = 0.000078
-        min_total_volume = 0.00012
-        max_volume = 0.9
-        fluid_density = 0.8
-        fluid_viscosity = 0.00003
-        fluid_shape = "none"
-        fluid_coef = (0.1, 0.2, 0.3, 0.4, 0.5)
-        fitness_gain_fraction = 0.7
-        environment = FLYING_ENVIRONMENT
-
-    monkeypatch.setattr(
-        module,
-        "task_definition",
-        lambda _task: argparse.Namespace(
-            config_type=TaskDefaults,
-            environment=replace(
-                FLYING_ENVIRONMENT, fluid_density=0.8,
-                fluid_viscosity=0.00003, fluid_shape="none",
-                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
-            ),
-        ),
-    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -571,27 +549,24 @@ def test_evolve_accepts_save_genotype_every_n(monkeypatch):
     assert evolve_cli.parse_args().save_genotype_every_n == 5
 
 
-def test_evolve_rejects_nonpositive_save_genotype_every_n(monkeypatch):
+def test_evolve_rejects_nonpositive_save_genotype_every_n(monkeypatch, capsys):
     monkeypatch.setattr(
         sys, "argv", ["evolve.py", "--save-genotype-every-N", "0"]
     )
-    with pytest.raises(
-        ValueError, match="--save-genotype-every-N must be at least 1"
-    ):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("--save-genotype-every-N must be at least 1", capsys.readouterr().err)
 
 
-def test_evolve_rejects_save_genotype_interval_with_latest_best_only(monkeypatch):
+def test_evolve_rejects_save_genotype_interval_with_latest_best_only(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
         ["evolve.py", "--latest-best-only", "--save-genotype-every-N", "5"],
     )
-    with pytest.raises(
-        ValueError,
-        match="--save-genotype-every-N conflicts with --latest-best-only",
-    ):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("--save-genotype-every-N conflicts with --latest-best-only", capsys.readouterr().err)
 
 
 def test_evolve_save_genotype_interval_controls_generation_history():
@@ -625,16 +600,15 @@ def test_evolve_accepts_topology_mutation_rate_floor(monkeypatch):
     assert evolve_cli.parse_args().topology_mutation_rate_min == pytest.approx(0.12)
 
 
-def test_evolve_rejects_invalid_topology_mutation_rate_floor(monkeypatch):
+def test_evolve_rejects_invalid_topology_mutation_rate_floor(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
         ["evolve.py", "--topology-mutation-rate-min", "1.1"],
     )
-    with pytest.raises(
-        ValueError, match="--topology-mutation-rate-min must be between 0 and 1"
-    ):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("--topology-mutation-rate-min must be between 0 and 1", capsys.readouterr().err)
 
 
 def test_evolve_accepts_disallow_topology_mutations(monkeypatch):
@@ -671,9 +645,9 @@ def test_evolve_disallows_slide_joint_by_default(monkeypatch):
     assert not evolve_cli.parse_args().allow_slide_joint
 
 
-def test_generate_model_accepts_allow_slide_joint(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["generate_model.py", "--allow-slide-joint"])
-    assert generate_model.parse_args().allow_slide_joint
+def test_mutate_accepts_allow_slide_joint():
+    args = mutate_cli.parse_args(["--output", "out.json", "--allow-slide-joint"])
+    assert args.allow_slide_joint
 
 
 def test_evolve_records_generation_history_by_default(monkeypatch):
@@ -681,10 +655,11 @@ def test_evolve_records_generation_history_by_default(monkeypatch):
     assert not evolve_cli.parse_args().latest_best_only
 
 
-def test_evolve_rejects_nonpositive_threads(monkeypatch):
+def test_evolve_rejects_nonpositive_threads(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["evolve.py", "--threads", "0"])
-    with pytest.raises(ValueError, match="--threads must be at least 1"):
+    with pytest.raises(SystemExit, match="2"):
         evolve_cli.parse_args()
+    assert re.search("--threads must be at least 1", capsys.readouterr().err)
 
 
 @pytest.mark.parametrize(
@@ -1082,11 +1057,20 @@ def test_default_run_directory_uses_task_name(monkeypatch):
             ),
         ),
         (
-            generate_model.parse_args,
+            mutate_cli.parse_args,
+            (
+                "default: examples/example_genotype.json",
+                "default: 1",
+                "default: random",
+                "default: 0.05",
+            ),
+        ),
+        (
+            build_cli.parse_args,
             (
                 "default: examples/example_genotype.json",
                 "default: generated_creature.xml",
-                "default: 50",
+                "default: swimming_x",
                 "default: 500",
             ),
         ),
@@ -1282,3 +1266,89 @@ def test_population_helpers_forward_root_mutation_setting(monkeypatch):
     )
 
     assert settings == [False, False]
+
+
+def test_cli_lists_subcommands(capsys):
+    with pytest.raises(SystemExit, match="0"):
+        cli.main(["--help"])
+    help_text = capsys.readouterr().out
+    for command in ("evolve", "evaluate", "mutate", "build"):
+        assert command in help_text
+
+
+def test_cli_requires_a_subcommand(capsys):
+    with pytest.raises(SystemExit, match="2"):
+        cli.main([])
+
+
+def test_python_dash_m_runs_cli():
+    completed = subprocess.run(
+        [sys.executable, "-m", "evc3d", "build", "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "--output" in completed.stdout
+
+
+def test_mutate_is_reproducible_with_seed(tmp_path):
+    outputs = []
+    for name, seed in (("a.json", "42"), ("b.json", "42"), ("c.json", "43")):
+        output = tmp_path / name
+        cli.main(["mutate", "--output", str(output), "--mutations", "3", "--seed", seed])
+        outputs.append(output.read_text())
+
+    assert outputs[0] == outputs[1]
+    assert outputs[0] != outputs[2]
+    assert outputs[0] != evolve_cli.DEFAULT_GENOTYPE_PATH.read_text()
+
+
+def test_mutate_refuses_to_overwrite_source_genotype(tmp_path, capsys):
+    source = tmp_path / "seed.json"
+    source.write_text(evolve_cli.DEFAULT_GENOTYPE_PATH.read_text())
+
+    with pytest.raises(SystemExit, match="2"):
+        cli.main(["mutate", "--genotype", str(source), "--output", str(source)])
+    assert "--output must differ from --genotype" in capsys.readouterr().err
+
+
+def test_mutate_forwards_mutation_options(monkeypatch, tmp_path):
+    calls = []
+
+    def record_mutation(self, num_mutations=1, rng=None, **options):
+        calls.append((num_mutations, options))
+        return self
+
+    monkeypatch.setattr(Genotype, "mutation", record_mutation)
+    cli.main([
+        "mutate", "--output", str(tmp_path / "out.json"), "--mutations", "2",
+        "--allow-slide-joint", "--disallow-topology-mutations",
+        "--disallow-root-mutation", "--topology-mutation-rate-min", "0.2",
+    ])
+
+    assert calls == [
+        (1, {
+            "allow_topology_mutations": False,
+            "allow_slide_joint": True,
+            "allow_root_mutation": False,
+            "topology_mutation_rate_min": 0.2,
+        }),
+    ] * 2
+
+
+def test_build_default_matches_plain_phenotype_builder(tmp_path):
+    output = tmp_path / "creature.xml"
+    cli.main(["build", "--output", str(output)])
+
+    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
+    expected = PhenotypeBuilder(genotype, max_node=500).build()
+    assert output.read_text() == expected
+
+
+def test_build_writes_task_environment(tmp_path):
+    output = tmp_path / "walker.xml"
+    cli.main(["build", "--task", "walking_x", "--output", str(output)])
+
+    option = ET.parse(output).getroot().find("option")
+    assert option.get("gravity") == "0 0 -9.81"
+    assert option.get("density") == "0"
