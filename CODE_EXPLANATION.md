@@ -27,6 +27,8 @@ The code is split by responsibility:
 - `evc3d/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
 - `evc3d/controller_spec.py`: controller sizes, the `ActuatorController` record, and neural-weight helpers, with no MuJoCo dependency, so genotype code can run without the simulator.
 - `evc3d/control.py`: applies sine or neural controllers to a running MuJoCo simulation each step.
+- `evc3d/evolution.py`: population helpers for evolution: evaluate a population, select elites and tournament winners, mutate children, and summarize generations.
+- `evc3d/run_artifacts.py`: the files `evc3d evolve` writes into a run directory.
 - `evc3d/graph_analysis.py`: graph validation and node-count checks.
 - `evc3d/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
 - `evc3d/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.

@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 import pytest
 
-from evc3d import evolve as evolve_lib
+from evc3d import evolution, run_artifacts
 from evc3d.evaluation import task_definition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
@@ -48,7 +48,7 @@ class FakeEvaluationResult:
 
 
 def _creature(genotype, fitness, changed_by_mutation=False, **result_fields):
-    return evolve_lib.EvaluatedCreature(
+    return evolution.EvaluatedCreature(
         genotype,
         FakeEvaluationResult(fitness=fitness, **result_fields),
         changed_by_mutation=changed_by_mutation,
@@ -57,14 +57,14 @@ def _creature(genotype, fitness, changed_by_mutation=False, **result_fields):
 
 def test_default_thread_count_uses_half_available_affinity(monkeypatch):
     monkeypatch.setattr(
-        evolve_lib.os, "sched_getaffinity", lambda _pid: set(range(10))
+        evolution.os, "sched_getaffinity", lambda _pid: set(range(10))
     )
-    assert evolve_lib.default_thread_count() == 5
+    assert evolution.default_thread_count() == 5
 
 
 def test_default_thread_count_has_minimum_of_one(monkeypatch):
-    monkeypatch.setattr(evolve_lib.os, "sched_getaffinity", lambda _pid: {0})
-    assert evolve_lib.default_thread_count() == 1
+    monkeypatch.setattr(evolution.os, "sched_getaffinity", lambda _pid: {0})
+    assert evolution.default_thread_count() == 1
 
 
 def test_evaluate_defaults_to_swimming_without_self_collision(monkeypatch):
@@ -680,8 +680,8 @@ def test_evaluate_population_runs_in_processes_and_preserves_order(task, config)
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     population = [genotype, genotype]
     with ProcessPoolExecutor(max_workers=2) as executor:
-        evaluated = evolve_lib._evaluate_population(
-            population, task_definition(task), config, executor
+        evaluated = evolution.evaluate_population(
+            population, replace(task_definition(task), config=config), executor
         )
     assert len(evaluated) == len(population)
     assert evaluated[0].fitness == evaluated[1].fitness
@@ -690,11 +690,10 @@ def test_evaluate_population_runs_in_processes_and_preserves_order(task, config)
 def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("walking_x"),
-        WalkingEvaluationConfig(episode_seconds=0.02, self_collision=True),
+        make_definition("walking_x", episode_seconds=0.02, self_collision=True),
     )
     option = ET.fromstring(path.read_text()).find("option")
     assert option is not None
@@ -708,11 +707,10 @@ def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
 def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("swimming_away"),
-        SwimmingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
+        make_definition("swimming_away", episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
     option = root.find("option")
@@ -731,11 +729,10 @@ def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
 def test_saved_best_xml_preserves_flying_physics(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("flying_x"),
-        FlyingEvaluationConfig(episode_seconds=0.02, self_collision=True),
+        make_definition("flying_x", episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
     option = root.find("option")
@@ -758,12 +755,10 @@ def test_saved_best_xml_preserves_flying_physics(tmp_path):
 def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("flying_x"),
-        FlyingEvaluationConfig(episode_seconds=0.02),
-        replace(FLYING_ENVIRONMENT, gravity=-3.5),
+        make_definition("flying_x", episode_seconds=0.02, environment=replace(FLYING_ENVIRONMENT, gravity=-3.5)),
     )
     option = ET.fromstring(path.read_text()).find("option")
     assert option is not None
@@ -773,11 +768,10 @@ def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
 def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("walking_away"),
-        WalkingAwayEvaluationConfig(episode_seconds=0.02, self_collision=True),
+        make_definition("walking_away", episode_seconds=0.02, self_collision=True),
     )
     root = ET.fromstring(path.read_text())
     option = root.find("option")
@@ -798,13 +792,12 @@ def test_save_generation_best_can_skip_generation_history(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = _creature(genotype, 1.0)
 
-    evolve_lib._save_generation_best(
+    run_artifacts.save_generation_checkpoint(
         tmp_path,
         generation=3,
         generation_best=creature,
         best_so_far=creature,
-        definition=task_definition("swimming_x"),
-        config=SwimmingEvaluationConfig(episode_seconds=0.02),
+        definition=make_definition("swimming_x", episode_seconds=0.02),
         save_generation_history=False,
     )
 
@@ -817,13 +810,12 @@ def test_save_generation_best_records_history_by_default(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = _creature(genotype, 1.0)
 
-    evolve_lib._save_generation_best(
+    run_artifacts.save_generation_checkpoint(
         tmp_path,
         generation=3,
         generation_best=creature,
         best_so_far=creature,
-        definition=task_definition("swimming_x"),
-        config=SwimmingEvaluationConfig(episode_seconds=0.02),
+        definition=make_definition("swimming_x", episode_seconds=0.02),
     )
 
     assert (
@@ -876,7 +868,7 @@ def test_generation_progress_reports_mutant_type_counts_when_present():
 def test_generation_summary_counts_disqualifications_and_active_genes():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = _creature(genotype, -1_000.0, disqualified=True, body_count=1)
-    summary = evolve_lib.generation_summary(0, [creature], creature)
+    summary = evolution.generation_summary(0, [creature], creature)
     expected_genes = len(genotype.nodes) + sum(
         len(node.child_connections)
         for node in genotype.nodes.values()
@@ -891,7 +883,7 @@ def test_generation_summary_omits_mutant_type_counts_by_default():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     creature = _creature(genotype, 1.0)
 
-    summary = evolve_lib.generation_summary(0, [creature], creature)
+    summary = evolution.generation_summary(0, [creature], creature)
 
     assert "fitter_mutants" not in summary
     assert "neutral_mutants" not in summary
@@ -909,7 +901,7 @@ def test_generation_summary_counts_mutant_types_against_previous_best():
         _creature(genotype, 5.0),
     ]
 
-    summary = evolve_lib.generation_summary(
+    summary = evolution.generation_summary(
         1,
         evaluated,
         evaluated[0],
@@ -926,7 +918,7 @@ def test_generation_summary_reports_zero_mutant_counts_for_initial_generation():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     evaluated = [_creature(genotype, 1.0), _creature(genotype, 0.5)]
 
-    summary = evolve_lib.generation_summary(
+    summary = evolution.generation_summary(
         0, evaluated, evaluated[0], record_mutant_types=True
     )
 
@@ -940,7 +932,7 @@ def test_generation_summary_requires_baseline_when_creatures_were_mutated():
     evaluated = [_creature(genotype, 1.0, changed_by_mutation=True)]
 
     with pytest.raises(ValueError, match="baseline fitness"):
-        evolve_lib.generation_summary(
+        evolution.generation_summary(
             1, evaluated, evaluated[0], record_mutant_types=True
         )
 
@@ -966,9 +958,9 @@ def test_evaluate_creature_uses_task_failure_result_when_evaluation_raises(monke
     def explode(_genotype, _definition):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(evolve_lib, "evaluate_task", explode)
+    monkeypatch.setattr(evolution, "evaluate_task", explode)
 
-    creature = evolve_lib._evaluate_creature(genotype, definition)
+    creature = evolution._evaluate_creature(genotype, definition)
 
     assert isinstance(creature.result, definition.result_type)
     assert creature.fitness == definition.config.build_failure_fitness
@@ -999,9 +991,9 @@ def test_next_population_with_mutation_flags_marks_only_changed_children(monkeyp
             root = genotype.nodes[genotype.root]
             root.size = (root.size[0] + 0.1, root.size[1], root.size[2])
 
-    monkeypatch.setattr(evolve_lib, "mutate_quietly", mutate_second_child)
+    monkeypatch.setattr(evolution, "mutate_quietly", mutate_second_child)
 
-    population, changed = evolve_lib.next_population_with_mutation_flags(
+    population, changed = evolution.next_population_with_mutation_flags(
         evaluated=evaluated,
         population_size=3,
         elite_count=1,
@@ -1061,7 +1053,7 @@ def test_default_run_directory_uses_task_name(monkeypatch):
                 "default: examples/example_genotype.json",
                 "default: runs/<task>_<timestamp>",
                 "default: 100",
-                f"default: {evolve_lib.default_thread_count()}",
+                f"default: {evolution.default_thread_count()}",
                 "default: 10.0",
                 "default: 500",
                 "default: 0.05",
@@ -1117,15 +1109,12 @@ def test_evolve_accepts_disallow_collision(monkeypatch):
 def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
     path = tmp_path / "best.xml"
-    evolve_lib._write_best_xml(
+    run_artifacts.save_best_phenotype(
         path,
         genotype,
-        task_definition("swimming_x"),
-        SwimmingEvaluationConfig(
-            episode_seconds=0.02,
+        make_definition("swimming_x", episode_seconds=0.02,
             self_collision=False,
-            disallow_collision=True,
-        ),
+            disallow_collision=True,),
     )
     default_geom = ET.fromstring(path.read_text()).find("./default/geom")
     assert default_geom is not None
@@ -1150,8 +1139,8 @@ def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
             (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
         )
 
-    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
-    evolve_lib.initial_population(
+    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
+    evolution.initial_population(
         seed_genotype=genotype,
         population_size=3,
         initial_mutations=2,
@@ -1183,8 +1172,8 @@ def test_next_population_forwards_topology_mutation_setting(monkeypatch):
             (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
         )
 
-    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
-    evolve_lib.next_population(
+    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
+    evolution.next_population(
         evaluated=evaluated,
         population_size=3,
         elite_count=1,
@@ -1217,15 +1206,15 @@ def test_population_helpers_forward_allow_slide_joint(monkeypatch):
     ):
         settings.append(allow_slide_joint)
 
-    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
-    evolve_lib.initial_population(
+    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
+    evolution.initial_population(
         seed_genotype=genotype,
         population_size=2,
         initial_mutations=1,
         rng=random.Random(1),
         allow_slide_joint=True,
     )
-    evolve_lib.next_population(
+    evolution.next_population(
         evaluated=evaluated,
         population_size=2,
         elite_count=1,
@@ -1257,15 +1246,15 @@ def test_population_helpers_forward_root_mutation_setting(monkeypatch):
     ):
         settings.append(allow_root_mutation)
 
-    monkeypatch.setattr(evolve_lib, "mutate_quietly", record_mutation)
-    evolve_lib.initial_population(
+    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
+    evolution.initial_population(
         seed_genotype=genotype,
         population_size=2,
         initial_mutations=1,
         rng=random.Random(1),
         allow_root_mutation=False,
     )
-    evolve_lib.next_population(
+    evolution.next_population(
         evaluated=evaluated,
         population_size=2,
         elite_count=1,

@@ -14,20 +14,19 @@ from typing import Sequence
 
 from ..evaluation import task_definition
 from ..evolution_tasks.shared import EnvironmentFamily
-from ..evolve import (
+from ..evolution import (
     EvaluatedCreature,
-    _evaluate_population,
-    _save_generation_best,
     best_of,
     default_thread_count,
+    evaluate_population,
     generation_summary,
     initial_population,
     next_population_with_mutation_flags,
-    write_json,
 )
 from ..genes import CONTROL_MODES
 from ..genotype import Genotype
 from ..genotype_io import convert_control_mode, load_genotype_from_json
+from ..run_artifacts import save_generation_checkpoint, save_run_config
 from .args import (
     DEFAULT_GENOTYPE_PATH,
     HelpFormatter,
@@ -242,7 +241,7 @@ def run(args: argparse.Namespace) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Snapshot CLI settings so each run can be reproduced from config.json.
-    write_json(run_dir / "config.json", user_options(args))
+    save_run_config(run_dir, user_options(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
     seed_genotype = _resolve_seed_control_mode(
@@ -283,7 +282,7 @@ def run(args: argparse.Namespace) -> None:
                 base_environment, args, generation
             )
             definition.environment = generation_environment
-            evaluated = _evaluate_population(
+            evaluated = evaluate_population(
                 population,
                 definition,
                 executor,
@@ -302,7 +301,7 @@ def run(args: argparse.Namespace) -> None:
             )
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
-            _save_generation_best(
+            save_generation_checkpoint(
                 run_dir,
                 generation,
                 best,

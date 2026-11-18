@@ -869,7 +869,7 @@
         "Run evolution, evaluation, mutation, XML build, or viewing from the command line",
         "Add a subcommand by writing one module with add_parser, validate, and run"
       ],
-      "Related_Modules": ["evc3d.cli.args", "evc3d.evolve", "evc3d.evaluation", "evc3d.scene"]
+      "Related_Modules": ["evc3d.cli.args", "evc3d.evolution", "evc3d.evaluation", "evc3d.scene"]
     },
     "Classes": {},
     "Functions": {
@@ -1414,14 +1414,14 @@
     },
     "Exceptions": {}
   },
-  "evc3d.evolve": {
+  "evc3d.evolution": {
     "Overview": {
-      "Purpose": "Population helpers for mutation-based evolution: evaluate a population in worker processes, select elites and tournament winners, mutate children (flagging those that actually changed), summarize generations, and save run artifacts.",
+      "Purpose": "Population helpers for mutation-based evolution: evaluate a population with a caller-owned executor, select elites and tournament winners, mutate children (flagging those that actually changed), and summarize generations. Run output lives in evc3d.run_artifacts.",
       "Main_Use_Cases": [
         "Build initial and next populations",
         "Summarize a generation for metrics.jsonl"
       ],
-      "Related_Modules": ["evc3d.cli", "evc3d.evaluation", "evc3d.genotype"]
+      "Related_Modules": ["evc3d.run_artifacts", "evc3d.cli", "evc3d.evaluation", "evc3d.genotype"]
     },
     "Classes": {
       "EvaluatedCreature": {
@@ -1550,17 +1550,69 @@
         "Returns": {"Type": "EvaluatedCreature", "Description": "Selected parent."},
         "Raises": []
       },
-      "write_json": {
-        "Signature": "write_json(path: Path, data: Any) -> None",
-        "Purpose": "Write a JSON-serializable object to `path`, creating parent directories.",
+      "evaluate_population": {
+        "Signature": "evaluate_population(population: list[Genotype], definition: TaskDefinition, executor: Executor, changed_by_mutation: list[bool] | None = None) -> list[EvaluatedCreature]",
+        "Purpose": "Simulate and score every genotype with the caller-owned executor (normally a ProcessPoolExecutor), preserving input order.",
         "Parameters": {
-          "path": {"Type": "Path", "Default": "required", "Description": "Output file path."},
-          "data": {"Type": "Any", "Default": "required", "Description": "MuJoCo simulation state for the model."}
+          "population": {"Type": "list[Genotype]", "Default": "required", "Description": "Genotypes to evaluate."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task to evaluate on."},
+          "executor": {"Type": "Executor", "Default": "required", "Description": "Executor that runs evaluations, e.g. ProcessPoolExecutor."},
+          "changed_by_mutation": {"Type": "list[bool] | None", "Default": "None", "Description": "Optional per-genotype flags attached to the results."}
         },
-        "Returns": {"Type": "None", "Description": "Nothing; writes the file."},
+        "Returns": {"Type": "list[EvaluatedCreature]", "Description": "Evaluated creatures in input order."},
+        "Raises": ["ValueError"]
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.run_artifacts": {
+    "Overview": {
+      "Purpose": "Run output for `evc3d evolve`: writes config.json, the latest and all-time best genotypes, best_metrics.json, best_creature.xml, and optional generation_bests/generation_NNNN.json checkpoints into the run directory.",
+      "Main_Use_Cases": [
+        "Save a run configuration for reproducibility",
+        "Persist each generation's best creature and the all-time best"
+      ],
+      "Related_Modules": ["evc3d.evolution", "evc3d.cli", "evc3d.genotype_io", "evc3d.phenotype"]
+    },
+    "Classes": {},
+    "Functions": {
+      "save_run_config": {
+        "Signature": "save_run_config(run_dir: Path, options: dict[str, Any]) -> None",
+        "Purpose": "Write the run's command-line options to config.json for reproducibility.",
+        "Parameters": {
+          "run_dir": {"Type": "Path", "Default": "required", "Description": "Run output directory."},
+          "options": {"Type": "dict[str, Any]", "Default": "required", "Description": "Parsed options to record (see evc3d.cli.user_options)."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; writes config.json."},
+        "Raises": []
+      },
+      "save_generation_checkpoint": {
+        "Signature": "save_generation_checkpoint(run_dir: Path, generation: int, generation_best: EvaluatedCreature, best_so_far: EvaluatedCreature, definition: TaskDefinition, save_generation_history: bool = True) -> None",
+        "Purpose": "Persist the generation best and all-time best genotypes, best_metrics.json, and best_creature.xml; optionally add a generation_bests checkpoint.",
+        "Parameters": {
+          "run_dir": {"Type": "Path", "Default": "required", "Description": "Run output directory."},
+          "generation": {"Type": "int", "Default": "required", "Description": "Generation index (0 = initial population)."},
+          "generation_best": {"Type": "EvaluatedCreature", "Default": "required", "Description": "Best creature of this generation."},
+          "best_so_far": {"Type": "EvaluatedCreature", "Default": "required", "Description": "Best creature across all generations so far."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task used to build best_creature.xml."},
+          "save_generation_history": {"Type": "bool", "Default": "True", "Description": "Also write generation_bests/generation_NNNN.json."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; writes files."},
+        "Raises": []
+      },
+      "save_best_phenotype": {
+        "Signature": "save_best_phenotype(path: Path, genotype: Genotype, definition: TaskDefinition) -> None",
+        "Purpose": "Write the creature's MJCF for the task; skip silently if the phenotype build aborts.",
+        "Parameters": {
+          "path": {"Type": "Path", "Default": "required", "Description": "Output XML path."},
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task whose environment is written into the XML."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; writes the file when the build succeeds."},
         "Raises": []
       }
     },
+    "Internal_Functions": {"_write_json": "Writes a JSON-serializable object, creating parent directories."},
     "Exceptions": {}
   },
   "evc3d.scene": {

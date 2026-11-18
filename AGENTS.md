@@ -22,7 +22,8 @@ Use this map to choose files before broad searches:
 - `evc3d/control.py`: applies controllers to a running simulation (`apply_controller`, actuator ID lookup). Edit for per-step sine or neural control.
 - `evc3d/graph_analysis.py`: graph validity and generated body-count analysis. Edit for recursion, terminal-only, missing-node, or max-body-count validation rules.
 - `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
-- `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
+- `evc3d/evolution.py`: population helpers (evaluate a population, elite/tournament selection, mutation of children, generation summaries). Edit for selection, population initialization, or mutation scheduling.
+- `evc3d/run_artifacts.py`: files written into an evolve run directory (config, best genotypes, metrics, best XML, generation checkpoints). Edit for run output layout.
 - `evc3d/scene.py`: shared display setup for viewer and video (build for a task, placement and settling without scoring rules, lighting, floor, one controlled step with failure checks). Edit for anything both display modes should share.
 - `evc3d/video.py`: MP4 recording loop (`evc3d view --mp4`). Edit for frame capture, video camera motion, or shadow tweaks.
 - `evc3d/viewer.py`: interactive MuJoCo window loop (`evc3d view`). Edit for live stepping, pacing, or viewer camera.

@@ -1,32 +1,28 @@
-"""Reusable helpers for mutation-based virtual-creature evolution."""
+"""Population helpers for mutation-based evolution.
+
+Evaluation of a population, elite and tournament selection, mutation of
+children, and per-generation summaries. Writing run output lives in
+``evc3d.run_artifacts``; the ``evc3d evolve`` command ties them together.
+"""
 
 from __future__ import annotations
 
 import contextlib
 import copy
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Executor
 from dataclasses import asdict, dataclass
 import io
 from itertools import repeat
-import json
 import math
 import os
-from pathlib import Path
 import random
 from statistics import mean
 from typing import Any
 
 from .evaluation import evaluate_task
-from .evolution_tasks.shared import (
-    EnvironmentFamily,
-    EvaluationConfig,
-    EvaluationResult,
-    TaskDefinition,
-)
+from .evolution_tasks.shared import EvaluationResult, TaskDefinition
 from .genotype import Genotype
-from .genotype_io import genotype_to_dict, save_genotype_to_json
-from .graph_analysis import PhenotypeBuildAbort
-from .phenotype import PhenotypeBuilder
+from .genotype_io import genotype_to_dict
 
 
 @dataclass
@@ -60,22 +56,18 @@ class EvaluatedCreature:
         return asdict(self.result)
 
 
-def _evaluate_population(
+def evaluate_population(
     population: list[Genotype],
     definition: TaskDefinition,
-    config_or_executor: EvaluationConfig | ProcessPoolExecutor,
-    executor: ProcessPoolExecutor | None = None,
+    executor: Executor,
     changed_by_mutation: list[bool] | None = None,
 ) -> list[EvaluatedCreature]:
-    """Simulate and score every genotype concurrently, preserving input order.
+    """Simulate and score every genotype with ``executor``, preserving input order.
 
+    The caller owns the executor (normally a ``ProcessPoolExecutor``).
     ``changed_by_mutation`` optionally gives one flag per genotype, as returned
     by ``next_population_with_mutation_flags``; it is attached to each result.
     """
-    if executor is None:
-        executor = config_or_executor
-    else:
-        definition.config = config_or_executor
     if changed_by_mutation is not None and len(changed_by_mutation) != len(population):
         raise ValueError("changed_by_mutation must match population length")
     evaluated = list(
@@ -101,55 +93,6 @@ def _evaluate_creature(
     except Exception as error:
         result = definition.failed_task_callback(definition.config, str(error))
     return EvaluatedCreature(genotype=genotype, result=result)
-
-
-def _save_generation_best(
-    run_dir: Path,
-    generation: int,
-    generation_best: EvaluatedCreature,
-    best_so_far: EvaluatedCreature,
-    definition: TaskDefinition,
-    config: EvaluationConfig | None = None,
-    save_generation_history: bool = True,
-) -> None:
-    """Persist the generation best and all-time best genotypes, metrics, and MJCF."""
-    if config is not None:
-        definition.config = config
-    save_genotype_to_json(generation_best.genotype, run_dir / "latest_best_genotype.json")
-    save_genotype_to_json(best_so_far.genotype, run_dir / "best_genotype.json")
-    write_json(run_dir / "best_metrics.json", best_so_far.metrics_dict())
-    _write_best_xml(
-        run_dir / "best_creature.xml",
-        best_so_far.genotype,
-        definition,
-    )
-
-    if save_generation_history:
-        generation_dir = run_dir / "generation_bests"
-        generation_dir.mkdir(exist_ok=True)
-        save_genotype_to_json(
-            generation_best.genotype,
-            generation_dir / f"generation_{generation:04d}.json",
-        )
-
-
-def _write_best_xml(
-    path: Path,
-    genotype: Genotype,
-    definition: TaskDefinition,
-    config: EvaluationConfig | None = None,
-    environment: EnvironmentFamily | None = None,
-) -> None:
-    """Write the best creature's MJCF to disk, skipping output if the build aborts."""
-    if config is not None:
-        definition.config = config
-    if environment is not None:
-        definition.environment = environment
-    try:
-        mjcf = PhenotypeBuilder(genotype, definition).build()
-    except PhenotypeBuildAbort:
-        return
-    path.write_text(mjcf)
 
 
 def default_thread_count() -> int:
@@ -387,11 +330,3 @@ def _mutant_type_counts(
         else:
             counts["less_fit_mutants"] += 1
     return counts
-
-
-def write_json(path: Path, data: Any) -> None:
-    """Write a JSON-serializable object to ``path``, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
-        json.dump(data, f, indent=2, default=str)
-        f.write("\n")
