@@ -31,6 +31,8 @@ from evc3d.cli import evolve as evolve_cli
 from evc3d.cli import mutate as mutate_cli
 from evc3d.cli import view as view_cli
 
+from genotype_factory import make_definition
+
 
 @dataclass(frozen=True)
 class FakeEvaluationResult:
@@ -1350,7 +1352,7 @@ def test_build_default_matches_plain_phenotype_builder(tmp_path):
     cli.main(["build", "--output", str(output)])
 
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    expected = PhenotypeBuilder(genotype, max_node=500).build()
+    expected = PhenotypeBuilder(genotype, make_definition(max_node=500)).build()
     assert output.read_text() == expected
 
 

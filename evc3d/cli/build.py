@@ -64,13 +64,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 def run(args: argparse.Namespace) -> None:
     genotype = load_genotype_from_json(args.genotype)
     definition = resolve_task_definition(args)
-    config = definition.config
-    builder = PhenotypeBuilder(
-        genotype,
-        max_node=args.max_node,
-        environment=definition.environment,
-        self_collision=config.self_collision or config.disallow_collision,
-    )
+    builder = PhenotypeBuilder(genotype, definition)
     try:
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:

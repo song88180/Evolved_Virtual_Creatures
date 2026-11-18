@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 import mujoco
@@ -82,6 +83,8 @@ from evc3d.evolution_tasks.walking_away import TASK_ENVIRONMENT as WALKING_AWAY_
 from evc3d.evolution_tasks.walking_x import TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT
 from evc3d.genotype_io import build_genotype, load_genotype_from_json
 from evc3d.phenotype import PhenotypeBuilder
+
+from genotype_factory import make_definition
 
 
 GENOTYPE_PATH = "examples/example_genotype.json"
@@ -293,25 +296,31 @@ def test_task_physics_settings_are_distinct():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     swimming = ET.fromstring(
         PhenotypeBuilder(
-            genotype, max_node=500, environment=SWIMMING_X_ENVIRONMENT
+            genotype,
+            make_definition(
+                max_node=500, environment=SWIMMING_X_ENVIRONMENT,
+            ),
         ).build()
     )
     walking = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment=WALKING_X_ENVIRONMENT).build()
+        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=WALKING_X_ENVIRONMENT)).build()
     )
     swimming_away = ET.fromstring(
         PhenotypeBuilder(
-            genotype, max_node=500, environment=SWIMMING_AWAY_ENVIRONMENT
+            genotype,
+            make_definition(
+                max_node=500, environment=SWIMMING_AWAY_ENVIRONMENT,
+            ),
         ).build()
     )
     walking_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment=WALKING_AWAY_ENVIRONMENT).build()
+        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=WALKING_AWAY_ENVIRONMENT)).build()
     )
     flying = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment=FLYING_X_ENVIRONMENT).build()
+        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=FLYING_X_ENVIRONMENT)).build()
     )
     flying_away = ET.fromstring(
-        PhenotypeBuilder(genotype, max_node=500, environment=FLYING_AWAY_ENVIRONMENT).build()
+        PhenotypeBuilder(genotype, make_definition(max_node=500, environment=FLYING_AWAY_ENVIRONMENT)).build()
     )
 
     swimming_option = swimming.find("option")
@@ -375,7 +384,10 @@ def test_task_physics_settings_are_distinct():
 def test_flying_fluid_settings_compile_in_mujoco():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     mjcf = PhenotypeBuilder(
-        genotype, max_node=500, environment=FLYING_X_ENVIRONMENT
+        genotype,
+        make_definition(
+            max_node=500, environment=FLYING_X_ENVIRONMENT,
+        ),
     ).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
 
@@ -388,11 +400,13 @@ def test_flying_fluid_settings_can_be_overridden():
     root = ET.fromstring(
         PhenotypeBuilder(
             genotype,
-            max_node=500,
-            environment=replace(
-                FLYING_X_ENVIRONMENT, fluid_density=0.9,
-                fluid_viscosity=0.00002, fluid_shape="none",
-                fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+            make_definition(
+                max_node=500,
+                environment=replace(
+                    FLYING_X_ENVIRONMENT, fluid_density=0.9,
+                    fluid_viscosity=0.00002, fluid_shape="none",
+                    fluid_coef=(0.1, 0.2, 0.3, 0.4, 0.5),
+                ),
             ),
         ).build()
     )
@@ -446,9 +460,11 @@ def test_self_collision_masks_and_parent_filtering():
     walking_without_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
             genotype,
-            max_node=500,
-            environment=WALKING_X_ENVIRONMENT,
-            self_collision=False,
+            make_definition(
+                max_node=500,
+                environment=WALKING_X_ENVIRONMENT,
+                self_collision=False,
+            ),
         ).build()
     )
     floor_id = mujoco.mj_name2id(
@@ -468,9 +484,11 @@ def test_self_collision_masks_and_parent_filtering():
     walking_with_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
             genotype,
-            max_node=500,
-            environment=WALKING_X_ENVIRONMENT,
-            self_collision=True,
+            make_definition(
+                max_node=500,
+                environment=WALKING_X_ENVIRONMENT,
+                self_collision=True,
+            ),
         ).build()
     )
     parent_pair, nonparent_pair = _direct_parent_and_nonparent_pairs(
@@ -486,9 +504,11 @@ def test_self_collision_masks_and_parent_filtering():
     swimming_with_self_collision = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
             genotype,
-            max_node=500,
-            environment=SWIMMING_X_ENVIRONMENT,
-            self_collision=True,
+            make_definition(
+                max_node=500,
+                environment=SWIMMING_X_ENVIRONMENT,
+                self_collision=True,
+            ),
         ).build()
     )
     floor_id = mujoco.mj_name2id(
@@ -857,7 +877,7 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
         "total_volume": 0.0,
     }
 
-    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), SimpleNamespace(root_body_name="body_1")))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
@@ -906,7 +926,7 @@ def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
         "total_volume": 0.0,
     }
 
-    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), object()))
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), type("Data", (), {})(), SimpleNamespace(root_body_name="body_1")))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_walking_height_failure_reason", lambda *_args: None)
     monkeypatch.setattr(evaluation, "_run_episode", lambda *_args, **_kwargs: metrics)
@@ -938,8 +958,10 @@ def test_flying_speed_is_measured_before_first_ground_contact():
     )
     builder = PhenotypeBuilder(
         genotype,
-        max_node=config.max_node,
-        environment=environment,
+        make_definition(
+            max_node=config.max_node,
+            environment=environment,
+        ),
     )
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
@@ -1035,7 +1057,10 @@ def test_flying_initialization_raises_low_creature_above_floor():
     )
     model = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, environment=FLYING_X_ENVIRONMENT
+            genotype,
+            make_definition(
+                max_node=500, environment=FLYING_X_ENVIRONMENT,
+            ),
         ).build()
     )
     data = mujoco.MjData(model)
@@ -1064,7 +1089,10 @@ def test_walking_initialization_raises_low_creature_above_floor():
     )
     model = mujoco.MjModel.from_xml_string(
         PhenotypeBuilder(
-            genotype, max_node=500, environment=WALKING_X_ENVIRONMENT
+            genotype,
+            make_definition(
+                max_node=500, environment=WALKING_X_ENVIRONMENT,
+            ),
         ).build()
     )
     data = mujoco.MjData(model)
@@ -1094,7 +1122,7 @@ def test_generic_initialization_runs_environment_callback():
     )
     custom_definition = replace(SWIMMING_X_TASK, environment=environment)
     config = SwimmingEvaluationConfig()
-    builder = PhenotypeBuilder(genotype, max_node=500, environment=environment)
+    builder = PhenotypeBuilder(genotype, make_definition(max_node=500, environment=environment))
     model = mujoco.MjModel.from_xml_string(builder.build())
 
     assert initialize_model(model, mujoco.MjData(model), config, environment) == (
@@ -1458,7 +1486,7 @@ def _neural_single_motor_model(neural_b2):
             "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
         },
     )
-    builder = PhenotypeBuilder(genotype, max_node=10)
+    builder = PhenotypeBuilder(genotype, make_definition(max_node=10))
     model = mujoco.MjModel.from_xml_string(builder.build())
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
@@ -1612,7 +1640,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
     monkeypatch.setattr(evaluation, "_copy_simulation_state", lambda *_args: object())
     monkeypatch.setattr(evaluation, "_run_episode", fake_run)
 
-    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), object()))
+    monkeypatch.setattr(evaluation, "_build_model", lambda *_args: (object(), object(), SimpleNamespace(root_body_name="body_1")))
     monkeypatch.setattr(evaluation, "initialize_model", lambda *_args: None)
     result = evaluate_task(object(), FLYING_X_TASK, config)
 

@@ -16,7 +16,7 @@ from evc3d.graph_analysis import (
     GenotypeGraphError,
 )
 
-from genotype_factory import tree_genotype, tree_node
+from genotype_factory import make_definition, tree_genotype, tree_node
 
 
 def test_new_node_names_do_not_reuse_archived_gene_names():
@@ -860,7 +860,7 @@ MUTABLE_CONNECTION_FIELDS = {
 
 
 def _phenotype_and_controller_snapshot(genotype):
-    builder = PhenotypeBuilder(genotype, max_node=100)
+    builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
     mjcf = builder.build()
     controllers = tuple(
         (controller.amp, controller.freq, controller.phase)
@@ -1182,7 +1182,7 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
             ),
         },
     )
-    before_builder = PhenotypeBuilder(genotype, max_node=100)
+    before_builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
     before_builder.build()
 
     genotype.mutation(
@@ -1191,7 +1191,7 @@ def test_non_topology_mutations_preserve_phenotype_body_count():
         allow_topology_mutations=False,
     )
 
-    after_builder = PhenotypeBuilder(genotype, max_node=100)
+    after_builder = PhenotypeBuilder(genotype, make_definition(max_node=100))
     after_builder.build()
     assert after_builder.body_counter == before_builder.body_counter
 

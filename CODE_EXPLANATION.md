@@ -402,7 +402,7 @@ The `main()` function runs the full pipeline:
 genotype = load_genotype_from_json(DEFAULT_GENOTYPE_PATH)
 genotype.mutation(num_mutations=10)
 print("Building MuJoCo organism from mutated genotype.")
-builder = PhenotypeBuilder(genotype, max_node=MAX_N_NODES)
+builder = PhenotypeBuilder(genotype, task_definition("swimming_x"))
 mjcf = builder.build()
 ```
 

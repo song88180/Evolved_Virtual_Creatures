@@ -60,17 +60,12 @@ def prepare_scene(
     config = definition.config
     environment = definition.environment
     try:
-        builder = PhenotypeBuilder(
-            genotype,
-            max_node=config.max_node,
-            environment=environment,
-            self_collision=config.self_collision or config.disallow_collision,
-        )
+        builder = PhenotypeBuilder(genotype, definition)
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
         raise SceneBuildError(str(error)) from error
 
-    root_body_name = f"{genotype.root}_1"
+    root_body_name = builder.root_body_name
     mjcf = _track_light(mjcf, root_body_name, spotlight)
     model = mujoco.MjModel.from_xml_string(mjcf)
     _configure_light(model, shadowsize, spotlight)

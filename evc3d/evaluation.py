@@ -114,7 +114,7 @@ def evaluate_task(
         return definition.failed_task_callback(config, reason)
 
     environment = definition.environment
-    built = _build_model(genotype, config, environment)
+    built = _build_model(genotype, definition)
     if isinstance(built, str):
         return failed(built)
     model, data, builder = built
@@ -132,7 +132,7 @@ def evaluate_task(
         builder,
         config,
         policy,
-        root_body_name=(f"{genotype.root}_1" if policy.track_root_upright else None),
+        root_body_name=(builder.root_body_name if policy.track_root_upright else None),
     )
     if isinstance(controlled_metrics, str):
         return failed(controlled_metrics)
@@ -351,18 +351,11 @@ def settle_model(
 
 def _build_model(
     genotype: Genotype,
-    config: task_shared.EvaluationConfig,
-    environment: task_shared.EnvironmentFamily,
+    definition: task_shared.TaskDefinition,
 ):
+    config = definition.config
     try:
-        builder = PhenotypeBuilder(
-            genotype,
-            max_node=config.max_node,
-            environment=environment,
-            self_collision=(
-                config.self_collision or config.disallow_collision
-            ),
-        )
+        builder = PhenotypeBuilder(genotype, definition)
         mjcf = builder.build()
     except PhenotypeBuildAbort as error:
         return str(error)

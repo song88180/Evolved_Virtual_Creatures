@@ -21,7 +21,7 @@ from evc3d.genotype_io import (
 from evc3d.graph_analysis import GenotypeGraphAnalyzer
 from evc3d.phenotype import PhenotypeBuilder
 
-from genotype_factory import tree_genotype, tree_node
+from genotype_factory import make_definition, tree_genotype, tree_node
 
 
 def _vector(element, attribute):
@@ -402,7 +402,7 @@ def test_neural_hinge_joint_uses_wide_symmetric_range():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=10).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=10)).build())
     joint = xml_root.find("./worldbody/body/body/joint")
 
     assert joint is not None
@@ -472,7 +472,7 @@ def test_global_control_frequency_scales_actuator_controllers():
         global_control_freq=2.5,
     )
 
-    builder = PhenotypeBuilder(genotype, max_node=10)
+    builder = PhenotypeBuilder(genotype, make_definition(max_node=10))
     builder.build()
 
     assert builder.actuator_controllers[0].freq == pytest.approx(7.5)
@@ -546,7 +546,7 @@ def test_body_shapes_emit_expected_mujoco_geom_and_compile(
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=1).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=1)).build()
     xml_root = ET.fromstring(mjcf)
     geom = xml_root.find("./worldbody/body/geom")
     model = mujoco.MjModel.from_xml_string(mjcf)
@@ -605,7 +605,7 @@ def test_fixed_joint_emits_rigid_child_without_joint_or_motor():
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=2).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=2)).build()
     xml_root = ET.fromstring(mjcf)
     child_body = xml_root.find("./worldbody/body/body")
 
@@ -637,7 +637,7 @@ def test_oriented_root_and_child_emit_quat_and_compile():
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=2).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=2)).build()
     xml_root = ET.fromstring(mjcf)
     root_body = xml_root.find("./worldbody/body")
     child_body = root_body.find("body")
@@ -669,7 +669,7 @@ def test_rotated_child_joint_lies_on_parent_and_child_surfaces():
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=10).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=10)).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
@@ -710,7 +710,7 @@ def test_child_hinge_and_geom_meet_parent_surface():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=10).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=10)).build())
     root_body = xml_root.find("./worldbody/body")
     child_body = root_body.find("body")
     child_geom = child_body.find("geom")
@@ -755,7 +755,7 @@ def test_connection_scale_changes_repeated_child_size_by_hierarchy_order():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=10).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=10)).build())
     initial_segment = xml_root.find("./worldbody/body/body")
     first_order = initial_segment.findall("body")
     second_order = [
@@ -807,7 +807,7 @@ def test_terminal_only_child_is_created_only_on_terminal_parent():
     )
 
     assert GenotypeGraphAnalyzer(genotype, max_node=5).validate() == 5
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=5).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=5)).build())
     first_segment = xml_root.find("./worldbody/body/body")
     second_segment = first_segment.find("./body")
     terminal_segment = second_segment.find("./body")
@@ -853,7 +853,7 @@ def test_slide_and_ball_joints_compile_with_expected_actuators():
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=3).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=3)).build()
     xml_root = ET.fromstring(mjcf)
     child_bodies = xml_root.findall("./worldbody/body/body")
     joints = [body.find("joint") for body in child_bodies]
@@ -907,7 +907,7 @@ def test_ball_neural_motors_use_persisted_output_axes():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=2).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=2)).build())
     gears = [
         tuple(float(value) for value in motor.get("gear").split())
         for motor in xml_root.findall("./actuator/motor")
@@ -944,7 +944,7 @@ def test_slide_axis_uses_vector_reflection_for_symmetry():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=3).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=3)).build())
     joints = [
         body.find("joint")
         for body in xml_root.findall("./worldbody/body/body")
@@ -984,7 +984,7 @@ def test_recursive_attachment_uses_parent_geom_center():
         },
     )
 
-    xml_root = ET.fromstring(PhenotypeBuilder(genotype, max_node=10).build())
+    xml_root = ET.fromstring(PhenotypeBuilder(genotype, make_definition(max_node=10)).build())
     root_body = xml_root.find("./worldbody/body")
     segment_body = root_body.find("body")
     tip_body = segment_body.find("body")
@@ -1024,7 +1024,7 @@ def test_symmetric_rotated_children_attach_at_child_surface():
         },
     )
 
-    mjcf = PhenotypeBuilder(genotype, max_node=3).build()
+    mjcf = PhenotypeBuilder(genotype, make_definition(max_node=3)).build()
     model = mujoco.MjModel.from_xml_string(mjcf)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
@@ -1153,7 +1153,7 @@ def test_convert_neural_to_sine_clears_neural_and_zeroes_amplitude():
         assert connection.neural_b2 == ()
         assert connection.neural_output_axes == ()
     assert original.connections["body_to_limb"].neural_w1 != ()
-    assert PhenotypeBuilder(converted, max_node=10).build()
+    assert PhenotypeBuilder(converted, make_definition(max_node=10)).build()
 
 
 def test_convert_to_same_control_mode_keeps_parameters():

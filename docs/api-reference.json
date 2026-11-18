@@ -548,12 +548,10 @@
       "PhenotypeBuilder": {
         "Purpose": "Builds MuJoCo MJCF XML from a validated genotype graph.",
         "Constructor": {
-          "Signature": "PhenotypeBuilder(genotype: Genotype, max_node: int, environment: EnvironmentFamily = DEFAULT_ENVIRONMENT, self_collision: bool = false)",
+          "Signature": "PhenotypeBuilder(genotype: Genotype, definition: TaskDefinition)",
           "Parameters": {
             "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype graph to expand."},
-            "max_node": {"Type": "int", "Default": "required", "Description": "Maximum allowed generated body count."},
-            "environment": {"Type": "EnvironmentFamily", "Default": "DEFAULT_ENVIRONMENT", "Description": "Declarative MuJoCo physics and initial-placement settings."},
-            "self_collision": {"Type": "bool", "Default": "false", "Description": "Enable non-parent creature self-collision while retaining MuJoCo parent filtering."}
+            "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task to build for. Supplies the node limit (config.max_node), the physical environment, and the collision rule: self-collision is enabled when config.self_collision or config.disallow_collision is set."}
           },
           "Raises": ["ValueError"]
         },
@@ -561,7 +559,9 @@
           "genotype": {"Type": "Genotype", "Description": "Genotype being expanded."},
           "max_node": {"Type": "int", "Description": "Generated body budget."},
           "environment": {"Type": "EnvironmentFamily", "Description": "Declarative physical environment used for MJCF construction."},
-          "self_collision": {"Type": "bool", "Description": "Whether non-parent creature bodies can collide."},
+          "self_collision": {"Type": "bool", "Description": "Whether non-parent creature bodies can collide (derived from the task config)."},
+          "definition": {"Type": "TaskDefinition", "Description": "Task the phenotype is built for."},
+          "root_body_name": {"Type": "str | None", "Description": "MuJoCo name of the creature's root body, set by build()."},
           "body_counter": {"Type": "int", "Description": "Counter used for unique body names."},
           "joint_counter": {"Type": "int", "Description": "Counter used for unique joint names."},
           "motor_counter": {"Type": "int", "Description": "Counter used for unique motor names."},
@@ -576,7 +576,7 @@
             "Parameters": {},
             "Returns": {"Type": "str", "Description": "Formatted MJCF XML string."},
             "Raises": ["GenotypeGraphError", "PhenotypeNodeLimitExceeded", "RuntimeError"],
-            "Example": "mjcf = PhenotypeBuilder(genotype, max_node=500).build()"
+            "Example": "mjcf = PhenotypeBuilder(genotype, task_definition(\"walking_x\")).build()"
           },
           "new_body_name": {
             "Signature": "new_body_name(node_name: str) -> str",
@@ -755,7 +755,7 @@
             "Example": "if builder.can_add_child(child_node, depths): ..."
           }
         },
-        "Example": "builder = PhenotypeBuilder(genotype, max_node=500); mjcf = builder.build(); controllers = builder.actuator_controllers"
+        "Example": "builder = PhenotypeBuilder(genotype, task_definition(\"swimming_x\")); mjcf = builder.build(); controllers = builder.actuator_controllers"
       }
     },
     "Functions": {

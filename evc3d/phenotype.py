@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
 from .constants import FACE_NORMALS
-from .evolution_tasks.shared import DEFAULT_ENVIRONMENT, EnvironmentFamily
+from .evolution_tasks.shared import TaskDefinition
 from .control import (
     BALL_NEURAL_AXES,
     ActuatorController,
@@ -30,19 +30,23 @@ DEFAULT_ARTICULATED_ROOT_AXIS = (0.0, 1.0, 0.0)
 # -----------------------------
 
 class PhenotypeBuilder:
-    def __init__(
-        self,
-        genotype: Genotype,
-        max_node: int,
-        environment: EnvironmentFamily = DEFAULT_ENVIRONMENT,
-        self_collision: bool = False,
-    ):
-        if max_node < 1:
+    def __init__(self, genotype: Genotype, definition: TaskDefinition):
+        """Prepare to build ``genotype`` exactly as ``definition`` evaluates it.
+
+        The task supplies the node limit (``config.max_node``), the physical
+        environment, and the collision rule: body parts collide with each other
+        when ``config.self_collision`` is set, and also whenever
+        ``config.disallow_collision`` is set, since disqualifying collisions
+        requires detecting them.
+        """
+        config = definition.config
+        if config.max_node < 1:
             raise ValueError("max_node must be at least 1")
         self.genotype = genotype
-        self.max_node = max_node
-        self.environment = environment
-        self.self_collision = self_collision
+        self.definition = definition
+        self.max_node = config.max_node
+        self.environment = definition.environment
+        self.self_collision = config.self_collision or config.disallow_collision
         self.body_counter = 0
         self.joint_counter = 0
         self.motor_counter = 0
@@ -50,6 +54,8 @@ class PhenotypeBuilder:
         self.actuator_xml: Optional[ET.Element] = None
         self.actuator_controllers: List[ActuatorController] = []
         self.control_orders: Dict[Tuple[int, ...], int] = {}
+        # MuJoCo name of the creature's root body; set by build().
+        self.root_body_name: Optional[str] = None
 
     def new_body_name(self, node_name: str) -> str:
         self.body_counter += 1
@@ -81,6 +87,7 @@ class PhenotypeBuilder:
             vec_to_str(self.environment.initial_root_position),
             quat=matrix_to_quat(euler_degrees_to_matrix(root_node.orientation)),
         )
+        self.root_body_name = root_body.get("name")
 
         self.add_node_to_body(
             parent_xml=root_body,

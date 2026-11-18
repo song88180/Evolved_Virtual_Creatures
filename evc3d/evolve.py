@@ -146,15 +146,7 @@ def _write_best_xml(
     if environment is not None:
         definition.environment = environment
     try:
-        mjcf = PhenotypeBuilder(
-            genotype,
-            max_node=definition.config.max_node,
-            environment=definition.environment,
-            self_collision=(
-                definition.config.self_collision
-                or definition.config.disallow_collision
-            ),
-        ).build()
+        mjcf = PhenotypeBuilder(genotype, definition).build()
     except PhenotypeBuildAbort:
         return
     path.write_text(mjcf)

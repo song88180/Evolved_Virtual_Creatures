@@ -4,13 +4,17 @@
 want to declare connection objects next to their parent node instead, so
 ``tree_node`` pairs a node gene with its outgoing ``ConnectionGene`` objects and
 ``tree_genotype`` names those connections and registers them on the genotype.
+``make_definition`` returns a task definition for ``PhenotypeBuilder`` with only
+the overridden fields changed.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Iterable, List, Mapping, Union
 
+from evc3d.evaluation import task_definition
+from evc3d.evolution_tasks.shared import EnvironmentFamily, TaskDefinition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
 
@@ -75,4 +79,24 @@ def tree_genotype(
         archived_nodes=archived_genes,
         archived_connections=archived_connections,
         **kwargs,
+    )
+
+
+def make_definition(
+    task: str = "swimming_x",
+    *,
+    environment: EnvironmentFamily | None = None,
+    **config_overrides,
+) -> TaskDefinition:
+    """Return a private copy of a registered task with config/environment overrides.
+
+    ``PhenotypeBuilder`` takes a task definition; geometry tests use this to set
+    just the fields they care about (usually ``max_node``). The registry's
+    shared definition object is never modified.
+    """
+    base = task_definition(task)
+    return replace(
+        base,
+        config=replace(base.config, **config_overrides),
+        environment=base.environment if environment is None else environment,
     )
