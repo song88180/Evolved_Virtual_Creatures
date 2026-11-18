@@ -1,70 +1,54 @@
+"""Tests for the evc3d command: argument parsing, validation, help text, and subcommand behaviour."""
+
 import argparse
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import FrozenInstanceError, dataclass, replace
-from pathlib import Path
 import random
 import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-import mujoco
 import pytest
 
-from evc3d import evolution, run_artifacts
+from evc3d import evolution, cli
+from evc3d.cli.args import resolve_task_definition
+from evc3d.cli import (
+    build as build_cli,
+    evaluate,
+    evolve as evolve_cli,
+    mutate as mutate_cli,
+    view as view_cli,
+)
 from evc3d.evolution_tasks import task_definition
-from evc3d.genes import ConnectionGene, NodeGene
+from evc3d.evolution_tasks.swimming_x import SwimmingEvaluationConfig
 from evc3d.genotype import Genotype
 from evc3d.genotype_io import build_genotype
 from evc3d.phenotype import PhenotypeBuilder
-from evc3d.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
-from evc3d.evolution_tasks.flying_x import FlyingEvaluationConfig
-from evc3d.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
-from evc3d.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
-from evc3d.evolution_tasks.swimming_x import SwimmingEvaluationConfig
-from evc3d.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
-from evc3d.evolution_tasks.walking_x import WalkingEvaluationConfig
-from evc3d import cli
-from evc3d.cli import build as build_cli
-from evc3d.cli import evaluate
-from evc3d.cli import evolve as evolve_cli
-from evc3d.cli import mutate as mutate_cli
-from evc3d.cli import view as view_cli
-
-from genotype_factory import make_definition
+from helpers import make_definition, make_creature
 
 
-@dataclass(frozen=True)
-class FakeEvaluationResult:
-    """Minimal stand-in for a task result with the fields evolution reads."""
-
-    fitness: float
-    body_count: int = 0
-    total_volume: float = 0.0
-    control_energy: float = 0.0
-    build_failed: bool = False
-    disqualified: bool = False
-    failure_reason: str | None = None
-
-
-def _creature(genotype, fitness, changed_by_mutation=False, **result_fields):
-    return evolution.EvaluatedCreature(
-        genotype,
-        FakeEvaluationResult(fitness=fitness, **result_fields),
-        changed_by_mutation=changed_by_mutation,
+def _sine_seed_genotype():
+    return build_genotype(
+        root="body",
+        nodes={
+            "body": {
+                "size": (0.2, 0.2, 0.2),
+                "joint_type": "free",
+                "child_connections": ["body_to_limb"],
+            },
+            "limb": {"size": (0.1, 0.1, 0.1)},
+        },
+        connections={
+            "body_to_limb": {
+                "child": "limb",
+                "axis": (0.0, 1.0, 0.0),
+                "control_amp": 0.4,
+                "control_freq": 7,
+                "control_phase": 1.2,
+            }
+        },
+        global_control_freq=2.5,
+        control_mode="sine",
     )
-
-
-def test_default_thread_count_uses_half_available_affinity(monkeypatch):
-    monkeypatch.setattr(
-        evolution.os, "sched_getaffinity", lambda _pid: set(range(10))
-    )
-    assert evolution.default_thread_count() == 5
-
-
-def test_default_thread_count_has_minimum_of_one(monkeypatch):
-    monkeypatch.setattr(evolution.os, "sched_getaffinity", lambda _pid: {0})
-    assert evolution.default_thread_count() == 1
 
 
 def test_evaluate_defaults_to_swimming_without_self_collision(monkeypatch):
@@ -137,31 +121,6 @@ def test_evolve_override_control_mode_requires_control_mode(monkeypatch, capsys)
     assert re.search("requires --control-mode", capsys.readouterr().err)
 
 
-def _sine_seed_genotype():
-    return build_genotype(
-        root="body",
-        nodes={
-            "body": {
-                "size": (0.2, 0.2, 0.2),
-                "joint_type": "free",
-                "child_connections": ["body_to_limb"],
-            },
-            "limb": {"size": (0.1, 0.1, 0.1)},
-        },
-        connections={
-            "body_to_limb": {
-                "child": "limb",
-                "axis": (0.0, 1.0, 0.0),
-                "control_amp": 0.4,
-                "control_freq": 7,
-                "control_phase": 1.2,
-            }
-        },
-        global_control_freq=2.5,
-        control_mode="sine",
-    )
-
-
 def test_resolve_seed_control_mode_keeps_genotype_without_cli_mode():
     genotype = _sine_seed_genotype()
     assert evolve_cli._resolve_seed_control_mode(genotype, None, False) is genotype
@@ -230,21 +189,6 @@ def test_evaluate_accepts_flying_fluid_options(monkeypatch):
     assert args.fluid_shape == "none"
     assert args.fluid_coef == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5])
     assert args.fitness_gain_fraction == pytest.approx(0.8)
-
-
-def test_view_accepts_shadow_rendering_options():
-    args = view_cli.parse_args(
-        ["--mp4", "--shadowsize", "8192", "--spotlight", "--camera-circle-around"]
-    )
-    assert args.shadowsize == 8192
-    assert args.spotlight
-    assert args.camera_circle_around
-
-
-def test_view_rejects_nonpositive_shadowsize(capsys):
-    with pytest.raises(SystemExit, match="2"):
-        view_cli.parse_args(["--shadowsize", "0"])
-    assert "--shadowsize must be greater than zero" in capsys.readouterr().err
 
 
 def test_evaluate_no_longer_records_video():
@@ -410,7 +354,7 @@ def test_cli_leaves_task_dependent_options_unset(monkeypatch, module):
     "task", ["swimming_x", "walking_x", "flying_x"]
 )
 def test_task_definition_allows_explicit_fluid_overrides_for_every_environment(task):
-    definition = task_definition(task)
+    definition = make_definition(task)
     defaults = definition._default_environment
     args = argparse.Namespace(
         fluid_density=0.8,
@@ -434,7 +378,7 @@ def test_task_definition_allows_explicit_fluid_overrides_for_every_environment(t
 
 
 def test_task_definition_config_overrides_reset_to_task_defaults():
-    definition = task_definition("swimming_x")
+    definition = make_definition("swimming_x")
     defaults = SwimmingEvaluationConfig()
 
     definition.args_override(
@@ -663,169 +607,9 @@ def test_evolve_rejects_nonpositive_threads(monkeypatch, capsys):
     assert re.search("--threads must be at least 1", capsys.readouterr().err)
 
 
-@pytest.mark.parametrize(
-    "task, config",
-    [
-        ("swimming_x", SwimmingEvaluationConfig(episode_seconds=0.02)),
-        ("walking_x", WalkingEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0)),
-        ("swimming_away", SwimmingAwayEvaluationConfig(episode_seconds=0.02)),
-        ("walking_away", WalkingAwayEvaluationConfig(episode_seconds=0.02, settle_seconds=0.0)),
-        ("flying_x", FlyingEvaluationConfig(episode_seconds=0.02)),
-        ("flying_away", FlyingAwayEvaluationConfig(episode_seconds=0.02)),
-    ],
-)
-
-
-def test_evaluate_population_runs_in_processes_and_preserves_order(task, config):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    population = [genotype, genotype]
-    with ProcessPoolExecutor(max_workers=2) as executor:
-        evaluated = evolution.evaluate_population(
-            population, replace(task_definition(task), config=config), executor
-        )
-    assert len(evaluated) == len(population)
-    assert evaluated[0].fitness == evaluated[1].fitness
-
-
-def test_saved_best_xml_preserves_walking_self_collision(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("walking_x", episode_seconds=0.02, self_collision=True),
-    )
-    option = ET.fromstring(path.read_text()).find("option")
-    assert option is not None
-    assert option.get("gravity") == "0 0 -9.81"
-    default_geom = ET.fromstring(path.read_text()).find("./default/geom")
-    assert default_geom is not None
-    assert default_geom.get("contype") == "2"
-    assert default_geom.get("conaffinity") == "3"
-
-
-def test_saved_best_xml_preserves_swimming_away_physics(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("swimming_away", episode_seconds=0.02, self_collision=True),
-    )
-    root = ET.fromstring(path.read_text())
-    option = root.find("option")
-    default_geom = root.find("./default/geom")
-    floor = root.find("./worldbody/geom[@name='floor']")
-
-    assert option is not None
-    assert option.get("gravity") == "0 0 0"
-    assert option.get("density") == "1000"
-    assert default_geom is not None
-    assert default_geom.get("contype") == "2"
-    assert floor is not None
-    assert floor.get("contype") == "0"
-
-
-def test_saved_best_xml_preserves_flying_physics(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("flying_x", episode_seconds=0.02, self_collision=True),
-    )
-    root = ET.fromstring(path.read_text())
-    option = root.find("option")
-    default_geom = root.find("./default/geom")
-    floor = root.find("./worldbody/geom[@name='floor']")
-
-    assert option is not None
-    assert option.get("gravity") == "0 0 -9.81"
-    assert option.get("density") == "1.225"
-    assert option.get("viscosity") == "1.8e-05"
-    assert default_geom is not None
-    assert default_geom.get("fluidshape") == "ellipsoid"
-    assert default_geom.get("fluidcoef") == "0.5 0.25 1.5 1.0 1.0"
-    assert default_geom.get("contype") == "2"
-    assert default_geom.get("conaffinity") == "3"
-    assert floor is not None
-    assert floor.get("contype") == "1"
-
-
-def test_saved_best_xml_preserves_custom_flying_gravity(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("flying_x", episode_seconds=0.02, environment=replace(FLYING_ENVIRONMENT, gravity=-3.5)),
-    )
-    option = ET.fromstring(path.read_text()).find("option")
-    assert option is not None
-    assert option.get("gravity") == "0 0 -3.5"
-
-
-def test_saved_best_xml_preserves_walking_away_physics(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("walking_away", episode_seconds=0.02, self_collision=True),
-    )
-    root = ET.fromstring(path.read_text())
-    option = root.find("option")
-    default_geom = root.find("./default/geom")
-    floor = root.find("./worldbody/geom[@name='floor']")
-
-    assert option is not None
-    assert option.get("gravity") == "0 0 -9.81"
-    assert option.get("density") == "0"
-    assert default_geom is not None
-    assert default_geom.get("contype") == "2"
-    assert default_geom.get("conaffinity") == "3"
-    assert floor is not None
-    assert floor.get("contype") == "1"
-
-
-def test_save_generation_best_can_skip_generation_history(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(genotype, 1.0)
-
-    run_artifacts.save_generation_checkpoint(
-        tmp_path,
-        generation=3,
-        generation_best=creature,
-        best_so_far=creature,
-        definition=make_definition("swimming_x", episode_seconds=0.02),
-        save_generation_history=False,
-    )
-
-    assert (tmp_path / "latest_best_genotype.json").is_file()
-    assert (tmp_path / "best_genotype.json").is_file()
-    assert not (tmp_path / "generation_bests").exists()
-
-
-def test_save_generation_best_records_history_by_default(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(genotype, 1.0)
-
-    run_artifacts.save_generation_checkpoint(
-        tmp_path,
-        generation=3,
-        generation_best=creature,
-        best_so_far=creature,
-        definition=make_definition("swimming_x", episode_seconds=0.02),
-    )
-
-    assert (
-        tmp_path / "generation_bests" / "generation_0003.json"
-    ).is_file()
-
-
 def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(
+    creature = make_creature(
         genotype, 2.5, body_count=7, total_volume=0.125, control_energy=3.75
     )
     summary = {
@@ -847,7 +631,7 @@ def test_generation_progress_reports_volume_and_energy_without_best_ever_or_mean
 
 def test_generation_progress_reports_mutant_type_counts_when_present():
     genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(
+    creature = make_creature(
         genotype, 2.5, body_count=7, total_volume=0.125, control_energy=3.75
     )
     summary = {
@@ -863,148 +647,6 @@ def test_generation_progress_reports_mutant_type_counts_when_present():
     line = evolve_cli._format_generation_progress(4, creature, summary)
 
     assert line.endswith(" fitter=3 neutral=1 less_fit=4")
-
-
-def test_generation_summary_counts_disqualifications_and_active_genes():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(genotype, -1_000.0, disqualified=True, body_count=1)
-    summary = evolution.generation_summary(0, [creature], creature)
-    expected_genes = len(genotype.nodes) + sum(
-        len(node.child_connections)
-        for node in genotype.nodes.values()
-    )
-    assert summary["disqualifications"] == 1
-    assert summary["build_failures"] == 0
-    assert summary["best_gene_count"] == expected_genes
-    assert summary["best_ever_gene_count"] == expected_genes
-
-
-def test_generation_summary_omits_mutant_type_counts_by_default():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(genotype, 1.0)
-
-    summary = evolution.generation_summary(0, [creature], creature)
-
-    assert "fitter_mutants" not in summary
-    assert "neutral_mutants" not in summary
-    assert "less_fit_mutants" not in summary
-
-
-def test_generation_summary_counts_mutant_types_against_previous_best():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [
-        _creature(genotype, 2.0, changed_by_mutation=True),
-        _creature(genotype, 1.5, changed_by_mutation=True),
-        _creature(genotype, 1.0, changed_by_mutation=True),
-        _creature(genotype, 3.0, changed_by_mutation=True, build_failed=True),
-        _creature(genotype, 3.0, changed_by_mutation=True, disqualified=True),
-        _creature(genotype, 5.0),
-    ]
-
-    summary = evolution.generation_summary(
-        1,
-        evaluated,
-        evaluated[0],
-        record_mutant_types=True,
-        mutant_baseline_fitness=1.5,
-    )
-
-    assert summary["fitter_mutants"] == 1
-    assert summary["neutral_mutants"] == 1
-    assert summary["less_fit_mutants"] == 3
-
-
-def test_generation_summary_reports_zero_mutant_counts_for_initial_generation():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [_creature(genotype, 1.0), _creature(genotype, 0.5)]
-
-    summary = evolution.generation_summary(
-        0, evaluated, evaluated[0], record_mutant_types=True
-    )
-
-    assert summary["fitter_mutants"] == 0
-    assert summary["neutral_mutants"] == 0
-    assert summary["less_fit_mutants"] == 0
-
-
-def test_generation_summary_requires_baseline_when_creatures_were_mutated():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [_creature(genotype, 1.0, changed_by_mutation=True)]
-
-    with pytest.raises(ValueError, match="baseline fitness"):
-        evolution.generation_summary(
-            1, evaluated, evaluated[0], record_mutant_types=True
-        )
-
-
-def test_evaluated_creature_fitness_is_read_from_result():
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    creature = _creature(genotype, 2.0, body_count=3)
-
-    assert creature.fitness == 2.0
-    assert creature.metrics_dict()["fitness"] == 2.0
-    assert creature.metrics_dict()["body_count"] == 3
-    with pytest.raises(AttributeError):
-        creature.fitness = 5.0
-    with pytest.raises(FrozenInstanceError):
-        creature.result.fitness = 5.0
-
-
-def test_evaluate_creature_uses_task_failure_result_when_evaluation_raises(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    definition = task_definition("walking_x")
-    definition.config = WalkingEvaluationConfig(episode_seconds=0.02)
-
-    def explode(_genotype, _definition):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(evolution, "evaluate_task", explode)
-
-    creature = evolution._evaluate_creature(genotype, definition)
-
-    assert isinstance(creature.result, definition.result_type)
-    assert creature.fitness == definition.config.build_failure_fitness
-    assert creature.build_failed
-    assert not creature.disqualified
-    assert creature.result.failure_reason == "boom"
-
-
-def test_next_population_with_mutation_flags_marks_only_changed_children(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [
-        _creature(genotype, 1.0),
-    ]
-    calls = 0
-
-    def mutate_second_child(
-        genotype,
-        _mutation_count,
-        _rng,
-        allow_topology_mutations=True,
-        allow_slide_joint=False,
-        allow_root_mutation=True,
-        topology_mutation_rate_min=0.05,
-    ):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            root = genotype.nodes[genotype.root]
-            root.size = (root.size[0] + 0.1, root.size[1], root.size[2])
-
-    monkeypatch.setattr(evolution, "mutate_quietly", mutate_second_child)
-
-    population, changed = evolution.next_population_with_mutation_flags(
-        evaluated=evaluated,
-        population_size=3,
-        elite_count=1,
-        tournament_size=1,
-        min_mutations=1,
-        max_mutations=1,
-        rng=random.Random(1),
-    )
-
-    assert len(population) == 3
-    assert changed == [False, False, True]
 
 
 def test_default_run_directory_uses_task_name(monkeypatch):
@@ -1090,182 +732,6 @@ def test_help_describes_parameter_defaults(
     normalized_help = " ".join(capsys.readouterr().out.split())
     for expected_default in expected_defaults:
         assert expected_default in normalized_help
-
-
-def test_evaluate_accepts_disallow_collision(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["evaluate.py", "--disallow-collision"])
-    args = evaluate.parse_args()
-    assert args.disallow_collision
-    assert not args.self_collision
-
-
-def test_evolve_accepts_disallow_collision(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["evolve.py", "--disallow-collision"])
-    args = evolve_cli.parse_args()
-    assert args.disallow_collision
-    assert not args.self_collision
-
-
-def test_disallow_collision_enables_saved_self_contact_masks(tmp_path):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    path = tmp_path / "best.xml"
-    run_artifacts.save_best_phenotype(
-        path,
-        genotype,
-        make_definition("swimming_x", episode_seconds=0.02,
-            self_collision=False,
-            disallow_collision=True,),
-    )
-    default_geom = ET.fromstring(path.read_text()).find("./default/geom")
-    assert default_geom is not None
-    assert default_geom.get("contype") == "2"
-    assert default_geom.get("conaffinity") == "2"
-
-
-def test_initial_population_forwards_topology_mutation_setting(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    settings = []
-
-    def record_mutation(
-        _genotype,
-        _mutation_count,
-        _rng,
-        allow_topology_mutations=True,
-        allow_slide_joint=False,
-        allow_root_mutation=True,
-        topology_mutation_rate_min=0.05,
-    ):
-        settings.append(
-            (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
-        )
-
-    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
-    evolution.initial_population(
-        seed_genotype=genotype,
-        population_size=3,
-        initial_mutations=2,
-        rng=random.Random(1),
-        allow_topology_mutations=False,
-        topology_mutation_rate_min=0.2,
-    )
-
-    assert settings == [(False, False, 0.2), (False, False, 0.2)]
-
-
-def test_next_population_forwards_topology_mutation_setting(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [
-        _creature(genotype, 1.0),
-    ]
-    settings = []
-
-    def record_mutation(
-        _genotype,
-        _mutation_count,
-        _rng,
-        allow_topology_mutations=True,
-        allow_slide_joint=False,
-        allow_root_mutation=True,
-        topology_mutation_rate_min=0.05,
-    ):
-        settings.append(
-            (allow_topology_mutations, allow_slide_joint, topology_mutation_rate_min)
-        )
-
-    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
-    evolution.next_population(
-        evaluated=evaluated,
-        population_size=3,
-        elite_count=1,
-        tournament_size=1,
-        min_mutations=1,
-        max_mutations=1,
-        rng=random.Random(1),
-        allow_topology_mutations=False,
-        topology_mutation_rate_min=0.2,
-    )
-
-    assert settings == [(False, False, 0.2), (False, False, 0.2)]
-
-
-def test_population_helpers_forward_allow_slide_joint(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [
-        _creature(genotype, 1.0),
-    ]
-    settings = []
-
-    def record_mutation(
-        _genotype,
-        _mutation_count,
-        _rng,
-        allow_topology_mutations=True,
-        allow_slide_joint=False,
-        allow_root_mutation=True,
-        topology_mutation_rate_min=0.05,
-    ):
-        settings.append(allow_slide_joint)
-
-    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
-    evolution.initial_population(
-        seed_genotype=genotype,
-        population_size=2,
-        initial_mutations=1,
-        rng=random.Random(1),
-        allow_slide_joint=True,
-    )
-    evolution.next_population(
-        evaluated=evaluated,
-        population_size=2,
-        elite_count=1,
-        tournament_size=1,
-        min_mutations=1,
-        max_mutations=1,
-        rng=random.Random(1),
-        allow_slide_joint=True,
-    )
-
-    assert settings == [True, True]
-
-
-def test_population_helpers_forward_root_mutation_setting(monkeypatch):
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    evaluated = [
-        _creature(genotype, 1.0),
-    ]
-    settings = []
-
-    def record_mutation(
-        _genotype,
-        _mutation_count,
-        _rng,
-        allow_topology_mutations=True,
-        allow_slide_joint=False,
-        allow_root_mutation=True,
-        topology_mutation_rate_min=0.05,
-    ):
-        settings.append(allow_root_mutation)
-
-    monkeypatch.setattr(evolution, "mutate_quietly", record_mutation)
-    evolution.initial_population(
-        seed_genotype=genotype,
-        population_size=2,
-        initial_mutations=1,
-        rng=random.Random(1),
-        allow_root_mutation=False,
-    )
-    evolution.next_population(
-        evaluated=evaluated,
-        population_size=2,
-        elite_count=1,
-        tournament_size=1,
-        min_mutations=1,
-        max_mutations=1,
-        rng=random.Random(1),
-        allow_root_mutation=False,
-    )
-
-    assert settings == [False, False]
 
 
 def test_cli_lists_subcommands(capsys):
@@ -1354,97 +820,18 @@ def test_build_writes_task_environment(tmp_path):
     assert option.get("density") == "0"
 
 
-def test_view_defaults_to_interactive_with_mp4_defaults_unset():
-    args = view_cli.parse_args([])
-    assert args.mp4 is None
-    assert args.duration is None and args.fps is None
+def test_resolving_cli_options_does_not_modify_the_task_registry():
+    shared = task_definition("flying_x")
+    environment, config = shared.environment, shared.config
 
+    args = evolve_cli.parse_args(
+        ["--task", "flying_x", "--fluid-density", "0.5", "--duration", "2"]
+    )
+    resolved = resolve_task_definition(args)
 
-@pytest.mark.parametrize(
-    "argv",
-    [["--duration", "3"], ["--fps", "10"], ["--width", "100"], ["--camera-circle-around"]],
-)
-def test_view_rejects_mp4_options_without_mp4(argv, capsys):
-    with pytest.raises(SystemExit, match="2"):
-        view_cli.parse_args(argv)
-    assert "only applies with --mp4" in capsys.readouterr().err
+    assert resolved is not shared
+    assert resolved.environment.fluid_density == pytest.approx(0.5)
+    assert resolved.config.episode_seconds == pytest.approx(2.0)
+    assert shared.environment is environment
+    assert shared.config is config
 
-
-def test_view_mp4_fills_video_defaults():
-    args = view_cli.parse_args(["--mp4", "out.mp4"])
-    assert args.mp4 == Path("out.mp4")
-    assert (args.duration, args.fps, args.width, args.height) == (10.0, 30, 960, 544)
-
-
-def test_view_mp4_without_path_uses_task_default(monkeypatch, tmp_path):
-    recorded = {}
-
-    def fake_video(**kwargs):
-        recorded.update(kwargs)
-
-    monkeypatch.setattr("evc3d.video.save_x_axis_video", fake_video)
-    monkeypatch.chdir(tmp_path)
-    cli.main(["view", "--task", "walking_x", "--mp4", "--duration", "2"])
-
-    assert recorded["output_path"] == Path("example_walking_x.mp4")
-    assert recorded["definition"].config.episode_seconds == 2.0
-
-
-class _FakeViewer:
-    """Stands in for mujoco.viewer.launch_passive; runs a fixed number of frames."""
-
-    def __init__(self, frames):
-        self.frames = frames
-        self.syncs = 0
-        self.cam = mujoco.MjvCamera()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_exc):
-        return False
-
-    def is_running(self):
-        return self.syncs < self.frames
-
-    def sync(self):
-        self.syncs += 1
-
-
-def test_interactive_view_steps_past_episode_and_tracks_root(monkeypatch):
-    import evc3d.viewer as viewer_module
-
-    fake = _FakeViewer(frames=5)
-    started = {}
-
-    def fake_launch(model, data):
-        started["time"] = float(data.time)
-        started["data"] = data
-        return fake
-
-    monkeypatch.setattr(viewer_module.mujoco.viewer, "launch_passive", fake_launch)
-    monkeypatch.setattr(viewer_module.time, "sleep", lambda _seconds: None)
-    genotype = evolve_cli.load_genotype_from_json(evolve_cli.DEFAULT_GENOTYPE_PATH)
-    definition = task_definition("swimming_x")
-    definition.config = SwimmingEvaluationConfig(episode_seconds=0.02)
-
-    viewer_module.launch_viewer(genotype, definition, track_root=True, speed=1000.0)
-
-    assert fake.syncs == 5
-    # Five control steps are taken even though the episode is only two steps long.
-    timestep = definition.environment.timestep
-    assert started["data"].time == pytest.approx(started["time"] + 5 * timestep)
-    assert fake.cam.type == mujoco.mjtCamera.mjCAMERA_TRACKING
-    assert fake.cam.trackbodyid >= 1
-
-
-def test_interactive_view_reports_unbuildable_creature(monkeypatch, capsys):
-    from evc3d.scene import SceneBuildError
-
-    def fail(*_args, **_kwargs):
-        raise SceneBuildError("too many nodes")
-
-    monkeypatch.setattr("evc3d.viewer.launch_viewer", fail)
-    with pytest.raises(SystemExit, match="1"):
-        cli.main(["view"])
-    assert "Cannot view creature: too many nodes" in capsys.readouterr().out

@@ -14,7 +14,7 @@ from evc3d.graph_analysis import (
 )
 from evc3d.phenotype import PhenotypeBuilder
 
-from genotype_factory import make_definition, tree_genotype, tree_node
+from helpers import make_definition, tree_genotype, tree_node
 
 
 def _vector(element, attribute):

@@ -38,12 +38,9 @@ Use this map to choose files before broad searches:
 - `evc3d/cli/view.py`: `evc3d view`, watching a genotype in an interactive window or recording it with `--mp4`.
 - `pyproject.toml`: package metadata and the `evc3d` console script (`pip install -e .`).
 - `examples/*.json`: seed genotype recipes used by CLIs and tests.
-- `tests/test_surface_attachment.py`: tests for JSON migration, attachment placement, joint/body XML, symmetry attachment, and orientation constraints.
-- `tests/test_genotype_mutation.py`: tests for mutation registration, field mutation effects, topology mutation behavior, and mutation invariants.
-- `tests/test_symmetry.py`: tests for symmetry validation, JSON round trips, mirrored child generation, and reflected joint axes.
-- `tests/test_evaluation.py`: tests for task physics, MuJoCo compilation, collision settings, volume checks, and evaluation metrics.
+- Tests mirror the package: `tests/test_<module>.py` tests `evc3d/<module>.py`. `test_cli.py` covers all `evc3d` subcommands' parsing and behaviour; `test_view.py` covers `evc3d view`, `viewer.py`, and `scene.py`; `test_evaluation.py` covers `evaluation.py` and the task modules; `test_genotype_mutation.py` covers `evc3d/mutation/`; `test_symmetry.py` covers symmetry across genes, I/O, and phenotype.
+- `tests/helpers.py`: shared test helpers (`tree_node`/`tree_genotype` for inline genotypes, `make_definition` for private task-definition copies, `make_creature`, `placed_walker`). Never modify `task_definition(...)` results in tests; they are shared registry objects.
 - `tests/test_api_reference.py`: checks `docs/api-reference.json` against the code (names exist, parameters and defaults match, public members documented).
-- `tests/test_evolve.py`: tests for `evc3d` CLI parsing and subcommands, evolution task config forwarding, population helpers, and run artifact behavior.
 - `docs/`: static GitHub Pages documentation site. Update `docs/index.html` for user-facing concepts and `docs/api-reference.json` for the API reference. The API reference is hand-written but checked by `tests/test_api_reference.py`: after changing a public signature, default, class, or module, update its entry until that test passes.
 - `CODE_EXPLANATION.md`: narrative architecture walkthrough for humans and agents.
 

@@ -1,4 +1,10 @@
-"""Test-only helpers for writing genotype trees inline.
+"""Shared test helpers.
+
+Genotype trees written inline (``tree_node`` / ``tree_genotype``), private task
+definitions (``make_definition``), fake evaluated creatures (``make_creature``),
+and small MuJoCo model helpers.
+
+Writing genotype trees inline:
 
 ``NodeGene`` only stores connection names (``child_connections``). Tests often
 want to declare connection objects next to their parent node instead, so
@@ -13,10 +19,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Dict, Iterable, List, Mapping, Union
 
+import mujoco
+
+from evc3d import evolution
 from evc3d.evolution_tasks import task_definition
 from evc3d.evolution_tasks.shared import EnvironmentFamily, TaskDefinition
 from evc3d.genes import ConnectionGene, NodeGene
 from evc3d.genotype import Genotype
+from evc3d.genotype_io import load_genotype_from_json
+from evc3d.phenotype import PhenotypeBuilder
 
 
 @dataclass
@@ -100,3 +111,40 @@ def make_definition(
         config=replace(base.config, **config_overrides),
         environment=base.environment if environment is None else environment,
     )
+
+
+@dataclass(frozen=True)
+class FakeEvaluationResult:
+    """Minimal stand-in for a task result with the fields evolution reads."""
+
+    fitness: float
+    body_count: int = 0
+    total_volume: float = 0.0
+    control_energy: float = 0.0
+    build_failed: bool = False
+    disqualified: bool = False
+    failure_reason: str | None = None
+
+
+GENOTYPE_PATH = "examples/example_genotype.json"
+
+
+def make_creature(genotype, fitness, changed_by_mutation=False, **result_fields):
+    return evolution.EvaluatedCreature(
+        genotype,
+        FakeEvaluationResult(fitness=fitness, **result_fields),
+        changed_by_mutation=changed_by_mutation,
+    )
+
+
+def creature_geom_ids(model):
+    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    return [geom_id for geom_id in range(model.ngeom) if geom_id != floor_id]
+
+
+def placed_walker(definition):
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    model = mujoco.MjModel.from_xml_string(
+        PhenotypeBuilder(genotype, definition).build()
+    )
+    return model, mujoco.MjData(model)

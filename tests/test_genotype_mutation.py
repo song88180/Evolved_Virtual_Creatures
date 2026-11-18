@@ -16,7 +16,7 @@ from evc3d.graph_analysis import (
     GenotypeGraphError,
 )
 
-from genotype_factory import make_definition, tree_genotype, tree_node
+from helpers import make_definition, tree_genotype, tree_node
 
 
 def test_new_node_names_do_not_reuse_archived_gene_names():

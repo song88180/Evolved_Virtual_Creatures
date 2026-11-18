@@ -8,6 +8,7 @@ raise ``ValueError``; ``evc3d.cli.parse_args`` reports those as usage errors.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 from ..evolution_tasks import task_definition, task_names
@@ -271,8 +272,12 @@ def mutation_options(args: argparse.Namespace) -> dict:
 
 
 def resolve_task_definition(args: argparse.Namespace) -> TaskDefinition:
-    """Return the task definition with CLI environment/scoring overrides applied."""
-    definition = task_definition(args.task).args_override(args)
+    """Return a private copy of the task definition with CLI overrides applied.
+
+    The registry's definition is shared by everything in the process, so the
+    overrides are applied to a copy and never leak into later task lookups.
+    """
+    definition = replace(task_definition(args.task)).args_override(args)
     config = definition.config
     if config.max_volume <= config.volume_penalty_cutoff:
         raise ValueError("--max-volume must be greater than --volume-penalty-cutoff")

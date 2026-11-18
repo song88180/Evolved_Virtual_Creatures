@@ -1,5 +1,7 @@
-import importlib
+"""Tests for evc3d.evaluation and task modules: scoring rules, task physics, metrics, and results."""
+
 from dataclasses import replace
+import importlib
 import math
 from pathlib import Path
 import subprocess
@@ -11,9 +13,7 @@ import mujoco
 import numpy as np
 import pytest
 
-import evc3d.evaluation as evaluation
 from evc3d.control import apply_controller
-import evc3d.simulation as simulation
 from evc3d.evaluation import (
     INITIAL_FLOOR_OVERLAP_REASON,
     MAXIMUM_CREATURE_HEIGHT_REASON,
@@ -23,28 +23,15 @@ from evc3d.evaluation import (
     evaluate_task,
     initialize_model,
 )
+import evc3d.evaluation as evaluation
 from evc3d.evolution_tasks import load_task_definition, task_definition, task_names
-from evc3d.simulation import (
-    NUMERICAL_INSTABILITY_REASON,
-    has_nonparent_self_collision,
-    simulation_failure_reason,
-    start_episode,
-)
-from evc3d.evolution_tasks.shared import (
-    DEFAULT_ENVIRONMENT,
-    EnvironmentFamily,
-    EvaluationConfig,
-    EvaluationResult,
-    ResultField,
-    TASK_REGISTRY,
-    TaskDefinition,
-)
 from evc3d.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
     FlyingAwayEvaluationResult,
     TASK_DEFINITION as FLYING_AWAY_TASK,
     _episode_fitness as flying_away_episode_fitness,
     fitness_callback as flying_away_fitness,
+    TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT,
 )
 from evc3d.evolution_tasks.flying_x import (
     FlyingEvaluationConfig,
@@ -52,48 +39,131 @@ from evc3d.evolution_tasks.flying_x import (
     TASK_DEFINITION as FLYING_X_TASK,
     _episode_fitness as flying_x_episode_fitness,
     fitness_callback as flying_x_fitness,
+    TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT,
+)
+from evc3d.evolution_tasks.shared import (
+    DEFAULT_ENVIRONMENT,
+    EvaluationConfig,
+    EvaluationResult,
+    ResultField,
+    TASK_REGISTRY,
+    TaskDefinition,
 )
 from evc3d.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
     SwimmingAwayEvaluationConfig,
     TASK_DEFINITION as SWIMMING_AWAY_TASK,
     fitness_callback as swimming_away_fitness,
+    TASK_ENVIRONMENT as SWIMMING_AWAY_ENVIRONMENT,
 )
 from evc3d.evolution_tasks.swimming_x import (
     SwimmingEvaluationConfig,
     SwimmingEvaluationResult,
     TASK_DEFINITION as SWIMMING_X_TASK,
     fitness_callback as swimming_x_fitness,
+    TASK_ENVIRONMENT as SWIMMING_X_ENVIRONMENT,
 )
 from evc3d.evolution_tasks.walking_away import (
     WalkingAwayEvaluationConfig,
     WalkingAwayEvaluationResult,
     TASK_DEFINITION as WALKING_AWAY_TASK,
     fitness_callback as walking_away_fitness,
+    TASK_ENVIRONMENT as WALKING_AWAY_ENVIRONMENT,
 )
 from evc3d.evolution_tasks.walking_x import (
     WalkingEvaluationConfig,
     WalkingEvaluationResult,
     TASK_DEFINITION as WALKING_X_TASK,
     fitness_callback as walking_x_fitness,
+    TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT,
 )
-from evc3d.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
-from evc3d.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT
-from evc3d.evolution_tasks.swimming_away import TASK_ENVIRONMENT as SWIMMING_AWAY_ENVIRONMENT
-from evc3d.evolution_tasks.swimming_x import TASK_ENVIRONMENT as SWIMMING_X_ENVIRONMENT
-from evc3d.evolution_tasks.walking_away import TASK_ENVIRONMENT as WALKING_AWAY_ENVIRONMENT
-from evc3d.evolution_tasks.walking_x import TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT
 from evc3d.genotype_io import build_genotype, load_genotype_from_json
 from evc3d.phenotype import PhenotypeBuilder
-
-from genotype_factory import make_definition
-
-
-GENOTYPE_PATH = "examples/example_genotype.json"
+from evc3d.simulation import (
+    NUMERICAL_INSTABILITY_REASON,
+    has_nonparent_self_collision,
+    simulation_failure_reason,
+    start_episode,
+)
+from helpers import make_definition, GENOTYPE_PATH, creature_geom_ids, placed_walker
 
 
 def _reject_initialization(_model, _data, _config):
     return "custom initialization rejected model"
+
+
+def _collision_enabled(model, first_geom, second_geom):
+    return bool(
+        model.geom_contype[first_geom] & model.geom_conaffinity[second_geom]
+        or model.geom_contype[second_geom] & model.geom_conaffinity[first_geom]
+    )
+
+
+def _direct_parent_and_nonparent_pairs(model):
+    geom_ids = creature_geom_ids(model)
+    parent_pair = None
+    nonparent_pair = None
+    for index, first_geom in enumerate(geom_ids):
+        first_body = model.geom_bodyid[first_geom]
+        for second_geom in geom_ids[index + 1:]:
+            second_body = model.geom_bodyid[second_geom]
+            directly_related = (
+                model.body_parentid[first_body] == second_body
+                or model.body_parentid[second_body] == first_body
+            )
+            if directly_related and parent_pair is None:
+                parent_pair = (first_geom, second_geom)
+            elif not directly_related and nonparent_pair is None:
+                nonparent_pair = (first_geom, second_geom)
+    assert parent_pair is not None
+    assert nonparent_pair is not None
+    return parent_pair, nonparent_pair
+
+
+def _single_motor_genotype(motor_gear):
+    return build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.1, 0.1),
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": (0, 1, 0),
+                    "motor_gear": motor_gear,
+                    "control_amp": 0.1,
+                    "control_freq": 0.0,
+                    "control_phase": math.pi / 2.0,
+                }],
+            },
+            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
+        },
+        control_mode="sine",
+    )
+
+
+def _neural_single_motor_model(neural_b2):
+    genotype = build_genotype(
+        root="body",
+        spec={
+            "body": {
+                "size": (0.2, 0.1, 0.1),
+                "joint_type": "free",
+                "children": [{
+                    "child": "limb",
+                    "axis": (0, 1, 0),
+                    "ctrlrange": (-2.0, 2.0),
+                    "neural_b2": neural_b2,
+                }],
+            },
+            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
+        },
+    )
+    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=10))
+    model = mujoco.MjModel.from_xml_string(builder.build())
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    return model, data, builder
 
 
 @pytest.mark.parametrize(
@@ -423,39 +493,6 @@ def test_flying_fluid_settings_can_be_overridden():
     assert default_geom.get("fluidcoef") == "0.1 0.2 0.3 0.4 0.5"
 
 
-def _collision_enabled(model, first_geom, second_geom):
-    return bool(
-        model.geom_contype[first_geom] & model.geom_conaffinity[second_geom]
-        or model.geom_contype[second_geom] & model.geom_conaffinity[first_geom]
-    )
-
-
-def _creature_geom_ids(model):
-    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-    return [geom_id for geom_id in range(model.ngeom) if geom_id != floor_id]
-
-
-def _direct_parent_and_nonparent_pairs(model):
-    geom_ids = _creature_geom_ids(model)
-    parent_pair = None
-    nonparent_pair = None
-    for index, first_geom in enumerate(geom_ids):
-        first_body = model.geom_bodyid[first_geom]
-        for second_geom in geom_ids[index + 1:]:
-            second_body = model.geom_bodyid[second_geom]
-            directly_related = (
-                model.body_parentid[first_body] == second_body
-                or model.body_parentid[second_body] == first_body
-            )
-            if directly_related and parent_pair is None:
-                parent_pair = (first_geom, second_geom)
-            elif not directly_related and nonparent_pair is None:
-                nonparent_pair = (first_geom, second_geom)
-    assert parent_pair is not None
-    assert nonparent_pair is not None
-    return parent_pair, nonparent_pair
-
-
 def test_self_collision_masks_and_parent_filtering():
     genotype = load_genotype_from_json(GENOTYPE_PATH)
 
@@ -472,7 +509,7 @@ def test_self_collision_masks_and_parent_filtering():
     floor_id = mujoco.mj_name2id(
         walking_without_self_collision, mujoco.mjtObj.mjOBJ_GEOM, "floor"
     )
-    creature_geom = _creature_geom_ids(walking_without_self_collision)[0]
+    creature_geom = creature_geom_ids(walking_without_self_collision)[0]
     _, nonparent_pair = _direct_parent_and_nonparent_pairs(
         walking_without_self_collision
     )
@@ -516,7 +553,7 @@ def test_self_collision_masks_and_parent_filtering():
     floor_id = mujoco.mj_name2id(
         swimming_with_self_collision, mujoco.mjtObj.mjOBJ_GEOM, "floor"
     )
-    creature_geom = _creature_geom_ids(swimming_with_self_collision)[0]
+    creature_geom = creature_geom_ids(swimming_with_self_collision)[0]
     _, nonparent_pair = _direct_parent_and_nonparent_pairs(
         swimming_with_self_collision
     )
@@ -1047,72 +1084,6 @@ def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
     assert metrics["height_loss"] == pytest.approx(10.0)
 
 
-def test_flying_initialization_raises_low_creature_above_floor():
-    genotype = build_genotype(
-        root="body",
-        spec={
-            "body": {
-                "size": (0.2, 0.2, 0.8),
-                "joint_type": "free",
-            }
-        },
-    )
-    model = mujoco.MjModel.from_xml_string(
-        PhenotypeBuilder(
-            genotype,
-            make_definition(
-                max_body_count=500, environment=FLYING_X_ENVIRONMENT,
-            ),
-        ).build()
-    )
-    data = mujoco.MjData(model)
-
-    assert initialize_model(
-        model, data, FlyingEvaluationConfig(), FLYING_X_ENVIRONMENT
-    ) is None
-
-    floor_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
-    )
-    body_geom_id = _creature_geom_ids(model)[0]
-    lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
-    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2] + 5.0)
-
-
-def test_walking_initialization_raises_low_creature_above_floor():
-    genotype = build_genotype(
-        root="body",
-        spec={
-            "body": {
-                "size": (0.2, 0.2, 0.8),
-                "joint_type": "free",
-            }
-        },
-    )
-    model = mujoco.MjModel.from_xml_string(
-        PhenotypeBuilder(
-            genotype,
-            make_definition(
-                max_body_count=500, environment=WALKING_X_ENVIRONMENT,
-            ),
-        ).build()
-    )
-    data = mujoco.MjData(model)
-
-    assert initialize_model(
-        model, data, WalkingEvaluationConfig(), WALKING_X_ENVIRONMENT
-    ) is None
-
-    floor_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
-    )
-    body_geom_id = _creature_geom_ids(model)[0]
-    lowest_z = data.geom_xpos[body_geom_id, 2] - model.geom_size[body_geom_id, 2]
-    # Generic initialization applies clearance and then the configured settling pass.
-    assert lowest_z == pytest.approx(data.geom_xpos[floor_id, 2], abs=2e-4)
-    assert all(float(contact.dist) >= -2e-4 for contact in data.contact)
-
-
 def test_generic_initialization_runs_environment_callback():
     genotype = build_genotype(
         root="body",
@@ -1214,6 +1185,7 @@ def test_disallowed_collision_assigns_low_fitness(monkeypatch):
     assert not result.build_failed
     assert "self-collision" in result.failure_reason
 
+
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
@@ -1296,6 +1268,7 @@ def test_evaluation_rejects_numerical_instability(monkeypatch):
     assert result.fitness == -1_000.0
     assert result.build_failed
     assert result.failure_reason == NUMERICAL_INSTABILITY_REASON
+
 
 @pytest.mark.parametrize(
     ("geom_xml", "expected_volume"),
@@ -1410,6 +1383,7 @@ def test_body_below_minimum_volume_is_rejected_before_flying_bonus():
     assert "below the minimum allowed volume" in result.failure_reason
     assert result.no_ground_touch_bonus == 0.0
 
+
 def test_flying_total_volume_below_minimum_is_rejected_before_simulation():
     genotype = build_genotype(
         root="body",
@@ -1433,28 +1407,6 @@ def test_flying_total_volume_below_minimum_is_rejected_before_simulation():
     assert result.no_ground_touch_bonus == 0.0
 
 
-def _single_motor_genotype(motor_gear):
-    return build_genotype(
-        root="body",
-        spec={
-            "body": {
-                "size": (0.2, 0.1, 0.1),
-                "joint_type": "free",
-                "children": [{
-                    "child": "limb",
-                    "axis": (0, 1, 0),
-                    "motor_gear": motor_gear,
-                    "control_amp": 0.1,
-                    "control_freq": 0.0,
-                    "control_phase": math.pi / 2.0,
-                }],
-            },
-            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
-        },
-        control_mode="sine",
-    )
-
-
 def test_control_energy_scales_with_squared_motor_gear():
     low_gear = evaluate_task(
         _single_motor_genotype(10.0),
@@ -1469,30 +1421,6 @@ def test_control_energy_scales_with_squared_motor_gear():
 
     assert low_gear.control_energy > 0.0
     assert high_gear.control_energy == pytest.approx(4.0 * low_gear.control_energy)
-
-
-def _neural_single_motor_model(neural_b2):
-    genotype = build_genotype(
-        root="body",
-        spec={
-            "body": {
-                "size": (0.2, 0.1, 0.1),
-                "joint_type": "free",
-                "children": [{
-                    "child": "limb",
-                    "axis": (0, 1, 0),
-                    "ctrlrange": (-2.0, 2.0),
-                    "neural_b2": neural_b2,
-                }],
-            },
-            "limb": {"size": (0.1, 0.05, 0.05), "joint_type": "hinge"},
-        },
-    )
-    builder = PhenotypeBuilder(genotype, make_definition(max_body_count=10))
-    model = mujoco.MjModel.from_xml_string(builder.build())
-    data = mujoco.MjData(model)
-    mujoco.mj_forward(model, data)
-    return model, data, builder
 
 
 def test_zero_neural_weights_produce_zero_control():
@@ -1693,69 +1621,14 @@ def test_walking_away_fitness_maximizes_average_origin_speed():
     assert result.origin_distance >= abs(result.forward_distance)
 
 
-def _placed_walker(definition):
-    genotype = load_genotype_from_json(GENOTYPE_PATH)
-    model = mujoco.MjModel.from_xml_string(
-        PhenotypeBuilder(genotype, definition).build()
-    )
-    return model, mujoco.MjData(model)
-
-
 def test_start_rules_are_enforced_for_scoring_and_skipped_for_viewing():
     definition = make_definition("walking_x", max_creature_height=0.01)
 
-    model, data = _placed_walker(definition)
+    model, data = placed_walker(definition)
     failure = initialize_model(model, data, definition.config, definition.environment)
     assert failure.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
 
-    model, data = _placed_walker(definition)
+    model, data = placed_walker(definition)
     assert start_episode(
         model, data, definition.config, definition.environment
     ) is None
-
-
-def test_skipping_start_rules_does_not_change_the_start_state():
-    definition = make_definition("walking_x")
-    states = []
-    for start in (initialize_model, start_episode):  # scored start vs viewing start
-        model, data = _placed_walker(definition)
-        assert start(model, data, definition.config, definition.environment) is None
-        states.append((data.time, data.qpos.copy(), data.qvel.copy()))
-
-    assert states[0][0] == states[1][0]
-    np.testing.assert_array_equal(states[0][1], states[1][1])
-    np.testing.assert_array_equal(states[0][2], states[1][2])
-
-
-def test_view_shows_creature_that_scoring_rejects_at_start():
-    from evc3d.scene import prepare_scene
-
-    genotype = load_genotype_from_json(GENOTYPE_PATH)
-    definition = make_definition("walking_x", max_creature_height=0.01)
-
-    result = evaluate_task(genotype, definition)
-    assert result.build_failed
-    assert result.failure_reason.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
-
-    scene = prepare_scene(genotype, definition)
-    assert scene.data.time == 0.0
-
-
-def test_floor_clearance_without_free_root_joint_reports_reason():
-    model = mujoco.MjModel.from_xml_string(
-        """
-        <mujoco>
-          <worldbody>
-            <geom name="floor" type="plane" size="1 1 0.1"/>
-            <body name="body_1" pos="0 0 0.5"><geom type="box" size="0.1 0.1 0.1"/></body>
-          </worldbody>
-        </mujoco>
-        """
-    )
-    environment = replace(WALKING_X_ENVIRONMENT, initial_floor_clearance=0.05)
-
-    failure = simulation.place_creature(
-        model, mujoco.MjData(model), WalkingEvaluationConfig(), environment
-    )
-
-    assert failure == "walking_x creature has no free root joint."
