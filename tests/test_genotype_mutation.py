@@ -1288,7 +1288,7 @@ def test_genotype_modules_do_not_import_mujoco():
 
     code = (
         "import sys\n"
-        "import evc3d.genotype, evc3d.genotype_io, evc3d.genotype_mutation\n"
+        "import evc3d.genotype, evc3d.genotype_io, evc3d.mutation\n"
         "import evc3d.graph_analysis, evc3d.controller_spec\n"
         "from evc3d.genotype_io import load_genotype_from_json\n"
         "import random\n"
@@ -1301,3 +1301,10 @@ def test_genotype_modules_do_not_import_mujoco():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert completed.stdout.strip().splitlines()[-1] == "LOADED="
+
+
+def test_every_mutable_connection_field_has_a_mutation_spec():
+    genotype, _ = _mutable_effect_genotype("axis")
+    for field_name in genotype.CONNECTION_MUTABLE_FIELDS:
+        assert genotype._mutation_spec(field_name) is not None, field_name
+    assert genotype.SINE_CONTROL_FIELDS <= set(genotype.CONNECTION_MUTABLE_FIELDS)

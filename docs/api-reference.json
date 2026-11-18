@@ -8,12 +8,7 @@
         "Store genetic Euler orientations for root and child bodies",
         "Store motor control parameters on each connection"
       ],
-      "Related_Modules": [
-        "evc3d.genotype",
-        "evc3d.genotype_io",
-        "evc3d.genotype_mutation",
-        "evc3d.phenotype"
-      ]
+      "Related_Modules": ["evc3d.genotype", "evc3d.genotype_io", "evc3d.mutation", "evc3d.phenotype"]
     },
     "Classes": {
       "ConnectionGene": {
@@ -219,12 +214,7 @@
         "Carry archived nodes and connections used by topology mutations",
         "Expose mutation behavior through GenotypeMutationMixin"
       ],
-      "Related_Modules": [
-        "evc3d.genes",
-        "evc3d.genotype_mutation",
-        "evc3d.genotype_io",
-        "evc3d.phenotype"
-      ]
+      "Related_Modules": ["evc3d.genes", "evc3d.mutation", "evc3d.genotype_io", "evc3d.phenotype"]
     },
     "Classes": {
       "Genotype": {
@@ -270,6 +260,164 @@
           }
         },
         "Example": "genotype = Genotype(root=\"body\", nodes={\"body\": body_node})"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation": {
+    "Overview": {
+      "Purpose": "Genotype mutation, split by subsystem. GenotypeMutationMixin combines the mixins in evc3d.mutation.selection (choose what to mutate), .values (mutate one field value), .neural (neural controller weights), .topology (add/remove/relink connections and nodes), and .gene_pool (naming, archiving, pruning), with shared constants in .settings. Genotype inherits it.",
+      "Main_Use_Cases": [
+        "Mutate numeric, boolean, and tuple-valued genotype fields",
+        "Add, remove, replace, and retarget genotype connections",
+        "Create new mutated node genes and archive disconnected genetic material"
+      ],
+      "Related_Modules": ["evc3d.genotype", "evc3d.genes", "evc3d.controller_spec"]
+    },
+    "Classes": {
+      "GenotypeMutationMixin": {
+        "Purpose": "All genotype mutation behaviour, combined from the subsystem mixins (selection, values, neural, topology, gene_pool) and inherited by Genotype. genotype.mutation(...) is the single public entry point.",
+        "Constructor": {},
+        "Attributes": {
+          "MUTATION_STD_FRACTION": {"Type": "ClassVar[float]", "Description": "Fraction of a numeric value used as the default mutation standard deviation."},
+          "MIN_SIZE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for size mutations."},
+          "MIN_AXIS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for axis mutations."},
+          "MIN_INTEGER_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for integer mutations."},
+          "MIN_POS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for position mutations."},
+          "MIN_SCALE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for scale mutations."},
+          "MIN_MOTOR_GEAR_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for motor gear mutations."},
+          "MIN_CTRLRANGE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control range mutations."},
+          "MIN_CONTROL_AMP_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control amplitude mutations."},
+          "MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for global control frequency mutations."},
+          "HARMONIC_CONTROL_FREQS": {"Type": "ClassVar[Tuple[float, ...]]", "Description": "Allowed actuator-specific harmonic frequency multipliers."},
+          "MIN_PHASE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for phase mutations."},
+          "MIN_POSITIVE_VALUE": {"Type": "ClassVar[float]", "Description": "Lower clamp used for positive-valued mutations."}
+        },
+        "Methods": {
+          "mutation": {
+            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> \"Genotype\"",
+            "Purpose": "Randomly mutate mutable genotype parameters in place.",
+            "Parameters": {
+              "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters sampled when mutation_rate is None."},
+              "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent probability applied to every mutable parameter."},
+              "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source; defaults to the random module."},
+              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether topology-changing mutation paths are included."},
+              "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
+              "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
+              "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
+            },
+            "Returns": {"Type": "Genotype", "Description": "The mutated object itself."},
+            "Raises": ["ValueError"],
+            "Example": "genotype.mutation(num_mutations=5, rng=random.Random(42))"
+          }
+        },
+        "Internal_Methods": {"_collect_mutable_parameters": "Collects tuple paths for all mutable fields and optional topology operations.", "_add_mutable_parameter_paths": "Adds scalar or per-element tuple/list mutation paths for one field.", "_mutate_parameter_path": "Dispatches one selected mutation path to the appropriate mutation operation.", "_describe_parameter_target": "Builds human-readable labels for mutation logging.", "_resolve_parameter_path": "Resolves a mutation path to the owner object, field name, and optional index.", "_path_index": "Returns the optional tuple/list index from a mutation path.", "_mutation_spec": "Maps field names to mutation kind, minimum standard deviation, and ordered-pair behavior.", "_mutate_value": "Mutates boolean, integer, positive, and relative numeric values.", "_normal_mutation_delta": "Draws a Gaussian mutation delta with a minimum standard deviation.", "_mutate_connection_origin": "Moves a connection to a different origin node.", "_mutate_connection_destination": "Changes a connection child to another non-free node.", "_mutate_connection_type": "Copies connection parameters from another active or archived connection.", "_mutate_connection_replacement": "Archives a connection and replaces it with a mutated copy.", "_mutate_connection_addition": "Adds a new connection between active or archived node templates.", "_mutate_connection_new_node_addition": "Creates a new mutated node and connects it to an existing origin.", "_add_new_connection": "Creates and attaches a new connection from a template or default coding.", "_mutate_connection_removal": "Archives and removes an active connection.", "_mutate_connection_origin_node_replacement": "Creates a mutated replacement for the origin node of a connection.", "_mutate_connection_destination_node_replacement": "Creates a mutated replacement for the destination node of a connection.", "_new_node_from_existing": "Deep-copies a node and assigns a new mutation-derived name.", "_new_node_name": "Finds an unused name of the form '<base>_mutN'.", "_mutate_new_node": "Mutates one field on a newly created node.", "_resolve_new_node_path": "Resolves a mutation path for a new node.", "_mutate_new_connection": "Mutates one field on a newly created connection.", "_connection_coding_pool": "Returns active and archived connections as templates.", "_random_connection_template": "Chooses a connection template or returns None when none exist.", "_node_coding_pool": "Returns active and archived nodes as templates.", "_activate_node_gene": "Moves an archived node template into active nodes, recursively activating archived children when needed.", "_find_archived_node": "Finds the most recently archived node by name.", "_prune_disconnected_nodes": "Archives and removes nodes unreachable from the genotype root.", "_reachable_node_names": "Computes active node names reachable from the root.", "_describe_connection_source": "Builds human-readable labels for active or archived connection templates.", "_is_active_connection": "Checks whether a connection object is attached to an active node.", "_archived_connection_index": "Finds the archive index for a connection object.", "_find_connection_owner": "Finds the active origin node and child index for a connection object."},
+        "Example": "mutant = genotype.mutation(mutation_rate=0.05, allow_topology_mutations=True)"
+      }
+    },
+    "Functions": {},
+    "Exceptions": {
+      "ValueError": {"Description": "Raised by mutation when mutation_rate is outside [0, 1], num_mutations is negative, or an unknown mutation path/kind is encountered."}
+    }
+  },
+  "evc3d.mutation.selection": {
+    "Overview": {
+      "Purpose": "Choosing what to mutate: the public mutation() entry point, the mutable-parameter pool, per-parameter rates, and the topology-mutation floor.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "MutationSelectionMixin": {
+        "Purpose": "Choosing what to mutate: the public mutation() entry point, the mutable-parameter pool, per-parameter rates, and the topology-mutation floor. Part of GenotypeMutationMixin; used through Genotype, not on its own.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation.values": {
+    "Overview": {
+      "Purpose": "Mutating one field value: resolving a parameter path, per-field mutation specs, numeric and categorical mutation, and size/orientation repair.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "ValueMutationMixin": {
+        "Purpose": "Mutating one field value: resolving a parameter path, per-field mutation specs, numeric and categorical mutation, and size/orientation repair. Part of GenotypeMutationMixin; used through Genotype, not on its own.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation.neural": {
+    "Overview": {
+      "Purpose": "Neural controller weights: which connections carry weights, random initialization, per-weight mutation, and reshaping weights when a joint type changes.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "NeuralMutationMixin": {
+        "Purpose": "Neural controller weights: which connections carry weights, random initialization, per-weight mutation, and reshaping weights when a joint type changes. Part of GenotypeMutationMixin; used through Genotype, not on its own.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation.topology": {
+    "Overview": {
+      "Purpose": "Topology operators: adding, removing, relinking, and replacing connections and nodes, plus fresh-gene generation and child sizing.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "TopologyMutationMixin": {
+        "Purpose": "Topology operators: adding, removing, relinking, and replacing connections and nodes, plus fresh-gene generation and child sizing. Part of GenotypeMutationMixin; used through Genotype, not on its own.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation.gene_pool": {
+    "Overview": {
+      "Purpose": "Gene bookkeeping: unique naming, archiving and reactivating genes, pruning unreachable nodes, and connection lookups.",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "GenePoolMixin": {
+        "Purpose": "Gene bookkeeping: unique naming, archiving and reactivating genes, pruning unreachable nodes, and connection lookups. Part of GenotypeMutationMixin; used through Genotype, not on its own.",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.mutation.settings": {
+    "Overview": {
+      "Purpose": "Mutation tuning constants shared by all mutation mixins: standard deviations, harmonic control frequencies, topology operator names, and CONNECTION_MUTABLE_FIELDS (the ordered list of mutable connection fields; its order affects seeded results).",
+      "Main_Use_Cases": [],
+      "Related_Modules": ["evc3d.mutation"]
+    },
+    "Classes": {
+      "MutationSettings": {
+        "Purpose": "Mutation tuning constants shared by all mutation mixins: standard deviations, harmonic control frequencies, topology operator names, and CONNECTION_MUTABLE_FIELDS (the ordered list of mutable connection fields; its order affects seeded results).",
+        "Constructor": {},
+        "Attributes": {},
+        "Methods": {}
       }
     },
     "Functions": {},
@@ -347,62 +495,6 @@
     "Internal_Functions": {},
     "Type_Aliases": {"GeneSpec": "Mapping[str, Mapping[str, Any]]"},
     "Exceptions": {}
-  },
-  "evc3d.genotype_mutation": {
-    "Overview": {
-      "Purpose": "Implements parameter and topology mutation behavior mixed into Genotype.",
-      "Main_Use_Cases": [
-        "Mutate numeric, boolean, and tuple-valued genotype fields",
-        "Add, remove, replace, and retarget genotype connections",
-        "Create new mutated node genes and archive disconnected genetic material"
-      ],
-      "Related_Modules": ["evc3d.genes", "evc3d.genotype"]
-    },
-    "Classes": {
-      "GenotypeMutationMixin": {
-        "Purpose": "Mixin that provides in-place genotype mutation methods and helper routines.",
-        "Constructor": {},
-        "Attributes": {
-          "MUTATION_STD_FRACTION": {"Type": "ClassVar[float]", "Description": "Fraction of a numeric value used as the default mutation standard deviation."},
-          "MIN_SIZE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for size mutations."},
-          "MIN_AXIS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for axis mutations."},
-          "MIN_INTEGER_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for integer mutations."},
-          "MIN_POS_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for position mutations."},
-          "MIN_SCALE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for scale mutations."},
-          "MIN_MOTOR_GEAR_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for motor gear mutations."},
-          "MIN_CTRLRANGE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control range mutations."},
-          "MIN_CONTROL_AMP_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for control amplitude mutations."},
-          "MIN_GLOBAL_CONTROL_FREQ_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for global control frequency mutations."},
-          "HARMONIC_CONTROL_FREQS": {"Type": "ClassVar[Tuple[float, ...]]", "Description": "Allowed actuator-specific harmonic frequency multipliers."},
-          "MIN_PHASE_MUTATION_STD": {"Type": "ClassVar[float]", "Description": "Minimum standard deviation for phase mutations."},
-          "MIN_POSITIVE_VALUE": {"Type": "ClassVar[float]", "Description": "Lower clamp used for positive-valued mutations."}
-        },
-        "Methods": {
-          "mutation": {
-            "Signature": "mutation(num_mutations: int = 1, mutation_rate: Optional[float] = None, rng: Optional[random.Random] = None, allow_topology_mutations: bool = True, allow_slide_joint: bool = False, allow_root_mutation: bool = True, topology_mutation_rate_min: float = 0.05) -> \"Genotype\"",
-            "Purpose": "Randomly mutate mutable genotype parameters in place.",
-            "Parameters": {
-              "num_mutations": {"Type": "int", "Default": "1", "Description": "Number of distinct mutable parameters sampled when mutation_rate is None."},
-              "mutation_rate": {"Type": "Optional[float]", "Default": "None", "Description": "Independent probability applied to every mutable parameter."},
-              "rng": {"Type": "Optional[random.Random]", "Default": "None", "Description": "Random source; defaults to the random module."},
-              "allow_topology_mutations": {"Type": "bool", "Default": "True", "Description": "Whether topology-changing mutation paths are included."},
-              "allow_slide_joint": {"Type": "bool", "Default": "False", "Description": "Allow mutations to create slide joints."},
-              "allow_root_mutation": {"Type": "bool", "Default": "True", "Description": "Allow mutations of the root node gene."},
-              "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
-            },
-            "Returns": {"Type": "Genotype", "Description": "The mutated object itself."},
-            "Raises": ["ValueError"],
-            "Example": "genotype.mutation(num_mutations=5, rng=random.Random(42))"
-          }
-        },
-        "Internal_Methods": {"_collect_mutable_parameters": "Collects tuple paths for all mutable fields and optional topology operations.", "_add_mutable_parameter_paths": "Adds scalar or per-element tuple/list mutation paths for one field.", "_mutate_parameter_path": "Dispatches one selected mutation path to the appropriate mutation operation.", "_describe_parameter_target": "Builds human-readable labels for mutation logging.", "_resolve_parameter_path": "Resolves a mutation path to the owner object, field name, and optional index.", "_path_index": "Returns the optional tuple/list index from a mutation path.", "_mutation_spec": "Maps field names to mutation kind, minimum standard deviation, and ordered-pair behavior.", "_mutate_value": "Mutates boolean, integer, positive, and relative numeric values.", "_normal_mutation_delta": "Draws a Gaussian mutation delta with a minimum standard deviation.", "_mutate_connection_origin": "Moves a connection to a different origin node.", "_mutate_connection_destination": "Changes a connection child to another non-free node.", "_mutate_connection_type": "Copies connection parameters from another active or archived connection.", "_mutate_connection_replacement": "Archives a connection and replaces it with a mutated copy.", "_mutate_connection_addition": "Adds a new connection between active or archived node templates.", "_mutate_connection_new_node_addition": "Creates a new mutated node and connects it to an existing origin.", "_add_new_connection": "Creates and attaches a new connection from a template or default coding.", "_mutate_connection_removal": "Archives and removes an active connection.", "_mutate_connection_origin_node_replacement": "Creates a mutated replacement for the origin node of a connection.", "_mutate_connection_destination_node_replacement": "Creates a mutated replacement for the destination node of a connection.", "_new_node_from_existing": "Deep-copies a node and assigns a new mutation-derived name.", "_new_node_name": "Finds an unused name of the form '<base>_mutN'.", "_mutate_new_node": "Mutates one field on a newly created node.", "_resolve_new_node_path": "Resolves a mutation path for a new node.", "_mutate_new_connection": "Mutates one field on a newly created connection.", "_connection_coding_pool": "Returns active and archived connections as templates.", "_random_connection_template": "Chooses a connection template or returns None when none exist.", "_node_coding_pool": "Returns active and archived nodes as templates.", "_activate_node_gene": "Moves an archived node template into active nodes, recursively activating archived children when needed.", "_find_archived_node": "Finds the most recently archived node by name.", "_prune_disconnected_nodes": "Archives and removes nodes unreachable from the genotype root.", "_reachable_node_names": "Computes active node names reachable from the root.", "_describe_connection_source": "Builds human-readable labels for active or archived connection templates.", "_is_active_connection": "Checks whether a connection object is attached to an active node.", "_archived_connection_index": "Finds the archive index for a connection object.", "_find_connection_owner": "Finds the active origin node and child index for a connection object."},
-        "Example": "mutant = genotype.mutation(mutation_rate=0.05, allow_topology_mutations=True)"
-      }
-    },
-    "Functions": {},
-    "Exceptions": {
-      "ValueError": {"Description": "Raised by mutation when mutation_rate is outside [0, 1], num_mutations is negative, or an unknown mutation path/kind is encountered."}
-    }
   },
   "evc3d.graph_analysis": {
     "Overview": {
@@ -1092,12 +1184,7 @@
         "Size or validate neural controller weights for a joint type",
         "Read or write genotypes without the simulator installed"
       ],
-      "Related_Modules": [
-        "evc3d.control",
-        "evc3d.genotype_mutation",
-        "evc3d.genotype_io",
-        "evc3d.phenotype"
-      ]
+      "Related_Modules": ["evc3d.control", "evc3d.mutation", "evc3d.genotype_io", "evc3d.phenotype"]
     },
     "Classes": {
       "ActuatorController": {

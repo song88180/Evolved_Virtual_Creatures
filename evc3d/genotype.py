@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Set
 
 from .genes import CONTROL_MODES, ConnectionGene, NodeGene
-from .genotype_mutation import GenotypeMutationMixin
+from .mutation import GenotypeMutationMixin
 
 
 @dataclass

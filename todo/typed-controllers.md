@@ -59,9 +59,10 @@ topology mutation (which creates and copies connections), and JSON loading.
 - `genotype.py`: validate single controller family; handle `global_control_freq`.
 - `genotype_io.py`: nested JSON schema (`"controller": {"type": "sine", ...}`),
   migration from the flat schema, simplify `convert_control_mode`.
-- `genotype_mutation.py`: field registry (lines near 227, 890, 1192, 1387, 1736)
-  registers only the active controller's fields; fresh-gene generation builds the
-  right controller; neural tensor repair operates on `NeuralController`.
+- `mutation/`: the field registry (`settings.CONNECTION_MUTABLE_FIELDS`,
+  `values._mutation_spec`) registers only the active controller's fields;
+  fresh-gene generation (`topology.py`) builds the right controller; neural
+  tensor repair (`neural.py`) operates on `NeuralController`.
 - `phenotype.py`: read controller fields through `connection.controller`.
 - `control.py`: `ActuatorController` construction from controller dataclasses.
 - `examples/*.json`, `README.md`, `docs/`, `CODE_EXPLANATION.md`: schema updates.

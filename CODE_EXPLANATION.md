@@ -24,7 +24,7 @@ The code is split by responsibility:
 - `evc3d/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
 - `evc3d/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
 - `evc3d/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
-- `evc3d/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
+- `evc3d/mutation/`: in-place mutation operators, split by subsystem (choosing targets, field values, neural weights, topology, gene bookkeeping) and combined into the `GenotypeMutationMixin` that `Genotype` inherits.
 - `evc3d/controller_spec.py`: controller sizes, the `ActuatorController` record, and neural-weight helpers, with no MuJoCo dependency, so genotype code can run without the simulator.
 - `evc3d/control.py`: applies sine or neural controllers to a running MuJoCo simulation each step.
 - `evc3d/evolution.py`: population helpers for evolution: evaluate a population, select elites and tournament winners, mutate children, and summarize generations.
