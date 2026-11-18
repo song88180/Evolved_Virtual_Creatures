@@ -1030,7 +1030,7 @@
   },
   "evc3d.cli.args": {
     "Overview": {
-      "Purpose": "Option groups shared by subcommands, each with a validator: genotype (`--genotype`), environment (`--task`, fluid, `--self-collision`, `--max-body-count`), scoring (`--duration`, fitness weights, volume limits, `--upright-error`, `--disallow-collision`), and mutation (which mutations are allowed). Also resolves the task definition from parsed options.",
+      "Purpose": "Option groups shared by subcommands: genotype (`--genotype`), environment (`--task`, fluid, `--self-collision`, `--max-body-count`), scoring (`--duration`, fitness weights, volume limits, `--upright-error`, `--disallow-collision`), and mutation (which mutations are allowed). Also resolves the task definition from parsed options.",
       "Main_Use_Cases": [
         "Add a task, environment, scoring, or mutation option once for all subcommands"
       ],
@@ -1095,20 +1095,11 @@
       },
       "resolve_task_definition": {
         "Signature": "resolve_task_definition(args: argparse.Namespace) -> TaskDefinition",
-        "Purpose": "Return the task definition with CLI environment/scoring overrides applied.",
+        "Purpose": "Return a private copy of the task definition with CLI overrides applied; the shared registry definition is never modified.",
         "Parameters": {
           "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
         },
         "Returns": {"Type": "TaskDefinition", "Description": "Task definition with CLI overrides applied."},
-        "Raises": []
-      },
-      "validate_environment_arguments": {
-        "Signature": "validate_environment_arguments(args: argparse.Namespace) -> None",
-        "Purpose": "Raise ValueError for invalid environment options.",
-        "Parameters": {
-          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
-        },
-        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
         "Raises": []
       },
       "validate_mutation_arguments": {
@@ -1120,13 +1111,22 @@
         "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
         "Raises": []
       },
-      "validate_scoring_arguments": {
-        "Signature": "validate_scoring_arguments(args: argparse.Namespace) -> None",
-        "Purpose": "Raise ValueError for invalid scoring options.",
+      "validate_task_options": {
+        "Signature": "validate_task_options(args: argparse.Namespace) -> None",
+        "Purpose": "Build the task definition from parsed options so the task config and environment validate them; reword their errors with CLI option names (episode_seconds -> --duration).",
         "Parameters": {
           "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
         },
-        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError on invalid values."},
+        "Returns": {"Type": "None", "Description": "Nothing; raises ValueError with option names on invalid values."},
+        "Raises": ["ValueError"]
+      },
+      "option_message": {
+        "Signature": "option_message(message: str) -> str",
+        "Purpose": "Replace config and environment field names in an error message with the CLI options that set them, using evolution_tasks.shared.CONFIG_FIELD_OPTIONS.",
+        "Parameters": {
+          "message": {"Type": "str", "Default": "required", "Description": "Error message naming config or environment fields."}
+        },
+        "Returns": {"Type": "str", "Description": "Message with CLI option names."},
         "Raises": []
       }
     },
@@ -1452,7 +1452,7 @@
         "Methods": {}
       },
       "EvaluationConfig": {
-        "Purpose": "Common simulation, safety, and complexity settings for every task.",
+        "Purpose": "Common simulation, safety, and complexity settings for every task. Validates itself on creation (positive episode length, non-negative weights and volume limits, max_volume > volume_penalty_cutoff, max_body_count >= 1, a known initial_floor_contact_policy, a non-zero 3D target_direction, positive stability limits, and fitness_gain_fraction in [0, 1] where present); invalid values raise ValueError naming the field.",
         "Constructor": {
           "Signature": "EvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0) -> None",
           "Parameters": {
@@ -1476,7 +1476,7 @@
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."}
           },
-          "Raises": []
+          "Raises": ["ValueError"]
         },
         "Attributes": {},
         "Methods": {}

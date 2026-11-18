@@ -13,7 +13,7 @@ from .args import (
     add_environment_arguments,
     add_genotype_argument,
     resolve_task_definition,
-    validate_environment_arguments,
+    validate_task_options,
 )
 
 NAME = "view"
@@ -105,7 +105,6 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 
 
 def validate(args: argparse.Namespace) -> None:
-    validate_environment_arguments(args)
     if args.speed <= 0.0:
         raise ValueError("--speed must be greater than zero")
     if args.shadowsize < 1:
@@ -120,17 +119,17 @@ def validate(args: argparse.Namespace) -> None:
         if given:
             verb = "applies" if len(given) == 1 else "apply"
             raise ValueError(f"{', '.join(given)} only {verb} with --mp4")
+        validate_task_options(args)
         return
 
     for name, default in MP4_DEFAULTS.items():
         if getattr(args, name) is None:
             setattr(args, name, default)
-    if args.duration <= 0.0:
-        raise ValueError("--duration must be greater than zero")
     if args.fps < 1:
         raise ValueError("--fps must be at least 1")
     if args.width < 1 or args.height < 1:
         raise ValueError("--width and --height must be at least 1")
+    validate_task_options(args)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

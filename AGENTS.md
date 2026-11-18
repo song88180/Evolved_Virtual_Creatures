@@ -30,7 +30,7 @@ Use this map to choose files before broad searches:
 - `evc3d/video.py`: MP4 recording loop (`evc3d view --mp4`). Edit for frame capture, video camera motion, or shadow tweaks.
 - `evc3d/viewer.py`: interactive MuJoCo window loop (`evc3d view`). Edit for live stepping, pacing, or viewer camera.
 - `evc3d/cli/__init__.py`: the `evc3d` command entry point (`evc3d <command>`, also `python -m evc3d`); subcommand registration, parsing, and usage-error handling.
-- `evc3d/cli/args.py`: option groups shared by subcommands (genotype, environment, scoring, mutation) and their validation. Edit when adding a task, environment, scoring, or mutation option.
+- `evc3d/cli/args.py`: option groups shared by subcommands (genotype, environment, scoring, mutation). Environment and scoring values are validated by `EnvironmentFamily` and `EvaluationConfig` themselves (`evolution_tasks/shared.py`); `validate_task_options` rewords their errors with option names. When adding a task option, add it here, add its field-to-option entry to `CONFIG_FIELD_OPTIONS` in `shared.py`, and put any value rule in the config's `__post_init__`.
 - `evc3d/cli/evolve.py`: `evc3d evolve`, population-based evolution and run artifacts.
 - `evc3d/cli/evaluate.py`: `evc3d evaluate`, scoring one genotype and printing metrics.
 - `evc3d/cli/mutate.py`: `evc3d mutate`, writing a randomly mutated copy of a genotype.

@@ -1632,3 +1632,47 @@ def test_start_rules_are_enforced_for_scoring_and_skipped_for_viewing():
     assert start_episode(
         model, data, definition.config, definition.environment
     ) is None
+
+
+INVALID_CONFIG_VALUES = [
+    ({"episode_seconds": 0.0}, "episode_seconds must be greater than zero"),
+    ({"episode_seconds": -1.0}, "episode_seconds must be greater than zero"),
+    ({"max_body_count": 0}, "max_body_count must be at least 1"),
+    ({"body_count_weight": -0.1}, "body_count_weight must be non-negative"),
+    ({"volume_weight": -0.1}, "volume_weight must be non-negative"),
+    ({"min_body_volume": -1e-6}, "min_body_volume must be non-negative"),
+    ({"min_total_volume": -0.1}, "min_total_volume must be non-negative"),
+    ({"max_volume": 0.1, "volume_penalty_cutoff": 0.5}, "max_volume must be greater than volume_penalty_cutoff"),
+    ({"settle_seconds": -1.0}, "settle_seconds must be non-negative"),
+    ({"initial_floor_contact_policy": "sometimes"}, "initial_floor_contact_policy must be one of"),
+    ({"target_direction": (0.0, 0.0, 0.0)}, "target_direction must have three components"),
+    ({"target_direction": (1.0, 0.0)}, "target_direction must have three components"),
+    ({"max_abs_velocity": 0.0}, "max_abs_velocity must be greater than zero"),
+]
+ALL_TASK_CONFIGS = [
+    SwimmingEvaluationConfig,
+    SwimmingAwayEvaluationConfig,
+    WalkingEvaluationConfig,
+    WalkingAwayEvaluationConfig,
+    FlyingEvaluationConfig,
+    FlyingAwayEvaluationConfig,
+]
+
+
+@pytest.mark.parametrize("config_type", ALL_TASK_CONFIGS)
+@pytest.mark.parametrize(("values", "message"), INVALID_CONFIG_VALUES)
+def test_task_configs_reject_invalid_values_when_built_in_code(config_type, values, message):
+    with pytest.raises(ValueError, match=message):
+        config_type(**values)
+
+
+@pytest.mark.parametrize("config_type", [FlyingEvaluationConfig, FlyingAwayEvaluationConfig])
+@pytest.mark.parametrize("fraction", [-0.1, 1.5])
+def test_flying_configs_reject_fitness_gain_fraction_outside_unit_interval(config_type, fraction):
+    with pytest.raises(ValueError, match="fitness_gain_fraction must be between 0 and 1"):
+        config_type(fitness_gain_fraction=fraction)
+
+
+@pytest.mark.parametrize("config_type", ALL_TASK_CONFIGS)
+def test_task_config_defaults_are_valid(config_type):
+    config_type()

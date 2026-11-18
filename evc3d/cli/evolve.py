@@ -36,9 +36,8 @@ from .args import (
     add_scoring_arguments,
     mutation_options,
     resolve_task_definition,
-    validate_environment_arguments,
+    validate_task_options,
     validate_mutation_arguments,
-    validate_scoring_arguments,
 )
 
 NAME = "evolve"
@@ -204,8 +203,7 @@ def validate(args: argparse.Namespace) -> None:
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
     validate_mutation_arguments(args)
-    validate_environment_arguments(args)
-    validate_scoring_arguments(args)
+    validate_task_options(args)
     if (
         args.gradual_gravity_change is not None
         and not task_definition(args.task).environment.supports_scheduled_gravity

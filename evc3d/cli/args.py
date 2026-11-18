@@ -1,8 +1,10 @@
 """Argument groups shared by ``evc3d`` subcommands.
 
-Each ``add_*_arguments`` function adds one named group to a subcommand parser,
-and the matching ``validate_*`` function checks it after parsing. Validators
-raise ``ValueError``; ``evc3d.cli.parse_args`` reports those as usage errors.
+Each ``add_*_arguments`` function adds one named group to a subcommand parser.
+Task options (environment and scoring) are validated by the task config and
+environment themselves, through ``validate_task_options``; other groups have a
+``validate_*`` function. Validators raise ``ValueError``, which
+``evc3d.cli.parse_args`` reports as a usage error.
 """
 
 from __future__ import annotations
@@ -10,9 +12,14 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
+import re
 
 from ..evolution_tasks import task_definition, task_names
-from ..evolution_tasks.shared import TaskDefinition
+from ..evolution_tasks.shared import (
+    CONFIG_FIELD_OPTIONS,
+    ENVIRONMENT_FIELD_OPTIONS,
+    TaskDefinition,
+)
 from ..genotype import Genotype
 
 
@@ -102,15 +109,6 @@ def add_environment_arguments(
     )
 
 
-def validate_environment_arguments(args: argparse.Namespace) -> None:
-    if args.max_body_count < 1:
-        raise ValueError("--max-body-count must be at least 1")
-    if args.fluid_density is not None and args.fluid_density < 0.0:
-        raise ValueError("--fluid-density must be non-negative")
-    if args.fluid_viscosity is not None and args.fluid_viscosity < 0.0:
-        raise ValueError("--fluid-viscosity must be non-negative")
-
-
 def add_scoring_arguments(
     parser: argparse.ArgumentParser,
     duration_help: str,
@@ -198,32 +196,6 @@ def add_scoring_arguments(
     )
 
 
-def validate_scoring_arguments(args: argparse.Namespace) -> None:
-    if args.duration <= 0.0:
-        raise ValueError("--duration must be greater than zero")
-    if args.volume_penalty_cutoff is not None and args.volume_penalty_cutoff < 0.0:
-        raise ValueError("--volume-penalty-cutoff must be non-negative")
-    if (
-        args.max_volume is not None
-        and args.volume_penalty_cutoff is not None
-        and args.max_volume <= args.volume_penalty_cutoff
-    ):
-        raise ValueError("--max-volume must be greater than --volume-penalty-cutoff")
-    if args.min_body_volume is not None and args.min_body_volume < 0.0:
-        raise ValueError("--min-body-volume must be non-negative")
-    if args.min_total_volume is not None and args.min_total_volume < 0.0:
-        raise ValueError("--min-total-volume must be non-negative")
-    if args.volume_weight is not None and args.volume_weight < 0.0:
-        raise ValueError("--volume-weight must be non-negative")
-    if args.body_count_weight is not None and args.body_count_weight < 0.0:
-        raise ValueError("--body-count-weight must be non-negative")
-    if (
-        args.fitness_gain_fraction is not None
-        and not 0.0 <= args.fitness_gain_fraction <= 1.0
-    ):
-        raise ValueError("--fitness-gain-fraction must be between 0 and 1")
-
-
 def add_mutation_arguments(parser: argparse.ArgumentParser) -> None:
     """Options that restrict which genotype mutations may be applied."""
     group = parser.add_argument_group("mutation")
@@ -277,8 +249,26 @@ def resolve_task_definition(args: argparse.Namespace) -> TaskDefinition:
     The registry's definition is shared by everything in the process, so the
     overrides are applied to a copy and never leak into later task lookups.
     """
-    definition = replace(task_definition(args.task)).args_override(args)
-    config = definition.config
-    if config.max_volume <= config.volume_penalty_cutoff:
-        raise ValueError("--max-volume must be greater than --volume-penalty-cutoff")
-    return definition
+    return replace(task_definition(args.task)).args_override(args)
+
+
+def validate_task_options(args: argparse.Namespace) -> None:
+    """Build the task definition from parsed options to validate them.
+
+    The task config and environment enforce their own rules; this rewords
+    their errors with CLI option names (``episode_seconds`` -> ``--duration``)
+    so they can be reported as usage errors.
+    """
+    try:
+        resolve_task_definition(args)
+    except ValueError as error:
+        raise ValueError(option_message(str(error))) from error
+
+
+def option_message(message: str) -> str:
+    """Replace config and environment field names in ``message`` with CLI options."""
+    names = {**CONFIG_FIELD_OPTIONS, **{name: name for name in ENVIRONMENT_FIELD_OPTIONS}}
+    for field_name in sorted(names, key=len, reverse=True):
+        option = "--" + names[field_name].replace("_", "-")
+        message = re.sub(rf"(?<![\w-]){field_name}\b", option, message)
+    return message

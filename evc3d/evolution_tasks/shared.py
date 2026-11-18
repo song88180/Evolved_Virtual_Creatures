@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, fields, replace
 from typing import Any, Callable, Sequence
 
@@ -68,6 +69,27 @@ class EnvironmentFamily:
 DEFAULT_ENVIRONMENT = EnvironmentFamily()
 
 
+INITIAL_FLOOR_CONTACT_POLICIES = ("allow", "penetration", "contact")
+
+# Config field -> parsed CLI option (argparse dest) that sets it. Used to apply
+# CLI overrides and to reword config validation errors with option names.
+CONFIG_FIELD_OPTIONS = {
+    "episode_seconds": "duration",
+    "max_body_count": "max_body_count",
+    "body_count_weight": "body_count_weight",
+    "volume_weight": "volume_weight",
+    "volume_penalty_cutoff": "volume_penalty_cutoff",
+    "min_body_volume": "min_body_volume",
+    "min_total_volume": "min_total_volume",
+    "max_volume": "max_volume",
+    "self_collision": "self_collision",
+    "disallow_collision": "disallow_collision",
+    "fitness_gain_fraction": "fitness_gain_fraction",
+}
+# Environment fields settable from the CLI (option dest equals field name).
+ENVIRONMENT_FIELD_OPTIONS = ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef")
+
+
 @dataclass(frozen=True)
 class EvaluationConfig:
     """Common simulation, safety, and complexity settings for every task."""
@@ -91,6 +113,47 @@ class EvaluationConfig:
     max_abs_state_value: float = 1_000_000.0
     max_abs_velocity: float = 1_000.0
     max_abs_acceleration: float = 100_000.0
+
+    def __post_init__(self) -> None:
+        """Reject configs that cannot be scored meaningfully.
+
+        Runs for every task config (they all inherit it), whether built by the
+        CLI or directly in code. Messages name config fields; the CLI rewords
+        them with option names via CONFIG_FIELD_OPTIONS.
+        """
+        if not math.isfinite(self.episode_seconds) or self.episode_seconds <= 0.0:
+            raise ValueError("episode_seconds must be greater than zero")
+        if self.settle_seconds < 0.0:
+            raise ValueError("settle_seconds must be non-negative")
+        if self.max_body_count < 1:
+            raise ValueError("max_body_count must be at least 1")
+        for name in (
+            "body_count_weight",
+            "volume_weight",
+            "volume_penalty_cutoff",
+            "min_body_volume",
+            "min_total_volume",
+            "max_creature_height",
+        ):
+            if getattr(self, name) < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+        if self.max_volume <= self.volume_penalty_cutoff:
+            raise ValueError("max_volume must be greater than volume_penalty_cutoff")
+        if not 0.0 <= self.min_center_height_fraction <= 1.0:
+            raise ValueError("min_center_height_fraction must be between 0 and 1")
+        if self.initial_floor_contact_policy not in INITIAL_FLOOR_CONTACT_POLICIES:
+            raise ValueError(
+                f"initial_floor_contact_policy must be one of "
+                f"{', '.join(INITIAL_FLOOR_CONTACT_POLICIES)}"
+            )
+        if len(self.target_direction) != 3 or not any(self.target_direction):
+            raise ValueError("target_direction must have three components, not all zero")
+        for name in ("max_abs_state_value", "max_abs_velocity", "max_abs_acceleration"):
+            if getattr(self, name) <= 0.0:
+                raise ValueError(f"{name} must be greater than zero")
+        fraction = getattr(self, "fitness_gain_fraction", None)
+        if fraction is not None and not 0.0 <= fraction <= 1.0:
+            raise ValueError("fitness_gain_fraction must be between 0 and 1")
 
 
 @dataclass(frozen=True)
@@ -167,7 +230,7 @@ class TaskDefinition:
     def args_override_environment(self, args: Any) -> EnvironmentFamily:
         """Apply only explicitly supplied environment arguments."""
         overrides = {}
-        for name in ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef"):
+        for name in ENVIRONMENT_FIELD_OPTIONS:
             value = getattr(args, name, None)
             if value is not None:
                 overrides[name] = tuple(value) if name == "fluid_coef" else value
@@ -179,17 +242,8 @@ class TaskDefinition:
         config = self.config_type()
         supported = {item.name for item in fields(config)}
         candidates = {
-            "episode_seconds": getattr(args, "duration", None),
-            "max_body_count": getattr(args, "max_body_count", None),
-            "body_count_weight": getattr(args, "body_count_weight", None),
-            "volume_weight": getattr(args, "volume_weight", None),
-            "volume_penalty_cutoff": getattr(args, "volume_penalty_cutoff", None),
-            "min_body_volume": getattr(args, "min_body_volume", None),
-            "min_total_volume": getattr(args, "min_total_volume", None),
-            "max_volume": getattr(args, "max_volume", None),
-            "self_collision": getattr(args, "self_collision", None),
-            "disallow_collision": getattr(args, "disallow_collision", None),
-            "fitness_gain_fraction": getattr(args, "fitness_gain_fraction", None),
+            field_name: getattr(args, option, None)
+            for field_name, option in CONFIG_FIELD_OPTIONS.items()
         }
         if getattr(args, "upright_error", False):
             candidates["upright_weight"] = DEFAULT_UPRIGHT_ERROR_WEIGHT

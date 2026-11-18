@@ -15,7 +15,7 @@ from .args import (
     add_environment_arguments,
     add_genotype_argument,
     resolve_task_definition,
-    validate_environment_arguments,
+    validate_task_options,
 )
 
 NAME = "build"
@@ -47,7 +47,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 
 
 def validate(args: argparse.Namespace) -> None:
-    validate_environment_arguments(args)
+    validate_task_options(args)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

@@ -14,8 +14,7 @@ from .args import (
     add_genotype_argument,
     add_scoring_arguments,
     resolve_task_definition,
-    validate_environment_arguments,
-    validate_scoring_arguments,
+    validate_task_options,
 )
 
 NAME = "evaluate"
@@ -39,8 +38,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
 
 
 def validate(args: argparse.Namespace) -> None:
-    validate_environment_arguments(args)
-    validate_scoring_arguments(args)
+    validate_task_options(args)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

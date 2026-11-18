@@ -835,3 +835,27 @@ def test_resolving_cli_options_does_not_modify_the_task_registry():
     assert shared.environment is environment
     assert shared.config is config
 
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["evaluate", "--duration", "0"], "--duration must be greater than zero"),
+        (["evolve", "--max-body-count", "0"], "--max-body-count must be at least 1"),
+        (["build", "--max-body-count", "0"], "--max-body-count must be at least 1"),
+        (["evaluate", "--volume-weight", "-1"], "--volume-weight must be non-negative"),
+        (
+            ["evolve", "--max-volume", "0.1", "--volume-penalty-cutoff", "0.5"],
+            "--max-volume must be greater than --volume-penalty-cutoff",
+        ),
+        (["evaluate", "--max-volume", "0.05"], "--max-volume must be greater than --volume-penalty-cutoff"),
+        (["evaluate", "--task", "flying_x", "--fitness-gain-fraction", "2"], "--fitness-gain-fraction must be between 0 and 1"),
+        (["view", "--fluid-density", "-1"], "--fluid-density must be non-negative"),
+        (["view", "--mp4", "x.mp4", "--duration", "-2"], "--duration must be greater than zero"),
+        (["view", "--duration", "-2"], "--duration only applies with --mp4"),
+    ],
+)
+def test_cli_reports_config_errors_with_option_names(argv, message, capsys):
+    with pytest.raises(SystemExit, match="2"):
+        cli.parse_args(argv)
+    assert message in capsys.readouterr().err
