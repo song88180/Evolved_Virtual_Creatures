@@ -15,7 +15,8 @@ import xml.etree.ElementTree as ET
 
 import mujoco
 
-from .control import ActuatorController, apply_controller
+from .control import apply_controller
+from .controller_spec import ActuatorController
 from .evaluation import (
     _has_nonparent_self_collision,
     initialize_model,

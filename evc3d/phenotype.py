@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 from .constants import FACE_NORMALS
 from .evolution_tasks.shared import TaskDefinition
-from .control import (
+from .controller_spec import (
     BALL_NEURAL_AXES,
     ActuatorController,
     normalized_neural_parameters,

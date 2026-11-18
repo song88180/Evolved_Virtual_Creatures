@@ -1026,12 +1026,52 @@
   },
   "evc3d.control": {
     "Overview": {
-      "Purpose": "Actuator controllers: the ActuatorController record built by PhenotypeBuilder, and apply_controller, the single entry point that drives sine or neural controllers each step.",
+      "Purpose": "Applies actuator controllers to a running MuJoCo simulation: apply_controller is the single entry point that writes sine or neural motor commands each step. The controller record and sizes live in evc3d.controller_spec.",
       "Main_Use_Cases": [
         "Drive a creature's motors each step",
-        "Validate or create neural controller weights"
+        "Look up the MuJoCo actuator IDs of all controllers"
       ],
-      "Related_Modules": ["evc3d.phenotype", "evc3d.scene", "evc3d.evaluation"]
+      "Related_Modules": ["evc3d.controller_spec", "evc3d.phenotype", "evc3d.scene", "evc3d.evaluation"]
+    },
+    "Classes": {},
+    "Functions": {
+      "actuator_ids_for_controllers": {
+        "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
+        "Purpose": "Flat list of MuJoCo actuator IDs for all controllers' motors, in controller order.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+        },
+        "Returns": {"Type": "list[int]", "Description": "Actuator IDs."},
+        "Raises": []
+      },
+      "apply_controller": {
+        "Signature": "apply_controller(model: mujoco.MjModel, data: mujoco.MjData, actuator_controllers: list[ActuatorController]) -> None",
+        "Purpose": "Write this step's control values for every controller (sine or neural) into data.ctrl.",
+        "Parameters": {
+          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
+          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; mutates data.ctrl."},
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.controller_spec": {
+    "Overview": {
+      "Purpose": "Controller specifications without the MuJoCo runtime: controller sizes (NEURAL_HIDDEN_SIZE, NEURAL_INPUT_DIMS, NEURAL_OUTPUT_DIMS, BALL_NEURAL_AXES), the ActuatorController record built by PhenotypeBuilder, and neural-weight helpers. Genotype loading and mutation depend only on this module, so they do not import MuJoCo or NumPy.",
+      "Main_Use_Cases": [
+        "Size or validate neural controller weights for a joint type",
+        "Read or write genotypes without the simulator installed"
+      ],
+      "Related_Modules": [
+        "evc3d.control",
+        "evc3d.genotype_mutation",
+        "evc3d.genotype_io",
+        "evc3d.phenotype"
+      ]
     },
     "Classes": {
       "ActuatorController": {
@@ -1059,25 +1099,13 @@
       }
     },
     "Functions": {
-      "actuator_ids_for_controllers": {
-        "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
-        "Purpose": "Flat list of MuJoCo actuator IDs for all controllers' motors, in controller order.",
+      "zero_neural_parameters": {
+        "Signature": "zero_neural_parameters(joint_type: str) -> tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]",
+        "Purpose": "Zero neural weights and biases sized for a joint type.",
         "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+          "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."}
         },
-        "Returns": {"Type": "list[int]", "Description": "Actuator IDs."},
-        "Raises": []
-      },
-      "apply_controller": {
-        "Signature": "apply_controller(model: mujoco.MjModel, data: mujoco.MjData, actuator_controllers: list[ActuatorController]) -> None",
-        "Purpose": "Write this step's control values for every controller (sine or neural) into data.ctrl.",
-        "Parameters": {
-          "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
-          "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
-        },
-        "Returns": {"Type": "None", "Description": "Nothing; mutates data.ctrl."},
+        "Returns": {"Type": "tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]", "Description": "(w1, b1, w2, b2) of zeros."},
         "Raises": []
       },
       "normalized_neural_parameters": {
@@ -1091,15 +1119,6 @@
           "neural_b2": {"Type": "Sequence[float]", "Default": "required", "Description": "Neural output-layer biases."}
         },
         "Returns": {"Type": "tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]", "Description": "(w1, b1, w2, b2)."},
-        "Raises": []
-      },
-      "zero_neural_parameters": {
-        "Signature": "zero_neural_parameters(joint_type: str) -> tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]",
-        "Purpose": "Zero neural weights and biases sized for a joint type.",
-        "Parameters": {
-          "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."}
-        },
-        "Returns": {"Type": "tuple[tuple[tuple[float, ...], ...], tuple[float, ...], tuple[tuple[float, ...], ...], tuple[float, ...]]", "Description": "(w1, b1, w2, b2) of zeros."},
         "Raises": []
       }
     },

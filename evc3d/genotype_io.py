@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 import warnings
 
-from .control import BALL_NEURAL_AXES, zero_neural_parameters
+from .controller_spec import BALL_NEURAL_AXES, zero_neural_parameters
 from .genes import (
     CONTROL_MODES,
     MAX_BODY_SIZE,

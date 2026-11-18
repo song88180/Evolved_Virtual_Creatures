@@ -5,7 +5,7 @@ import copy
 import math
 import random
 
-from .control import (
+from .controller_spec import (
     BALL_NEURAL_AXES,
     NEURAL_HIDDEN_SIZE,
     NEURAL_INPUT_DIMS,

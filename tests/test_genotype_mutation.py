@@ -1279,3 +1279,25 @@ def test_fresh_child_size_clamps_after_parent_relative_generation(
     )
 
     assert child_size == (expected, expected, expected)
+
+
+def test_genotype_modules_do_not_import_mujoco():
+    """Reading, writing, and mutating genotypes must not need the simulator."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "import evc3d.genotype, evc3d.genotype_io, evc3d.genotype_mutation\n"
+        "import evc3d.graph_analysis, evc3d.controller_spec\n"
+        "from evc3d.genotype_io import load_genotype_from_json\n"
+        "import random\n"
+        "g = load_genotype_from_json('examples/example_genotype.json')\n"
+        "g.mutation(num_mutations=5, rng=random.Random(0))\n"
+        "loaded = sorted(m for m in ('mujoco', 'numpy') if m in sys.modules)\n"
+        "print('LOADED=' + ','.join(loaded))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert completed.stdout.strip().splitlines()[-1] == "LOADED="

@@ -18,6 +18,8 @@ Use this map to choose files before broad searches:
 - `evc3d/genotype_io.py`: JSON schema loading, old-genotype migration, and serialization. Edit when genotype JSON fields, defaults, or backward compatibility behavior changes.
 - `evc3d/genotype_mutation.py`: mutation parameter discovery and mutation operators. Edit when adding mutable fields, topology mutations, repair rules, or random fresh gene generation.
 - `evc3d/phenotype.py`: genotype-to-MJCF expansion. Edit when body placement, joints, motors, symmetry reflection, body quaternions, geometry, collision settings, or task-specific XML output changes.
+- `evc3d/controller_spec.py`: MuJoCo-free controller sizes, the `ActuatorController` record, and neural-weight helpers. Genotype modules import this, never `control.py`, so genotype loading does not need MuJoCo.
+- `evc3d/control.py`: applies controllers to a running simulation (`apply_controller`, actuator ID lookup). Edit for per-step sine or neural control.
 - `evc3d/graph_analysis.py`: graph validity and generated body-count analysis. Edit for recursion, terminal-only, missing-node, or max-body-count validation rules.
 - `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
 - `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
