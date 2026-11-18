@@ -111,15 +111,15 @@ def add_environment_arguments(
 
 def add_scoring_arguments(
     parser: argparse.ArgumentParser,
-    duration_help: str,
+    episode_seconds_help: str,
 ) -> None:
     """Options that only affect how an episode is scored."""
     group = parser.add_argument_group("scoring")
     group.add_argument(
-        "--duration",
+        "--episode-seconds",
         type=float,
         default=10.0,
-        help=duration_help,
+        help=episode_seconds_help,
     )
     group.add_argument(
         "--body-count-weight",
@@ -256,7 +256,7 @@ def validate_task_options(args: argparse.Namespace) -> None:
     """Build the task definition from parsed options to validate them.
 
     The task config and environment enforce their own rules; this rewords
-    their errors with CLI option names (``episode_seconds`` -> ``--duration``)
+    their errors with CLI option names (``max_volume`` -> ``--max-volume``)
     so they can be reported as usage errors.
     """
     try:
@@ -267,8 +267,8 @@ def validate_task_options(args: argparse.Namespace) -> None:
 
 def option_message(message: str) -> str:
     """Replace config and environment field names in ``message`` with CLI options."""
-    names = {**CONFIG_FIELD_OPTIONS, **{name: name for name in ENVIRONMENT_FIELD_OPTIONS}}
+    names = (*CONFIG_FIELD_OPTIONS, *ENVIRONMENT_FIELD_OPTIONS)
     for field_name in sorted(names, key=len, reverse=True):
-        option = "--" + names[field_name].replace("_", "-")
+        option = "--" + field_name.replace("_", "-")
         message = re.sub(rf"(?<![\w-]){field_name}\b", option, message)
     return message

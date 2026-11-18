@@ -73,22 +73,22 @@ DEFAULT_ENVIRONMENT = EnvironmentFamily()
 # reject geometry sunk into the floor, or reject any floor contact at all.
 INITIAL_FLOOR_CONTACT_POLICIES = ("allow", "no_penetration", "no_contact")
 
-# Config field -> parsed CLI option (argparse dest) that sets it. Used to apply
-# CLI overrides and to reword config validation errors with option names.
-CONFIG_FIELD_OPTIONS = {
-    "episode_seconds": "duration",
-    "max_body_count": "max_body_count",
-    "body_count_weight": "body_count_weight",
-    "volume_weight": "volume_weight",
-    "volume_penalty_cutoff": "volume_penalty_cutoff",
-    "min_body_volume": "min_body_volume",
-    "min_total_volume": "min_total_volume",
-    "max_volume": "max_volume",
-    "self_collision": "self_collision",
-    "disallow_collision": "disallow_collision",
-    "fitness_gain_fraction": "fitness_gain_fraction",
-}
-# Environment fields settable from the CLI (option dest equals field name).
+# Config and environment fields settable from the CLI. Each option is named
+# after its field (``max_volume`` <-> ``--max-volume``, argparse dest
+# ``max_volume``); used to apply CLI overrides and to reword validation errors.
+CONFIG_FIELD_OPTIONS = (
+    "episode_seconds",
+    "max_body_count",
+    "body_count_weight",
+    "volume_weight",
+    "volume_penalty_cutoff",
+    "min_body_volume",
+    "min_total_volume",
+    "max_volume",
+    "self_collision",
+    "disallow_collision",
+    "fitness_gain_fraction",
+)
 ENVIRONMENT_FIELD_OPTIONS = ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef")
 
 
@@ -270,10 +270,7 @@ class TaskDefinition:
         """Build a fresh task config and apply supported explicit CLI arguments."""
         config = self.config_type()
         supported = {item.name for item in fields(config)}
-        candidates = {
-            field_name: getattr(args, option, None)
-            for field_name, option in CONFIG_FIELD_OPTIONS.items()
-        }
+        candidates = {name: getattr(args, name, None) for name in CONFIG_FIELD_OPTIONS}
         if getattr(args, "upright_error", False):
             candidates["upright_weight"] = DEFAULT_UPRIGHT_ERROR_WEIGHT
         overrides = {

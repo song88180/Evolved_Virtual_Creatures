@@ -158,14 +158,14 @@ evc3d view \
   --task swimming_x \
   --genotype runs/readme_swimming_example/best_genotype.json \
   --mp4 videos/best_swimmer.mp4 \
-  --duration 10 \
+  --episode-seconds 10 \
   --track-root \
   --fps 30 \
   --width 960 \
   --height 544
 ```
 
-Passing `--mp4` without a path writes `example_<task>.mp4` in the current directory. `--track-root`, `--speed`, `--spotlight`, and `--shadowsize` apply to both modes; `--duration`, `--fps`, `--width`, `--height`, and `--camera-circle-around` only apply with `--mp4`. See `evc3d view --help` for all options.
+Passing `--mp4` without a path writes `example_<task>.mp4` in the current directory. `--track-root`, `--speed`, `--spotlight`, and `--shadowsize` apply to both modes; `--episode-seconds`, `--fps`, `--width`, `--height`, and `--camera-circle-around` only apply with `--mp4`. See `evc3d view --help` for all options.
 
 ### Evolution tasks
 

@@ -411,7 +411,7 @@ def test_task_definition_config_overrides_reset_to_task_defaults():
     defaults = SwimmingEvaluationConfig()
 
     definition.args_override(
-        argparse.Namespace(duration=3.0, body_count_weight=0.25)
+        argparse.Namespace(episode_seconds=3.0, body_count_weight=0.25)
     )
     assert definition.config.episode_seconds == pytest.approx(3.0)
     assert definition.config.body_count_weight == pytest.approx(0.25)
@@ -854,7 +854,7 @@ def test_resolving_cli_options_does_not_modify_the_task_registry():
     environment, config = shared.environment, shared.config
 
     args = evolve_cli.parse_args(
-        ["--task", "flying_x", "--fluid-density", "0.5", "--duration", "2"]
+        ["--task", "flying_x", "--fluid-density", "0.5", "--episode-seconds", "2"]
     )
     resolved = resolve_task_definition(args)
 
@@ -869,7 +869,7 @@ def test_resolving_cli_options_does_not_modify_the_task_registry():
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
-        (["evaluate", "--duration", "0"], "--duration must be greater than zero"),
+        (["evaluate", "--episode-seconds", "0"], "--episode-seconds must be greater than zero"),
         (["evolve", "--max-body-count", "0"], "--max-body-count must be at least 1"),
         (["build", "--max-body-count", "0"], "--max-body-count must be at least 1"),
         (["evaluate", "--volume-weight", "-1"], "--volume-weight must be non-negative"),
@@ -883,8 +883,8 @@ def test_resolving_cli_options_does_not_modify_the_task_registry():
         (["evolve", "--volume-weight", "nan"], "--volume-weight must be a number, not NaN"),
         (["evaluate", "--body-count-weight", "inf"], "--body-count-weight must be finite"),
         (["view", "--fluid-density", "-1"], "--fluid-density must be non-negative"),
-        (["view", "--mp4", "x.mp4", "--duration", "-2"], "--duration must be greater than zero"),
-        (["view", "--duration", "-2"], "--duration only applies with --mp4"),
+        (["view", "--mp4", "x.mp4", "--episode-seconds", "-2"], "--episode-seconds must be greater than zero"),
+        (["view", "--episode-seconds", "-2"], "--episode-seconds only applies with --mp4"),
     ],
 )
 def test_cli_reports_config_errors_with_option_names(argv, message, capsys):

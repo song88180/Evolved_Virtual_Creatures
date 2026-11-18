@@ -1030,7 +1030,7 @@
   },
   "evc3d.cli.args": {
     "Overview": {
-      "Purpose": "Option groups shared by subcommands: genotype (`--genotype`), environment (`--task`, fluid, `--self-collision`, `--max-body-count`), scoring (`--duration`, fitness weights, volume limits, `--upright-error`, `--disallow-collision`), and mutation (which mutations are allowed). Also resolves the task definition from parsed options.",
+      "Purpose": "Option groups shared by subcommands: genotype (`--genotype`), environment (`--task`, fluid, `--self-collision`, `--max-body-count`), scoring (`--episode-seconds`, fitness weights, volume limits, `--upright-error`, `--disallow-collision`), and mutation (which mutations are allowed). Also resolves the task definition from parsed options.",
       "Main_Use_Cases": [
         "Add a task, environment, scoring, or mutation option once for all subcommands"
       ],
@@ -1075,11 +1075,11 @@
         "Raises": []
       },
       "add_scoring_arguments": {
-        "Signature": "add_scoring_arguments(parser: argparse.ArgumentParser, duration_help: str) -> None",
+        "Signature": "add_scoring_arguments(parser: argparse.ArgumentParser, episode_seconds_help: str) -> None",
         "Purpose": "Options that only affect how an episode is scored.",
         "Parameters": {
           "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."},
-          "duration_help": {"Type": "str", "Default": "required", "Description": "Help text for --duration in this subcommand."}
+          "episode_seconds_help": {"Type": "str", "Default": "required", "Description": "Help text for --episode-seconds in this subcommand."}
         },
         "Returns": {"Type": "None", "Description": "Nothing; adds the 'scoring' group."},
         "Raises": []
@@ -1113,7 +1113,7 @@
       },
       "validate_task_options": {
         "Signature": "validate_task_options(args: argparse.Namespace) -> None",
-        "Purpose": "Build the task definition from parsed options so the task config and environment validate them; reword their errors with CLI option names (episode_seconds -> --duration).",
+        "Purpose": "Build the task definition from parsed options so the task config and environment validate them; reword their errors with CLI option names (max_volume -> --max-volume).",
         "Parameters": {
           "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed command-line arguments."}
         },
@@ -1122,7 +1122,7 @@
       },
       "option_message": {
         "Signature": "option_message(message: str) -> str",
-        "Purpose": "Replace config and environment field names in an error message with the CLI options that set them, using evolution_tasks.shared.CONFIG_FIELD_OPTIONS.",
+        "Purpose": "Replace config and environment field names in an error message with the CLI options that set them (each option is named after its field), using evolution_tasks.shared.CONFIG_FIELD_OPTIONS and ENVIRONMENT_FIELD_OPTIONS.",
         "Parameters": {
           "message": {"Type": "str", "Default": "required", "Description": "Error message naming config or environment fields."}
         },

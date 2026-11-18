@@ -24,7 +24,7 @@ MP4_DEFAULTS = {
     "fps": 30,
     "width": 960,
     "height": 544,
-    "duration": 10.0,
+    "episode_seconds": 10.0,
 }
 
 
@@ -82,7 +82,7 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
         ),
     )
     group.add_argument(
-        "--duration",
+        "--episode-seconds",
         type=float,
         default=None,
         help="Recorded episode length in simulated seconds. (default: 10.0)",
@@ -112,7 +112,9 @@ def validate(args: argparse.Namespace) -> None:
 
     if args.mp4 is None:
         given = [
-            f"--{name}" for name in MP4_DEFAULTS if getattr(args, name) is not None
+            "--" + name.replace("_", "-")
+            for name in MP4_DEFAULTS
+            if getattr(args, name) is not None
         ]
         if args.camera_circle_around:
             given.append("--camera-circle-around")

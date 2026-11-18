@@ -54,12 +54,12 @@ def test_view_rejects_nonpositive_shadowsize(capsys):
 def test_view_defaults_to_interactive_with_mp4_defaults_unset():
     args = view_cli.parse_args([])
     assert args.mp4 is None
-    assert args.duration is None and args.fps is None
+    assert args.episode_seconds is None and args.fps is None
 
 
 @pytest.mark.parametrize(
     "argv",
-    [["--duration", "3"], ["--fps", "10"], ["--width", "100"], ["--camera-circle-around"]],
+    [["--episode-seconds", "3"], ["--fps", "10"], ["--width", "100"], ["--camera-circle-around"]],
 )
 def test_view_rejects_mp4_options_without_mp4(argv, capsys):
     with pytest.raises(SystemExit, match="2"):
@@ -70,7 +70,7 @@ def test_view_rejects_mp4_options_without_mp4(argv, capsys):
 def test_view_mp4_fills_video_defaults():
     args = view_cli.parse_args(["--mp4", "out.mp4"])
     assert args.mp4 == Path("out.mp4")
-    assert (args.duration, args.fps, args.width, args.height) == (10.0, 30, 960, 544)
+    assert (args.episode_seconds, args.fps, args.width, args.height) == (10.0, 30, 960, 544)
 
 
 def test_view_mp4_without_path_uses_task_default(monkeypatch, tmp_path):
@@ -81,7 +81,7 @@ def test_view_mp4_without_path_uses_task_default(monkeypatch, tmp_path):
 
     monkeypatch.setattr("evc3d.video.save_x_axis_video", fake_video)
     monkeypatch.chdir(tmp_path)
-    cli.main(["view", "--task", "walking_x", "--mp4", "--duration", "2"])
+    cli.main(["view", "--task", "walking_x", "--mp4", "--episode-seconds", "2"])
 
     assert recorded["output_path"] == Path("example_walking_x.mp4")
     assert recorded["definition"].config.episode_seconds == 2.0
