@@ -219,7 +219,7 @@ The top-level fields are:
 | --- | --- |
 | `root` | Name of the node where phenotype expansion begins. |
 | `control_mode` | Required global controller family: `neural` or `sine`. |
-| `global_control_freq` | Positive base controller frequency. Defaults to `1.0`. |
+| `global_control_freq` | Sine mode only. Base **angular** frequency in radians per second (not hertz), shared by all sine controllers. Defaults to `1.0`. |
 | `nodes` | Name-keyed map of active node genes. |
 | `connections` | Name-keyed map of active connection genes. |
 | `archived_nodes` | Optional map of inactive node genes retained by topology mutation. |
@@ -253,7 +253,7 @@ A connection gene supports these principal fields:
 | `motor_gear` | MuJoCo actuator gear value. |
 | `ctrlrange` | Minimum and maximum actuator control values. |
 | `control_amp` | Amplitude used by the sine controller. |
-| `control_freq` | Sine-frequency multiplier applied to `global_control_freq`. |
+| `control_freq` | Sine mode only. Dimensionless **multiplier** on `global_control_freq` (not a frequency itself). The joint's command is `amp * sin(global_control_freq * control_freq * t + phase)`, so the defaults `1.0 × 10` give 10 rad/s ≈ 1.6 cycles per second. Mutation snaps it to the harmonics 0.5, 1, 2, 3, or 4. |
 | `control_phase` | Base phase used by the sine controller. |
 | `control_phase_depth_scale` | Phase offset added for each recursive depth level. |
 | `control_phase_order_scale` | Phase offset added according to sibling expansion order. |

@@ -34,7 +34,7 @@
             "motor_gear": {"Type": "float", "Default": "100.0", "Description": "Motor gear value written to the MJCF actuator."},
             "ctrlrange": {"Type": "Tuple[float, float]", "Default": "(-1.0, 1.0)", "Description": "Control range for the generated motor."},
             "control_amp": {"Type": "float", "Default": "0.1", "Description": "Amplitude for the sine-wave open-loop controller."},
-            "control_freq": {"Type": "float", "Default": "10", "Description": "Harmonic multiplier applied to Genotype.global_control_freq for the sine-wave controller."},
+            "control_freq": {"Type": "float", "Default": "10", "Description": "Sine mode only. Dimensionless multiplier on Genotype.global_control_freq, not a frequency itself: the joint's sine angular frequency is global_control_freq × control_freq rad/s (defaults 1.0 × 10 = 10 rad/s ≈ 1.6 Hz). Mutation snaps it to the harmonics 0.5, 1, 2, 3, 4."},
             "control_phase": {"Type": "float", "Default": "0.0", "Description": "Base phase offset for the sine-wave open-loop controller."},
             "control_phase_depth_scale": {"Type": "float", "Default": "0.0", "Description": "Additional phase offset multiplied by recursive depth."},
             "control_phase_order_scale": {"Type": "float", "Default": "0.0", "Description": "Additional phase offset multiplied by actuator order."},
@@ -60,7 +60,7 @@
           "motor_gear": {"Type": "float", "Description": "MuJoCo motor gear value."},
           "ctrlrange": {"Type": "Tuple[float, float]", "Description": "MuJoCo motor control range."},
           "control_amp": {"Type": "float", "Description": "Open-loop control amplitude."},
-          "control_freq": {"Type": "float", "Description": "Actuator-specific harmonic frequency multiplier."},
+          "control_freq": {"Type": "float", "Description": "Sine mode only. Dimensionless multiplier on Genotype.global_control_freq, not a frequency itself: the joint's sine angular frequency is global_control_freq × control_freq rad/s (defaults 1.0 × 10 = 10 rad/s ≈ 1.6 Hz). Mutation snaps it to the harmonics 0.5, 1, 2, 3, 4."},
           "control_phase": {"Type": "float", "Description": "Open-loop base phase."},
           "control_phase_depth_scale": {"Type": "float", "Description": "Depth-based phase scale."},
           "control_phase_order_scale": {"Type": "float", "Description": "Actuator-order-based phase scale."},
@@ -235,7 +235,7 @@
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
             "connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=...)", "Description": "Active connection genes keyed by connection name."},
-            "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base angular frequency multiplied by each connection control_freq harmonic."},
+            "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Sine mode only. Base angular frequency in rad/s (not Hz) shared by all sine controllers; each joint's angular frequency is global_control_freq × its connection's control_freq."},
             "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural or sine."},
             "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named connection genes retained as mutation templates."},
             "archived_nodes": {"Type": "Dict[str, NodeGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named node genes retained as mutation templates."}
@@ -246,7 +246,7 @@
           "root": {"Type": "str", "Description": "Root node name."},
           "nodes": {"Type": "Dict[str, NodeGene]", "Description": "Active node genes."},
           "connections": {"Type": "Dict[str, ConnectionGene]", "Description": "Active connection genes."},
-          "global_control_freq": {"Type": "float", "Description": "Continuous base actuator frequency shared by all generated controllers."},
+          "global_control_freq": {"Type": "float", "Description": "Sine mode only. Base angular frequency in rad/s (not Hz) shared by all sine controllers; each joint's angular frequency is global_control_freq × its connection's control_freq."},
           "control_mode": {"Type": "str", "Description": "Global controller family used when building controllers."},
           "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Description": "Archived connection templates."},
           "archived_nodes": {"Type": "Dict[str, NodeGene]", "Description": "Archived node templates."}
@@ -294,7 +294,7 @@
           "root": {"Type": "str", "Default": "required", "Description": "Name of the root node."},
           "nodes": {"Type": "GeneSpec | None", "Default": "None", "Description": "Mapping from node names to node fields and child_connections lists."},
           "connections": {"Type": "GeneSpec | None", "Default": "None", "Description": "Mapping from connection names to connection fields."},
-          "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Continuous base actuator frequency for the returned genotype."},
+          "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Sine mode only. Base angular frequency in rad/s (not Hz) shared by all sine controllers; each joint's angular frequency is global_control_freq × its connection's control_freq."},
           "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the returned genotype."},
           "spec": {"Type": "GeneSpec | None", "Default": "None", "Description": "Legacy nested genotype specification with embedded children (alternative to nodes/connections)."}
         },
@@ -507,7 +507,7 @@
             "neural_w2": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural output weights (outputs x 16). Used only in neural mode."},
             "neural_b2": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural output biases. Used only in neural mode."},
             "amp": {"Type": "float", "Default": "0.0", "Description": "Sine control amplitude. Used only in sine mode."},
-            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency after the global base frequency and connection harmonic multiplier are combined. Used only in sine mode."},
+            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency in rad/s: Genotype.global_control_freq × the connection's control_freq (divide by 2π for Hz). Used only in sine mode."},
             "phase": {"Type": "float", "Default": "0.0", "Description": "Sine phase offset. Used only in sine mode."}
           },
           "Raises": []
@@ -1049,7 +1049,7 @@
             "neural_w2": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural output-layer weight matrix."},
             "neural_b2": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural output-layer biases."},
             "amp": {"Type": "float", "Default": "0.0", "Description": "Sine control amplitude."},
-            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency."},
+            "freq": {"Type": "float", "Default": "0.0", "Description": "Effective sine angular frequency in rad/s: Genotype.global_control_freq × the connection's control_freq (divide by 2π for Hz). Used only in sine mode."},
             "phase": {"Type": "float", "Default": "0.0", "Description": "Sine phase offset."}
           },
           "Raises": []

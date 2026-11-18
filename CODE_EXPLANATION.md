@@ -52,7 +52,7 @@ A `ConnectionGene` describes how one body-part node connects to another. Its imp
 - `terminal_only`: adds the child only on the terminal occurrence of the parent node. A terminal-only connection cannot point back to its own node.
 - `motor_enabled`: whether the articulated joint on this connection gets a motor.
 - `motor_gear` and `ctrlrange`: MuJoCo actuator settings for the generated motor.
-- `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters. `control_freq` is an actuator-specific harmonic multiplier applied to the genotype's global base frequency.
+- `control_amp`, `control_freq`, `control_phase`, `control_phase_depth_scale`, and `control_phase_order_scale`: open-loop sine controller parameters. `control_freq` is a dimensionless multiplier (mutation snaps it to the harmonics 0.5, 1, 2, 3, 4) applied to the genotype's `global_control_freq`, a base angular frequency in rad/s. The joint's sine angular frequency is their product in rad/s; divide by 2π for cycles per second.
 - `neural_w1`, `neural_b1`, `neural_w2`, and `neural_b2`: the two-layer neural controller tensors for this connection.
 - `neural_output_axes`: signed physical axes associated with the neural output rows, allowing joint-type mutations to preserve an output's direction.
 
@@ -361,7 +361,7 @@ evc3d view --genotype mutated.json --task walking_x          # watch it (window,
 During simulation, `control.apply_controller()` is the single entry point that writes motor commands each step. It looks up each controller's own motors by name, so a ball joint's three motors are all driven by that joint's controller:
 
 - **Neural** (`control_mode = "neural"`, the default): a two-layer network per joint reads the joint's position and velocity plus the root body's orientation and velocity, and outputs one command per motor. The weights come from the connection gene, so they evolve with the body.
-- **Sine** (`control_mode = "sine"`): each joint's motors follow `amp * sin(freq * t + phase)`, where the frequency is the genotype's global base frequency times the connection's harmonic multiplier.
+- **Sine** (`control_mode = "sine"`): each joint's motors follow `amp * sin(freq * t + phase)`, where `freq` is an angular frequency in rad/s: the genotype's `global_control_freq` times the connection's `control_freq` multiplier.
 
 Evaluation (`evaluation.evaluate_task`) and viewing (`evc3d view`, via `scene.py`) build, place, and settle the creature the same way, so what you watch starts exactly like what was scored.
 

@@ -335,6 +335,7 @@ class PhenotypeBuilder:
         ctrlrange = incoming_conn.ctrlrange if incoming_conn else (-1.0, 1.0)
         control_mode = self.genotype.control_mode
         control_amp = incoming_conn.control_amp if incoming_conn else 0.5
+        # Sine angular frequency in rad/s: base rate times the connection's multiplier.
         control_freq = (
             self.genotype.global_control_freq
             * (incoming_conn.control_freq if incoming_conn else 4.0)

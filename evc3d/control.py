@@ -38,7 +38,7 @@ class ActuatorController:
     neural_w2: tuple[tuple[float, ...], ...] = ()
     neural_b2: tuple[float, ...] = ()
     amp: float = 0.0
-    freq: float = 0.0
+    freq: float = 0.0  # sine angular frequency in rad/s (divide by 2*pi for Hz)
     phase: float = 0.0
 
 

@@ -143,6 +143,10 @@ class ConnectionGene:
     motor_gear: float = 100.0
     ctrlrange: Tuple[float, float] = (-1.0, 1.0)
     control_amp: float = 0.1
+    # Sine mode only. Dimensionless multiplier on Genotype.global_control_freq,
+    # not a frequency: the joint's angular frequency is
+    # global_control_freq * control_freq, in rad/s. Mutation snaps it to
+    # GenotypeMutationMixin.HARMONIC_CONTROL_FREQS.
     control_freq: float = 10
     control_phase: float = 0.0
     control_phase_depth_scale: float = 0.0

@@ -14,6 +14,8 @@ class Genotype(GenotypeMutationMixin):
     root: str
     nodes: Dict[str, NodeGene]
     connections: Dict[str, ConnectionGene] = field(default_factory=dict)
+    # Sine mode only. Base angular frequency in rad/s (not Hz) shared by all
+    # sine controllers; each joint multiplies it by its connection's control_freq.
     global_control_freq: float = 1.0
     control_mode: str = "neural"
     archived_connections: Dict[str, ConnectionGene] = field(default_factory=dict)
