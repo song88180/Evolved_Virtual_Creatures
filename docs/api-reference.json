@@ -1738,7 +1738,7 @@
       "SwimmingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for swimming_away distance-from-origin fitness.",
         "Constructor": {
-          "Signature": "SwimmingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 1.0, energy_weight: float = 1e-06, angular_speed_weight: float = 0.01) -> None",
+          "Signature": "SwimmingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = allow, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, origin_speed_weight: float = 1.0, energy_weight: float = 1e-06, angular_speed_weight: float = 0.01) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -1759,7 +1759,7 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
+            "origin_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
             "energy_weight": {"Type": "float", "Default": "1e-06", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."}
           },
@@ -1831,7 +1831,7 @@
       "WalkingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for walking_away distance-from-origin fitness in the land environment.",
         "Constructor": {
-          "Signature": "WalkingAwayEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 1.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2) -> None",
+          "Signature": "WalkingAwayEvaluationConfig(settle_seconds: float = 1.0, max_creature_height: float = 10.0, min_center_height_fraction: float = 0.5, initial_floor_contact_policy: str = penetration, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, origin_speed_weight: float = 1.0, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.2) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "1.0", "Description": "Unscored time used to let the creature settle onto the floor."},
             "max_creature_height": {"Type": "float", "Default": "10.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -1852,7 +1852,7 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
+            "origin_speed_weight": {"Type": "float", "Default": "1.0", "Description": "Reward multiplier for average speed away from the starting point."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
             "height_loss_weight": {"Type": "float", "Default": "0.2", "Description": "Fitness penalty per meter of center-of-mass height loss."}
@@ -1883,7 +1883,7 @@
       "FlyingEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_x.",
         "Constructor": {
-          "Signature": "FlyingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, distance_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Signature": "FlyingEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, forward_speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -1904,7 +1904,7 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "distance_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average forward speed."},
+            "forward_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average forward speed."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
             "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},
@@ -1932,7 +1932,7 @@
       "FlyingAwayEvaluationConfig": {
         "Purpose": "Frozen dataclass of simulation settings and fitness weights for flying_away.",
         "Constructor": {
-          "Signature": "FlyingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
+          "Signature": "FlyingAwayEvaluationConfig(settle_seconds: float = 0.0, max_creature_height: float = 0.0, min_center_height_fraction: float = 0.0, initial_floor_contact_policy: str = contact, episode_seconds: float = 10.0, max_body_count: int = 500, self_collision: bool = False, disallow_collision: bool = False, target_direction: Sequence[float] = (1.0, 0.0, 0.0), body_count_weight: float = 0.001, volume_weight: float = 0.01, volume_penalty_cutoff: float = 0.1, min_body_volume: float = 1e-06, min_total_volume: float = 0.0001, max_volume: float = 1.0, build_failure_fitness: float = -1000.0, max_abs_state_value: float = 1000000.0, max_abs_velocity: float = 1000.0, max_abs_acceleration: float = 100000.0, origin_speed_weight: float = 0.1, energy_weight: float = 1e-07, angular_speed_weight: float = 0.01, height_loss_weight: float = 0.5, ground_touch_weight: float = 0.0, no_ground_touch_bonus: float = 10, fitness_gain_fraction: float = 0.5) -> None",
           "Parameters": {
             "settle_seconds": {"Type": "float", "Default": "0.0", "Description": "Seconds to settle before the episode starts."},
             "max_creature_height": {"Type": "float", "Default": "0.0", "Description": "Start rule: maximum creature height in meters (0 disables)."},
@@ -1953,7 +1953,7 @@
             "max_abs_state_value": {"Type": "float", "Default": "1000000.0", "Description": "Instability limit for |qpos|."},
             "max_abs_velocity": {"Type": "float", "Default": "1000.0", "Description": "Instability limit for |qvel|."},
             "max_abs_acceleration": {"Type": "float", "Default": "100000.0", "Description": "Instability limit for |qacc|."},
-            "speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average speed away from the start."},
+            "origin_speed_weight": {"Type": "float", "Default": "0.1", "Description": "Fitness weight on average speed away from the start."},
             "energy_weight": {"Type": "float", "Default": "1e-07", "Description": "Fitness penalty per unit control energy."},
             "angular_speed_weight": {"Type": "float", "Default": "0.01", "Description": "Fitness penalty per unit mean angular speed."},
             "height_loss_weight": {"Type": "float", "Default": "0.5", "Description": "Fitness penalty per meter of center-of-mass height loss."},

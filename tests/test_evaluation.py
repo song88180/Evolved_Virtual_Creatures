@@ -1513,13 +1513,34 @@ def test_neural_output_sign_maps_to_control_direction():
     assert positive_data.ctrl[0] == pytest.approx(-negative_data.ctrl[0])
 
 
-def test_away_configs_reject_old_distance_weight_name():
+@pytest.mark.parametrize("old_name", ["distance_weight", "speed_weight"])
+@pytest.mark.parametrize(
+    "config_type",
+    [
+        SwimmingAwayEvaluationConfig,
+        WalkingAwayEvaluationConfig,
+        FlyingAwayEvaluationConfig,
+        FlyingEvaluationConfig,
+    ],
+)
+def test_configs_reject_retired_speed_weight_names(config_type, old_name):
     with pytest.raises(TypeError):
-        SwimmingAwayEvaluationConfig(distance_weight=1.0)
-    with pytest.raises(TypeError):
-        WalkingAwayEvaluationConfig(distance_weight=1.0)
-    with pytest.raises(TypeError):
-        FlyingAwayEvaluationConfig(distance_weight=0.1)
+        config_type(**{old_name: 1.0})
+
+
+def test_speed_weights_are_named_after_the_speed_they_weight():
+    for config_type in (
+        SwimmingAwayEvaluationConfig,
+        WalkingAwayEvaluationConfig,
+        FlyingAwayEvaluationConfig,
+    ):
+        assert hasattr(config_type(), "origin_speed_weight")
+    for config_type in (
+        SwimmingEvaluationConfig,
+        WalkingEvaluationConfig,
+        FlyingEvaluationConfig,
+    ):
+        assert hasattr(config_type(), "forward_speed_weight")
 
 
 def test_swimming_away_fitness_maximizes_average_origin_speed():
@@ -1542,7 +1563,7 @@ def test_swimming_away_fitness_maximizes_average_origin_speed():
 
 def test_flying_fitness_uses_xy_speed_and_penalizes_ground_contact():
     config = FlyingAwayEvaluationConfig(
-        speed_weight=0.1,
+        origin_speed_weight=0.1,
         energy_weight=0.0,
         height_loss_weight=1.0,
         angular_speed_weight=0.0,
@@ -1595,7 +1616,7 @@ def test_x_axis_flying_fitness_uses_forward_speed():
     }
 
     config = FlyingEvaluationConfig(
-        distance_weight=1.0, energy_weight=0.0, height_loss_weight=0.0,
+        forward_speed_weight=1.0, energy_weight=0.0, height_loss_weight=0.0,
         angular_speed_weight=0.0, body_count_weight=0.0, volume_weight=0.0,
     )
     assert flying_x_episode_fitness(config, metrics) == pytest.approx(2.0)
@@ -1629,7 +1650,7 @@ def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
         return controlled_metrics.copy() if apply_controls else passive_metrics.copy()
 
     config = FlyingEvaluationConfig(
-        distance_weight=1.0,
+        forward_speed_weight=1.0,
         energy_weight=0.0,
         height_loss_weight=0.0,
         angular_speed_weight=0.0,

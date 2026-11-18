@@ -9,7 +9,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(name="swimming_away")
 
 @dataclass(frozen=True)
 class SwimmingAwayEvaluationConfig(EvaluationConfig):
-    speed_weight: float = 1.0
+    origin_speed_weight: float = 1.0
     energy_weight: float = 1e-6
     angular_speed_weight: float = 0.01
 
@@ -24,7 +24,7 @@ class OriginDistanceEvaluationResult(EvaluationResult):
 
 def fitness_callback(config, metrics: dict, _passive_metrics: dict | None):
     fitness = (
-        config.speed_weight * metrics["average_origin_speed"]
+        config.origin_speed_weight * metrics["average_origin_speed"]
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.body_count_weight * metrics["body_count"]

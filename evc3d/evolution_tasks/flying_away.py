@@ -18,7 +18,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(
 @dataclass(frozen=True)
 class FlyingAwayEvaluationConfig(EvaluationConfig):
     initial_floor_contact_policy: str = "contact"
-    speed_weight: float = 0.1
+    origin_speed_weight: float = 0.1
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
     height_loss_weight: float = 0.5
@@ -44,7 +44,7 @@ class FlyingAwayEvaluationResult(EvaluationResult):
 
 def _episode_fitness(config, metrics: dict) -> float:
     return (
-        config.speed_weight * metrics["average_origin_speed"]
+        config.origin_speed_weight * metrics["average_origin_speed"]
         + metrics["no_ground_touch_bonus"]
         - config.height_loss_weight * metrics["height_loss"]
         - metrics["ground_touch_penalty"]

@@ -16,7 +16,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(
 class WalkingAwayEvaluationConfig(EvaluationConfig):
     initial_floor_contact_policy: str = "penetration"
     settle_seconds: float = 1.0
-    speed_weight: float = 1.0
+    origin_speed_weight: float = 1.0
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01
     height_loss_weight: float = 0.2
@@ -36,7 +36,7 @@ class WalkingAwayEvaluationResult(EvaluationResult):
 def fitness_callback(config, metrics: dict, _passive_metrics: dict | None):
     metrics = {key: value for key, value in metrics.items() if key != "vertical_drift_speed"}
     fitness = (
-        config.speed_weight * metrics["average_origin_speed"]
+        config.origin_speed_weight * metrics["average_origin_speed"]
         - config.energy_weight * metrics["control_energy"]
         - config.angular_speed_weight * metrics["mean_angular_speed"]
         - config.height_loss_weight * metrics["height_loss"]
