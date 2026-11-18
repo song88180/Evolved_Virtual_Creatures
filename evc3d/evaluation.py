@@ -144,11 +144,17 @@ def start_rule_failure(
     Read-only: inspects the placed state without modifying it.
     """
     floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-    contact_policy = config.initial_floor_contact_policy  # validated by the config
-    if floor_id >= 0 and (
-        (contact_policy == "penetration" and has_floor_penetration(model, data, floor_id))
-        or (contact_policy == "contact" and has_floor_contact(model, data, floor_id))
-    ):
+    contact_policy = config.initial_floor_contact_policy
+    if contact_policy == "allow" or floor_id < 0:
+        violates_floor_rule = False
+    elif contact_policy == "no_penetration":
+        violates_floor_rule = has_floor_penetration(model, data, floor_id)
+    elif contact_policy == "no_contact":
+        violates_floor_rule = has_floor_contact(model, data, floor_id)
+    else:
+        # Configs reject unknown policies, but never let one score as "allow".
+        raise ValueError(f"Unknown initial floor contact policy: {contact_policy!r}")
+    if violates_floor_rule:
         return INITIAL_FLOOR_OVERLAP_REASON
     return _walking_height_failure_reason(model, data, config)
 

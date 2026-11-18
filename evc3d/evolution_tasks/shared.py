@@ -69,7 +69,9 @@ class EnvironmentFamily:
 DEFAULT_ENVIRONMENT = EnvironmentFamily()
 
 
-INITIAL_FLOOR_CONTACT_POLICIES = ("allow", "penetration", "contact")
+# Start rule for floor contact when the creature is placed: allow anything,
+# reject geometry sunk into the floor, or reject any floor contact at all.
+INITIAL_FLOOR_CONTACT_POLICIES = ("allow", "no_penetration", "no_contact")
 
 # Config field -> parsed CLI option (argparse dest) that sets it. Used to apply
 # CLI overrides and to reword config validation errors with option names.

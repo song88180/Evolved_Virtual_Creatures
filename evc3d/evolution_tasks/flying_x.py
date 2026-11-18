@@ -17,7 +17,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(
 
 @dataclass(frozen=True)
 class FlyingEvaluationConfig(EvaluationConfig):
-    initial_floor_contact_policy: str = "contact"
+    initial_floor_contact_policy: str = "no_contact"
     forward_speed_weight: float = 0.1
     energy_weight: float = 1e-7
     angular_speed_weight: float = 0.01

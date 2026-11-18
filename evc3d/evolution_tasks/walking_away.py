@@ -14,7 +14,7 @@ TASK_ENVIRONMENT = EnvironmentFamily(
 
 @dataclass(frozen=True)
 class WalkingAwayEvaluationConfig(EvaluationConfig):
-    initial_floor_contact_policy: str = "penetration"
+    initial_floor_contact_policy: str = "no_penetration"
     settle_seconds: float = 1.0
     origin_speed_weight: float = 1.0
     energy_weight: float = 1e-7

@@ -1154,6 +1154,40 @@ def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
     assert result.failure_reason == INITIAL_FLOOR_OVERLAP_REASON
 
 
+@pytest.mark.parametrize(
+    ("policy", "penetrates", "touches", "rejected"),
+    [
+        ("allow", True, True, False),
+        ("no_penetration", False, True, False),
+        ("no_penetration", True, True, True),
+        ("no_contact", False, False, False),
+        ("no_contact", False, True, True),
+    ],
+)
+def test_initial_floor_contact_policies(monkeypatch, policy, penetrates, touches, rejected):
+    monkeypatch.setattr(evaluation, "has_floor_penetration", lambda *_args: penetrates)
+    monkeypatch.setattr(evaluation, "has_floor_contact", lambda *_args: touches)
+    config = WalkingEvaluationConfig(
+        initial_floor_contact_policy=policy, max_creature_height=0.0
+    )
+    model, data = placed_walker(make_definition("walking_x"))
+
+    failure = evaluation.start_rule_failure(model, data, config)
+
+    assert (failure == INITIAL_FLOOR_OVERLAP_REASON) is rejected
+
+
+def test_unknown_floor_contact_policy_raises_instead_of_allowing():
+    # A config subclass that skips super().__post_init__() bypasses validation;
+    # scoring must still refuse an unknown policy rather than treat it as "allow".
+    config = WalkingEvaluationConfig()
+    object.__setattr__(config, "initial_floor_contact_policy", "contacts")
+    model, data = placed_walker(make_definition("walking_x"))
+
+    with pytest.raises(ValueError, match="Unknown initial floor contact policy: 'contacts'"):
+        evaluation.start_rule_failure(model, data, config)
+
+
 def test_detects_nonparent_contact_but_parent_filter_remains_enabled():
     model = mujoco.MjModel.from_xml_string(
         """
