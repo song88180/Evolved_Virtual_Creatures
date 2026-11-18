@@ -108,7 +108,7 @@ def settle_model(
     config: EvaluationConfig,
 ) -> str | None:
     """Let a walking creature fall onto the floor before controls and scoring."""
-    settle_steps = max(0, math.ceil(getattr(config, "settle_seconds", 0.0) / model.opt.timestep))
+    settle_steps = max(0, math.ceil(config.settle_seconds / model.opt.timestep))
     for _ in range(settle_steps):
         previous_time = float(data.time)
         mujoco.mj_step(model, data)

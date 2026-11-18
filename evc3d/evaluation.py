@@ -164,7 +164,7 @@ def _walking_height_failure_reason(
     data: mujoco.MjData,
     config: task_shared.EvaluationConfig,
 ) -> str | None:
-    max_height = getattr(config, "max_creature_height", 0.0)
+    max_height = config.max_creature_height
     if max_height <= 0.0:
         return None
     height = creature_height(model, data)
@@ -329,7 +329,7 @@ def _run_episode(
     if root_body_id >= 0:
         min_center_height = (
             initial_center_of_mass[2]
-            * getattr(config, "min_center_height_fraction", 0.0)
+            * config.min_center_height_fraction
         )
         if final_center_of_mass[2] < min_center_height:
             return WALKING_CENTER_HEIGHT_DROP_REASON
@@ -400,7 +400,7 @@ def _creature_volume_failure_reason(
     model: mujoco.MjModel,
     config: task_shared.EvaluationConfig,
 ) -> str | None:
-    min_body_volume = getattr(config, "min_body_volume", 0.0)
+    min_body_volume = config.min_body_volume
     body_volumes = _creature_body_volumes(model)
     if min_body_volume > 0.0:
         for body_id, body_volume in body_volumes.items():
@@ -414,7 +414,7 @@ def _creature_volume_failure_reason(
                 f"{body_volume:.6g} m^3; minimum is {min_body_volume:.6g} m^3."
             )
 
-    min_total_volume = getattr(config, "min_total_volume", 0.0)
+    min_total_volume = config.min_total_volume
     total_volume = sum(body_volumes.values())
     if total_volume < min_total_volume:
         return (
