@@ -1,5 +1,5 @@
 {
-  "evol_virtual_creature.genes": {
+  "evc3d.genes": {
     "Overview": {
       "Purpose": "Defines dataclass genes used to describe reusable genotype node types and directed child connections.",
       "Main_Use_Cases": [
@@ -9,10 +9,10 @@
         "Store motor control parameters on each connection"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.genotype_io",
-        "evol_virtual_creature.genotype_mutation",
-        "evol_virtual_creature.phenotype"
+        "evc3d.genotype",
+        "evc3d.genotype_io",
+        "evc3d.genotype_mutation",
+        "evc3d.phenotype"
       ]
     },
     "Classes": {
@@ -197,7 +197,7 @@
     },
     "Exceptions": {}
   },
-  "evol_virtual_creature.genotype": {
+  "evc3d.genotype": {
     "Overview": {
       "Purpose": "Defines the top-level genotype dataclass that combines active genes with archived genetic material and mutation behavior.",
       "Main_Use_Cases": [
@@ -206,10 +206,10 @@
         "Expose mutation behavior through GenotypeMutationMixin"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genes",
-        "evol_virtual_creature.genotype_mutation",
-        "evol_virtual_creature.genotype_io",
-        "evol_virtual_creature.phenotype"
+        "evc3d.genes",
+        "evc3d.genotype_mutation",
+        "evc3d.genotype_io",
+        "evc3d.phenotype"
       ]
     },
     "Classes": {
@@ -258,7 +258,7 @@
     "Functions": {},
     "Exceptions": {}
   },
-  "evol_virtual_creature.genotype_io": {
+  "evc3d.genotype_io": {
     "Overview": {
       "Purpose": "Builds, loads, saves, and serializes genotype graph recipes using the project JSON schema.",
       "Main_Use_Cases": [
@@ -267,8 +267,8 @@
         "Save active and archived genetic material back to JSON"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genes",
-        "evol_virtual_creature.genotype"
+        "evc3d.genes",
+        "evc3d.genotype"
       ]
     },
     "Classes": {},
@@ -325,7 +325,7 @@
     },
     "Exceptions": {}
   },
-  "evol_virtual_creature.genotype_mutation": {
+  "evc3d.genotype_mutation": {
     "Overview": {
       "Purpose": "Implements parameter and topology mutation behavior mixed into Genotype.",
       "Main_Use_Cases": [
@@ -334,8 +334,8 @@
         "Create new mutated node genes and archive disconnected genetic material"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genes",
-        "evol_virtual_creature.genotype"
+        "evc3d.genes",
+        "evc3d.genotype"
       ]
     },
     "Classes": {
@@ -419,7 +419,7 @@
       }
     }
   },
-  "evol_virtual_creature.graph_analysis": {
+  "evc3d.graph_analysis": {
     "Overview": {
       "Purpose": "Validates recursive genotype graphs and estimates expanded phenotype size before XML generation.",
       "Main_Use_Cases": [
@@ -428,10 +428,10 @@
         "Abort expansion before max_node would be exceeded"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.phenotype",
-        "evol_virtual_creature.evaluation",
-        "evol_virtual_creature.video"
+        "evc3d.genotype",
+        "evc3d.phenotype",
+        "evc3d.evaluation",
+        "evc3d.video"
       ]
     },
     "Classes": {
@@ -497,7 +497,7 @@
       "ValueError": {"Description": "Raised when max_node is less than 1."}
     }
   },
-  "evol_virtual_creature.phenotype": {
+  "evc3d.phenotype": {
     "Overview": {
       "Purpose": "Converts genotype graphs into MuJoCo MJCF XML and records actuator controller metadata.",
       "Main_Use_Cases": [
@@ -506,17 +506,17 @@
         "Record per-joint controller metadata (ActuatorController) for generated actuators"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.genes",
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.graph_analysis",
-        "evol_virtual_creature.evaluation",
-        "evol_virtual_creature.video",
-        "evol_virtual_creature.viewer"
+        "evc3d.genes",
+        "evc3d.genotype",
+        "evc3d.graph_analysis",
+        "evc3d.evaluation",
+        "evc3d.video",
+        "evc3d.viewer"
       ]
     },
     "Classes": {
       "ActuatorController": {
-        "Purpose": "Per-joint controller record created by PhenotypeBuilder and applied each step by control.apply_controller. Defined in evol_virtual_creature.control. One controller drives every motor of its joint: one for hinge or slide joints, three for ball joints.",
+        "Purpose": "Per-joint controller record created by PhenotypeBuilder and applied each step by control.apply_controller. Defined in evc3d.control. One controller drives every motor of its joint: one for hinge or slide joints, three for ball joints.",
         "Constructor": {
           "Signature": "ActuatorController(motor_names: tuple[str, ...], joint_name: str, joint_type: str, control_mode: str, ctrlranges: tuple[tuple[float, float], ...], neural_w1=(), neural_b1=(), neural_w2=(), neural_b2=(), amp: float = 0.0, freq: float = 0.0, phase: float = 0.0)",
           "Parameters": {
@@ -776,7 +776,7 @@
       "PhenotypeNodeLimitExceeded": {"Description": "Raised when XML body creation would exceed max_node."}
     }
   },
-  "evol_virtual_creature.evolution_tasks": {
+  "evc3d.evolution_tasks": {
     "Overview": {
       "Purpose": "Matches task strings to task-module filenames. Each task-specific submodule exports a TASK_DEFINITION containing its config, result type, fitness and failure callbacks, rollout policy, and metadata; evaluation.evaluate_task owns model construction and rollout orchestration.",
       "Main_Use_Cases": [
@@ -785,18 +785,18 @@
         "Convert phenotype build failures or unstable simulations into failed evaluation results"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.evolution_tasks.swimming_x",
-        "evol_virtual_creature.evolution_tasks.swimming_away",
-        "evol_virtual_creature.evolution_tasks.walking_x",
-        "evol_virtual_creature.evolution_tasks.walking_away",
-        "evol_virtual_creature.evolution_tasks.flying_x",
-        "evol_virtual_creature.evolution_tasks.flying_away",
-        "evol_virtual_creature.evolution_tasks.shared",
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.evaluation",
-        "evol_virtual_creature.graph_analysis",
-        "evol_virtual_creature.phenotype",
-        "evol_virtual_creature.video"
+        "evc3d.evolution_tasks.swimming_x",
+        "evc3d.evolution_tasks.swimming_away",
+        "evc3d.evolution_tasks.walking_x",
+        "evc3d.evolution_tasks.walking_away",
+        "evc3d.evolution_tasks.flying_x",
+        "evc3d.evolution_tasks.flying_away",
+        "evc3d.evolution_tasks.shared",
+        "evc3d.genotype",
+        "evc3d.evaluation",
+        "evc3d.graph_analysis",
+        "evc3d.phenotype",
+        "evc3d.video"
       ]
     },
     "Classes": {
@@ -986,7 +986,7 @@
       "ValueError": {"Description": "Raised when target_direction does not have three components or has zero norm."}
     }
   },
-  "evol_virtual_creature.video": {
+  "evc3d.video": {
     "Overview": {
       "Purpose": "Renders selected swimming, walking, or flying simulations to MP4 video and exposes controller helpers shared with rendering.",
       "Main_Use_Cases": [
@@ -995,10 +995,10 @@
         "Apply open-loop sine controls during video rendering"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.evaluation",
-        "evol_virtual_creature.genotype",
-        "evol_virtual_creature.graph_analysis",
-        "evol_virtual_creature.phenotype"
+        "evc3d.evaluation",
+        "evc3d.genotype",
+        "evc3d.graph_analysis",
+        "evc3d.phenotype"
       ]
     },
     "Classes": {},
@@ -1051,7 +1051,7 @@
       "RuntimeError": {"Description": "Raised when imageio/imageio-ffmpeg is unavailable, output writing fails, or phenotype generation fails before recording."}
     }
   },
-  "evol_virtual_creature.viewer": {
+  "evc3d.viewer": {
     "Overview": {
       "Purpose": "Launches an interactive passive MuJoCo viewer and applies generated open-loop actuator controls while it runs.",
       "Main_Use_Cases": [
@@ -1059,8 +1059,8 @@
         "Preview open-loop controller behavior in MuJoCo"
       ],
       "Related_Modules": [
-        "evol_virtual_creature.phenotype",
-        "evol_virtual_creature.video"
+        "evc3d.phenotype",
+        "evc3d.video"
       ]
     },
     "Classes": {},

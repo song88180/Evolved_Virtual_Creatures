@@ -11,8 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Mapping, Union
 
-from evol_virtual_creature.genes import ConnectionGene, NodeGene
-from evol_virtual_creature.genotype import Genotype
+from evc3d.genes import ConnectionGene, NodeGene
+from evc3d.genotype import Genotype
 
 
 @dataclass

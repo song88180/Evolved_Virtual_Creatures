@@ -9,18 +9,18 @@ import pytest
 
 import evaluate
 import evolve as evolve_cli
-from evol_virtual_creature import evolve as evolve_lib
-from evol_virtual_creature.evaluation import task_definition
-from evol_virtual_creature.genes import ConnectionGene, NodeGene
-from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.genotype_io import build_genotype
-from evol_virtual_creature.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
-from evol_virtual_creature.evolution_tasks.flying_x import FlyingEvaluationConfig
-from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
-from evol_virtual_creature.evolution_tasks.swimming_x import SwimmingEvaluationConfig
-from evol_virtual_creature.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
-from evol_virtual_creature.evolution_tasks.walking_x import WalkingEvaluationConfig
+from evc3d import evolve as evolve_lib
+from evc3d.evaluation import task_definition
+from evc3d.genes import ConnectionGene, NodeGene
+from evc3d.genotype import Genotype
+from evc3d.genotype_io import build_genotype
+from evc3d.evolution_tasks.flying_away import FlyingAwayEvaluationConfig
+from evc3d.evolution_tasks.flying_x import FlyingEvaluationConfig
+from evc3d.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_ENVIRONMENT
+from evc3d.evolution_tasks.swimming_away import SwimmingAwayEvaluationConfig
+from evc3d.evolution_tasks.swimming_x import SwimmingEvaluationConfig
+from evc3d.evolution_tasks.walking_away import WalkingAwayEvaluationConfig
+from evc3d.evolution_tasks.walking_x import WalkingEvaluationConfig
 import generate_model
 
 

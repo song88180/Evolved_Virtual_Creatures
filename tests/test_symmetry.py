@@ -3,16 +3,16 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from evol_virtual_creature.genes import ConnectionGene, NodeGene
-from evol_virtual_creature.genotype_io import (
+from evc3d.genes import ConnectionGene, NodeGene
+from evc3d.genotype_io import (
     load_genotype_from_json,
     save_genotype_to_json,
 )
-from evol_virtual_creature.graph_analysis import (
+from evc3d.graph_analysis import (
     GenotypeGraphAnalyzer,
     PhenotypeNodeLimitExceeded,
 )
-from evol_virtual_creature.phenotype import PhenotypeBuilder
+from evc3d.phenotype import PhenotypeBuilder
 
 from genotype_factory import tree_genotype, tree_node
 

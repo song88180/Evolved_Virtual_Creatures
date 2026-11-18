@@ -13,16 +13,16 @@ conda run -n mujoco --no-capture-output python -m pytest
 
 Use this map to choose files before broad searches:
 
-- `evol_virtual_creature/genes.py`: core gene dataclasses and low-level validation. Edit for new `NodeGene` or `ConnectionGene` fields, attachment-face rules, symmetry rules, orientation math, or constructor validation.
-- `evol_virtual_creature/genotype.py`: top-level `Genotype` container. Edit when active or archived genetic material fields change.
-- `evol_virtual_creature/genotype_io.py`: JSON schema loading, old-genotype migration, and serialization. Edit when genotype JSON fields, defaults, or backward compatibility behavior changes.
-- `evol_virtual_creature/genotype_mutation.py`: mutation parameter discovery and mutation operators. Edit when adding mutable fields, topology mutations, repair rules, or random fresh gene generation.
-- `evol_virtual_creature/phenotype.py`: genotype-to-MJCF expansion. Edit when body placement, joints, motors, symmetry reflection, body quaternions, geometry, collision settings, or task-specific XML output changes.
-- `evol_virtual_creature/graph_analysis.py`: graph validity and phenotype node-count analysis. Edit for recursion, terminal-only, missing-node, or max-node validation rules.
-- `evol_virtual_creature/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
-- `evol_virtual_creature/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
-- `evol_virtual_creature/video.py`: video rendering helpers used by evaluation output. Edit for camera, lighting, floor rendering, or tracked-body video behavior.
-- `evol_virtual_creature/viewer.py`: interactive MuJoCo viewer loop. Edit for manual visualization and live controller stepping.
+- `evc3d/genes.py`: core gene dataclasses and low-level validation. Edit for new `NodeGene` or `ConnectionGene` fields, attachment-face rules, symmetry rules, orientation math, or constructor validation.
+- `evc3d/genotype.py`: top-level `Genotype` container. Edit when active or archived genetic material fields change.
+- `evc3d/genotype_io.py`: JSON schema loading, old-genotype migration, and serialization. Edit when genotype JSON fields, defaults, or backward compatibility behavior changes.
+- `evc3d/genotype_mutation.py`: mutation parameter discovery and mutation operators. Edit when adding mutable fields, topology mutations, repair rules, or random fresh gene generation.
+- `evc3d/phenotype.py`: genotype-to-MJCF expansion. Edit when body placement, joints, motors, symmetry reflection, body quaternions, geometry, collision settings, or task-specific XML output changes.
+- `evc3d/graph_analysis.py`: graph validity and phenotype node-count analysis. Edit for recursion, terminal-only, missing-node, or max-node validation rules.
+- `evc3d/evaluation.py`: MuJoCo rollout metrics and task fitness functions. Edit for swimming, walking, flying, collision disqualification, floor clearance, or volume penalties.
+- `evc3d/evolve.py`: reusable population/evolution helpers. Edit for selection, population initialization, generation outputs, or mutation scheduling.
+- `evc3d/video.py`: video rendering helpers used by evaluation output. Edit for camera, lighting, floor rendering, or tracked-body video behavior.
+- `evc3d/viewer.py`: interactive MuJoCo viewer loop. Edit for manual visualization and live controller stepping.
 - `generate_model.py`: CLI for loading, mutating, building, writing, and viewing one creature.
 - `evaluate.py`: CLI for scoring one genotype and optionally rendering video.
 - `evolve.py`: CLI for running population-based evolution and writing run artifacts.

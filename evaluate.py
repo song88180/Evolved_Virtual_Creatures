@@ -17,14 +17,14 @@ def _configure_video_rendering_backend() -> None:
 
 _configure_video_rendering_backend()
 
-from evol_virtual_creature.evaluation import (
+from evc3d.evaluation import (
     DEFAULT_UPRIGHT_ERROR_WEIGHT,
     evaluate_task,
     task_definition,
     task_names,
 )
-from evol_virtual_creature.genotype_io import load_genotype_from_json
-from evol_virtual_creature.video import save_x_axis_video
+from evc3d.genotype_io import load_genotype_from_json
+from evc3d.video import save_x_axis_video
 
 
 DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"

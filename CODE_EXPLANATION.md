@@ -24,16 +24,16 @@ The code is split by responsibility:
 - `generate_model.py`: command-line entrypoint for loading, mutating, building, saving, and viewing one creature.
 - `evaluate.py`: command-line entrypoint for scoring one genotype on a locomotion task.
 - `evolve.py`: command-line entrypoint for population-based mutation search.
-- `evol_virtual_creature/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
-- `evol_virtual_creature/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
-- `evol_virtual_creature/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
-- `evol_virtual_creature/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
-- `evol_virtual_creature/graph_analysis.py`: graph validation and node-count checks.
-- `evol_virtual_creature/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
-- `evol_virtual_creature/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.
-- `evol_virtual_creature/evolution_tasks/`: task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
-- `evol_virtual_creature/video.py`: optional evaluation video rendering helpers.
-- `evol_virtual_creature/viewer.py`: MuJoCo simulation and viewer loop.
+- `evc3d/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
+- `evc3d/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
+- `evc3d/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
+- `evc3d/genotype_mutation.py`: in-place mutation operators for node fields, connection fields, and topology changes.
+- `evc3d/graph_analysis.py`: graph validation and node-count checks.
+- `evc3d/phenotype.py`: MJCF phenotype generation, including body quaternions and rotated attachment placement.
+- `evc3d/evaluation.py`: shared MuJoCo evaluation engine, rollout mechanics, and lazy task lookup.
+- `evc3d/evolution_tasks/`: task-specific configs, environments, results, fitness/failure callbacks, and registration metadata; `shared.py` owns the declarative environment template, task metadata types, registry state, and rollout policies.
+- `evc3d/video.py`: optional evaluation video rendering helpers.
+- `evc3d/viewer.py`: MuJoCo simulation and viewer loop.
 
 ## Genotype Data Structures
 

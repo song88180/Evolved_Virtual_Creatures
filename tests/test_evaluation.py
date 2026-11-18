@@ -10,9 +10,9 @@ import mujoco
 import numpy as np
 import pytest
 
-import evol_virtual_creature.evaluation as evaluation
-from evol_virtual_creature.control import apply_controller
-from evol_virtual_creature.evaluation import (
+import evc3d.evaluation as evaluation
+from evc3d.control import apply_controller
+from evc3d.evaluation import (
     NUMERICAL_INSTABILITY_REASON,
     INITIAL_FLOOR_OVERLAP_REASON,
     MAXIMUM_CREATURE_HEIGHT_REASON,
@@ -27,7 +27,7 @@ from evol_virtual_creature.evaluation import (
     initialize_model,
     simulation_failure_reason,
 )
-from evol_virtual_creature.evolution_tasks.shared import (
+from evc3d.evolution_tasks.shared import (
     DEFAULT_ENVIRONMENT,
     EnvironmentFamily,
     EvaluationConfig,
@@ -36,52 +36,52 @@ from evol_virtual_creature.evolution_tasks.shared import (
     TASK_REGISTRY,
     TaskDefinition,
 )
-from evol_virtual_creature.evolution_tasks.flying_away import (
+from evc3d.evolution_tasks.flying_away import (
     FlyingAwayEvaluationConfig,
     FlyingAwayEvaluationResult,
     TASK_DEFINITION as FLYING_AWAY_TASK,
     _episode_fitness as flying_away_episode_fitness,
     fitness_callback as flying_away_fitness,
 )
-from evol_virtual_creature.evolution_tasks.flying_x import (
+from evc3d.evolution_tasks.flying_x import (
     FlyingEvaluationConfig,
     FlyingEvaluationResult,
     TASK_DEFINITION as FLYING_X_TASK,
     _episode_fitness as flying_x_episode_fitness,
     fitness_callback as flying_x_fitness,
 )
-from evol_virtual_creature.evolution_tasks.swimming_away import (
+from evc3d.evolution_tasks.swimming_away import (
     OriginDistanceEvaluationResult,
     SwimmingAwayEvaluationConfig,
     TASK_DEFINITION as SWIMMING_AWAY_TASK,
     fitness_callback as swimming_away_fitness,
 )
-from evol_virtual_creature.evolution_tasks.swimming_x import (
+from evc3d.evolution_tasks.swimming_x import (
     SwimmingEvaluationConfig,
     SwimmingEvaluationResult,
     TASK_DEFINITION as SWIMMING_X_TASK,
     fitness_callback as swimming_x_fitness,
 )
-from evol_virtual_creature.evolution_tasks.walking_away import (
+from evc3d.evolution_tasks.walking_away import (
     WalkingAwayEvaluationConfig,
     WalkingAwayEvaluationResult,
     TASK_DEFINITION as WALKING_AWAY_TASK,
     fitness_callback as walking_away_fitness,
 )
-from evol_virtual_creature.evolution_tasks.walking_x import (
+from evc3d.evolution_tasks.walking_x import (
     WalkingEvaluationConfig,
     WalkingEvaluationResult,
     TASK_DEFINITION as WALKING_X_TASK,
     fitness_callback as walking_x_fitness,
 )
-from evol_virtual_creature.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.swimming_away import TASK_ENVIRONMENT as SWIMMING_AWAY_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.swimming_x import TASK_ENVIRONMENT as SWIMMING_X_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.walking_away import TASK_ENVIRONMENT as WALKING_AWAY_ENVIRONMENT
-from evol_virtual_creature.evolution_tasks.walking_x import TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT
-from evol_virtual_creature.genotype_io import build_genotype, load_genotype_from_json
-from evol_virtual_creature.phenotype import PhenotypeBuilder
+from evc3d.evolution_tasks.flying_away import TASK_ENVIRONMENT as FLYING_AWAY_ENVIRONMENT
+from evc3d.evolution_tasks.flying_x import TASK_ENVIRONMENT as FLYING_X_ENVIRONMENT
+from evc3d.evolution_tasks.swimming_away import TASK_ENVIRONMENT as SWIMMING_AWAY_ENVIRONMENT
+from evc3d.evolution_tasks.swimming_x import TASK_ENVIRONMENT as SWIMMING_X_ENVIRONMENT
+from evc3d.evolution_tasks.walking_away import TASK_ENVIRONMENT as WALKING_AWAY_ENVIRONMENT
+from evc3d.evolution_tasks.walking_x import TASK_ENVIRONMENT as WALKING_X_ENVIRONMENT
+from evc3d.genotype_io import build_genotype, load_genotype_from_json
+from evc3d.phenotype import PhenotypeBuilder
 
 
 GENOTYPE_PATH = "examples/example_genotype.json"
@@ -170,8 +170,8 @@ def test_shared_evaluation_engine_has_no_task_specific_airborne_terms():
 
 def test_evaluation_module_lazily_loads_builtin_tasks():
     script = (
-        "import evol_virtual_creature.evaluation as evaluation; "
-        "from evol_virtual_creature.evolution_tasks import shared; "
+        "import evc3d.evaluation as evaluation; "
+        "from evc3d.evolution_tasks import shared; "
         "assert not shared.TASK_REGISTRY; "
         "assert evaluation.task_names() == "
         "('swimming_x', 'swimming_away', 'walking_x', 'walking_away', "
@@ -183,9 +183,9 @@ def test_evaluation_module_lazily_loads_builtin_tasks():
 def test_evolution_tasks_package_import_has_no_registration_side_effect():
     script = (
         "import importlib; "
-        "import evol_virtual_creature.evaluation; "
-        "from evol_virtual_creature.evolution_tasks import shared; "
-        "importlib.import_module('evol_virtual_creature.evolution_tasks'); "
+        "import evc3d.evaluation; "
+        "from evc3d.evolution_tasks import shared; "
+        "importlib.import_module('evc3d.evolution_tasks'); "
         "assert not shared.TASK_REGISTRY"
     )
     subprocess.run([sys.executable, "-c", script], check=True)
@@ -205,8 +205,8 @@ def test_evolution_tasks_package_import_has_no_registration_side_effect():
 def test_task_module_import_does_not_import_evaluation_engine(task):
     script = (
         "import importlib, sys; "
-        f"importlib.import_module('evol_virtual_creature.evolution_tasks.{task}'); "
-        "assert 'evol_virtual_creature.evaluation' not in sys.modules"
+        f"importlib.import_module('evc3d.evolution_tasks.{task}'); "
+        "assert 'evc3d.evaluation' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", script], check=True)
 
@@ -214,17 +214,17 @@ def test_task_module_import_does_not_import_evaluation_engine(task):
 @pytest.mark.parametrize(
     "imports",
     (
-        "import evol_virtual_creature.evaluation; "
-        "import evol_virtual_creature.evolution_tasks.shared",
-        "import evol_virtual_creature.evolution_tasks.shared; "
-        "import evol_virtual_creature.evaluation",
+        "import evc3d.evaluation; "
+        "import evc3d.evolution_tasks.shared",
+        "import evc3d.evolution_tasks.shared; "
+        "import evc3d.evaluation",
     ),
 )
 def test_evaluation_and_shared_import_cleanly_in_either_order(imports):
     script = (
         f"{imports}; "
-        "import evol_virtual_creature.evaluation as evaluation; "
-        "from evol_virtual_creature.evolution_tasks import shared; "
+        "import evc3d.evaluation as evaluation; "
+        "from evc3d.evolution_tasks import shared; "
         "assert not hasattr(evaluation, 'EvaluationConfig'); "
         "assert not hasattr(evaluation, 'ResultField'); "
         "assert not hasattr(evaluation, 'TaskDefinition'); "
@@ -239,7 +239,7 @@ def test_evaluation_and_shared_import_cleanly_in_either_order(imports):
 def test_load_task_definition_matches_task_to_module_filename():
     definition = load_task_definition("swimming_x")
     module = importlib.import_module(
-        "evol_virtual_creature.evolution_tasks.swimming_x"
+        "evc3d.evolution_tasks.swimming_x"
     )
     assert definition is module.TASK_DEFINITION
     assert isinstance(definition, TaskDefinition)
@@ -596,7 +596,7 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
 
 
 def test_controlled_episode_reports_drift_speeds(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -668,7 +668,7 @@ def test_controlled_episode_initializes_center_of_mass_before_scoring():
 
 
 def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -723,7 +723,7 @@ def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
 
 
 def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -765,7 +765,7 @@ def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
 
 
 def test_controlled_episode_rejects_large_center_of_mass_drop(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -834,7 +834,7 @@ def test_walking_rejects_creature_above_maximum_height():
 
 
 def test_walking_upright_error_penalty_is_optional(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     genotype = build_genotype(
         root="body",
@@ -883,7 +883,7 @@ def test_walking_upright_error_penalty_is_optional(monkeypatch):
 
 
 def test_walking_away_fitness_uses_average_origin_speed(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     genotype = build_genotype(
         root="body",
@@ -969,7 +969,7 @@ def test_flying_speed_is_measured_before_first_ground_contact():
 
 
 def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     model = mujoco.MjModel.from_xml_string(
         """
@@ -1120,7 +1120,7 @@ def test_shared_evaluator_initializes_swimming_tasks():
 
 
 def test_initial_floor_overlap_assigns_low_fitness(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     monkeypatch.setattr(evaluation, "_has_floor_penetration", lambda *_args: True)
     result = evaluate_task(
@@ -1164,7 +1164,7 @@ def test_detects_nonparent_contact_but_parent_filter_remains_enabled():
 
 
 def test_disallowed_collision_assigns_low_fitness(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     monkeypatch.setattr(
@@ -1243,7 +1243,7 @@ def test_simulation_time_reset_is_rejected():
 
 
 def test_evaluation_rejects_numerical_instability(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     genotype = load_genotype_from_json(GENOTYPE_PATH)
     original_step = evaluation.mujoco.mj_step
@@ -1574,7 +1574,7 @@ def test_x_axis_flying_fitness_uses_forward_speed():
 
 
 def test_flying_passive_baseline_blends_controlled_gain(monkeypatch):
-    from evol_virtual_creature import evaluation
+    from evc3d import evaluation
 
     controlled_metrics = {
         "origin_distance": 2.0,

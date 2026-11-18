@@ -6,20 +6,20 @@ import mujoco
 import numpy as np
 import pytest
 
-from evol_virtual_creature.genes import (
+from evc3d.genes import (
     ConnectionGene,
     NodeGene,
     child_orientation_is_valid,
 )
-from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.genotype_io import (
+from evc3d.genotype import Genotype
+from evc3d.genotype_io import (
     build_genotype,
     convert_control_mode,
     load_genotype_from_json,
     save_genotype_to_json,
 )
-from evol_virtual_creature.graph_analysis import GenotypeGraphAnalyzer
-from evol_virtual_creature.phenotype import PhenotypeBuilder
+from evc3d.graph_analysis import GenotypeGraphAnalyzer
+from evc3d.phenotype import PhenotypeBuilder
 
 from genotype_factory import tree_genotype, tree_node
 

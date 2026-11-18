@@ -2,16 +2,16 @@ import random
 
 import pytest
 
-from evol_virtual_creature.genes import (
+from evc3d.genes import (
     BODY_SHAPES,
     ROUND_BODY_SHAPES,
     ConnectionGene,
     NodeGene,
     child_orientation_is_valid,
 )
-from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.phenotype import PhenotypeBuilder
-from evol_virtual_creature.graph_analysis import (
+from evc3d.genotype import Genotype
+from evc3d.phenotype import PhenotypeBuilder
+from evc3d.graph_analysis import (
     GenotypeGraphAnalyzer,
     GenotypeGraphError,
 )

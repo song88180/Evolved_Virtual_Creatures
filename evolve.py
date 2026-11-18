@@ -10,11 +10,11 @@ import json
 from pathlib import Path
 import random
 
-from evol_virtual_creature.evaluation import task_definition, task_names
-from evol_virtual_creature.evolution_tasks.shared import EnvironmentFamily
-from evol_virtual_creature.genes import CONTROL_MODES
-from evol_virtual_creature.genotype import Genotype
-from evol_virtual_creature.evolve import (
+from evc3d.evaluation import task_definition, task_names
+from evc3d.evolution_tasks.shared import EnvironmentFamily
+from evc3d.genes import CONTROL_MODES
+from evc3d.genotype import Genotype
+from evc3d.evolve import (
     EvaluatedCreature,
     _evaluate_population,
     _save_generation_best,
@@ -25,7 +25,7 @@ from evol_virtual_creature.evolve import (
     next_population_with_mutation_flags,
     write_json,
 )
-from evol_virtual_creature.genotype_io import (
+from evc3d.genotype_io import (
     convert_control_mode,
     load_genotype_from_json,
 )

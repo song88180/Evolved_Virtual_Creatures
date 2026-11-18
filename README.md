@@ -152,7 +152,7 @@ The available locomotion tasks are:
 | `flying_x` | Fly in the positive x direction. |
 | `flying_away` | Fly away from the starting point. |
 
-You can customize new tasks by adding task-specifying .py files in [`evol_virtual_creature/evolution_tasks/`](evol_virtual_creature/evolution_tasks)
+You can customize new tasks by adding task-specifying .py files in [`evc3d/evolution_tasks/`](evc3d/evolution_tasks)
 
 ### Generating a phenotype
 

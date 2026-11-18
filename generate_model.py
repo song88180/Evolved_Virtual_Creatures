@@ -3,10 +3,10 @@
 import argparse
 from pathlib import Path
 
-from evol_virtual_creature.genotype_io import load_genotype_from_json
-from evol_virtual_creature.graph_analysis import PhenotypeBuildAbort
-from evol_virtual_creature.phenotype import PhenotypeBuilder
-from evol_virtual_creature.viewer import launch_viewer
+from evc3d.genotype_io import load_genotype_from_json
+from evc3d.graph_analysis import PhenotypeBuildAbort
+from evc3d.phenotype import PhenotypeBuilder
+from evc3d.viewer import launch_viewer
 
 
 DEFAULT_GENOTYPE_PATH = Path(__file__).with_name("examples") / "example_genotype.json"
