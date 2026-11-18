@@ -142,7 +142,7 @@ The input is a genotype JSON file, and the results are written to the terminal. 
 
 ### Watching a creature
 
-`evc3d view` simulates a genotype in its task environment, starting exactly like the scored episode (same initialization and controller). By default it opens an interactive MuJoCo window that keeps simulating until you close it, paced to real time (scaled by `--speed`):
+`evc3d view` simulates a genotype in its task environment, starting exactly like the scored episode (same placement, settling, and controller). Scoring rules such as volume limits and the task's start rules are not applied, so any creature that can be built can be watched, including ones that evaluation rejects. By default it opens an interactive MuJoCo window that keeps simulating until you close it, paced to real time (scaled by `--speed`):
 
 ```bash
 evc3d view \

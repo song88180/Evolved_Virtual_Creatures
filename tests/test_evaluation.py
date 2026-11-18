@@ -1668,3 +1668,75 @@ def test_walking_away_fitness_maximizes_average_origin_speed():
 
     assert result.fitness == pytest.approx(result.average_origin_speed)
     assert result.origin_distance >= abs(result.forward_distance)
+
+
+def _placed_walker(definition):
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    model = mujoco.MjModel.from_xml_string(
+        PhenotypeBuilder(genotype, definition).build()
+    )
+    return model, mujoco.MjData(model)
+
+
+def test_start_rules_are_enforced_for_scoring_and_skipped_for_viewing():
+    definition = make_definition("walking_x", max_creature_height=0.01)
+
+    model, data = _placed_walker(definition)
+    failure = initialize_model(model, data, definition.config, definition.environment)
+    assert failure.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
+
+    model, data = _placed_walker(definition)
+    assert initialize_model(
+        model, data, definition.config, definition.environment,
+        enforce_start_rules=False,
+    ) is None
+
+
+def test_skipping_start_rules_does_not_change_the_start_state():
+    definition = make_definition("walking_x")
+    states = []
+    for enforce in (True, False):
+        model, data = _placed_walker(definition)
+        assert initialize_model(
+            model, data, definition.config, definition.environment,
+            enforce_start_rules=enforce,
+        ) is None
+        states.append((data.time, data.qpos.copy(), data.qvel.copy()))
+
+    assert states[0][0] == states[1][0]
+    np.testing.assert_array_equal(states[0][1], states[1][1])
+    np.testing.assert_array_equal(states[0][2], states[1][2])
+
+
+def test_view_shows_creature_that_scoring_rejects_at_start():
+    from evc3d.scene import prepare_scene
+
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    definition = make_definition("walking_x", max_creature_height=0.01)
+
+    result = evaluate_task(genotype, definition)
+    assert result.build_failed
+    assert result.failure_reason.startswith(evaluation.MAXIMUM_CREATURE_HEIGHT_REASON)
+
+    scene = prepare_scene(genotype, definition)
+    assert scene.data.time == 0.0
+
+
+def test_floor_clearance_without_free_root_joint_reports_reason():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <geom name="floor" type="plane" size="1 1 0.1"/>
+            <body name="body_1" pos="0 0 0.5"><geom type="box" size="0.1 0.1 0.1"/></body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    environment = replace(WALKING_X_ENVIRONMENT, initial_floor_clearance=0.05)
+
+    failure = evaluation.place_creature(
+        model, mujoco.MjData(model), WalkingEvaluationConfig(), environment
+    )
+
+    assert failure == "walking_x creature has no free root joint."

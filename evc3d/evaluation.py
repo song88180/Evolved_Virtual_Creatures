@@ -194,17 +194,44 @@ def initialize_model(
     data: mujoco.MjData,
     config: task_shared.EvaluationConfig,
     environment: task_shared.EnvironmentFamily,
+    *,
+    enforce_start_rules: bool = True,
 ) -> str | None:
-    """Apply declarative placement, validation, callback, and settling."""
+    """Prepare the episode start; return a failure reason, or None.
+
+    Steps, in order: place the creature (``place_creature``), check the task's
+    start rules (``start_rule_failure``), then settle. Scoring enforces the
+    start rules; viewing passes ``enforce_start_rules=False`` so any creature
+    that can be built is shown, from the same start state. The start-rule
+    checks only read the state, so skipping them does not move the creature.
+    """
+    failure = place_creature(model, data, config, environment)
+    if failure is not None:
+        return failure
+    if enforce_start_rules:
+        failure = start_rule_failure(model, data, config)
+        if failure is not None:
+            return failure
+    failure = settle_model(model, data, config)
+    if failure is None:
+        data.time = 0.0
+    return failure
+
+
+def place_creature(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    config: task_shared.EvaluationConfig,
+    environment: task_shared.EnvironmentFamily,
+) -> str | None:
+    """Apply the environment's floor clearance and initialization callback."""
     mujoco.mj_forward(model, data)
-    floor_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_GEOM, "floor"
-    )
+    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     clearance = environment.initial_floor_clearance
     if floor_id >= 0 and clearance is not None:
         free_joint_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE)
         if free_joint_ids.size == 0:
-            return f"{definition.name} creature has no free root joint."
+            return f"{environment.name} creature has no free root joint."
         root_qpos_adr = int(model.jnt_qposadr[int(free_joint_ids[0])])
         creature_geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] != 0]
         floor_z = float(data.geom_xpos[floor_id, 2])
@@ -219,6 +246,19 @@ def initialize_model(
         if failure is not None:
             return failure
         mujoco.mj_forward(model, data)
+    return None
+
+
+def start_rule_failure(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    config: task_shared.EvaluationConfig,
+) -> str | None:
+    """Check the task's rules for a valid start (floor contact, creature height).
+
+    Read-only: inspects the placed state without modifying it.
+    """
+    floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     contact_policy = getattr(config, "initial_floor_contact_policy", "allow")
     if contact_policy not in {"allow", "penetration", "contact"}:
         raise ValueError(f"Unknown initial floor contact policy: {contact_policy!r}")
@@ -227,13 +267,7 @@ def initialize_model(
         or (contact_policy == "contact" and _has_floor_contact(model, data, floor_id))
     ):
         return INITIAL_FLOOR_OVERLAP_REASON
-    height_failure = _walking_height_failure_reason(model, data, config)
-    if height_failure is not None:
-        return height_failure
-    failure = settle_model(model, data, config)
-    if failure is None:
-        data.time = 0.0
-    return failure
+    return _walking_height_failure_reason(model, data, config)
 
 
 def _walking_height_failure_reason(

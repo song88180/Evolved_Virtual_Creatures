@@ -1,8 +1,10 @@
 """Shared simulation setup for watching a creature (MP4 video or live viewer).
 
-``prepare_scene`` builds a genotype into a MuJoCo model for a task, applies the
-same initialization as the scored rollout (``initialize_model``), and tunes
-lighting and the floor for display. ``step_scene`` advances one controlled
+``prepare_scene`` builds a genotype into a MuJoCo model for a task, places and
+settles it exactly as the scored rollout does (``initialize_model``), and tunes
+lighting and the floor for display. Scoring rules are not applied: the task's
+start rules and volume limits decide fitness, not whether a creature can be
+shown, so any creature that can be built is viewable. ``step_scene`` advances one controlled
 physics step with the same failure checks as evaluation.
 """
 
@@ -56,7 +58,7 @@ def prepare_scene(
     spotlight: bool = False,
     offscreen_size: tuple[int, int] | None = None,
 ) -> Scene:
-    """Build, light, and initialize a creature exactly as the scored rollout starts."""
+    """Build, light, and place a creature exactly as the scored rollout starts."""
     config = definition.config
     environment = definition.environment
     try:
@@ -83,7 +85,9 @@ def prepare_scene(
         model.vis.global_.offheight = max(model.vis.global_.offheight, height)
 
     data = mujoco.MjData(model)
-    failure = initialize_model(model, data, config, environment)
+    failure = initialize_model(
+        model, data, config, environment, enforce_start_rules=False
+    )
     if failure is not None:
         raise SceneInitializationError(failure)
 
