@@ -115,10 +115,26 @@ def verify_leading_creatures(
     verified, or ``max_rounds`` is reached. Elites and tournament winners
     therefore come from verified scores. ``cache`` maps genotype keys to
     verification results so creatures copied unchanged between generations are
-    not re-simulated; the caller owns it and must clear it if the
-    verification physics changes. Returns the number of simulations run.
+    not re-simulated; cached results are applied to every creature not
+    ``changed_by_mutation`` before ranking, so a verified elite keeps its
+    verified score and the best fitness does not drop between generations.
+    The caller owns the cache and must clear it if the verification physics
+    changes. Returns the number of simulations run.
     """
     verified: set[int] = set()
+    # Creatures copied unchanged (elites, children whose mutations had no net
+    # effect) may already have a verified score. Apply it before ranking:
+    # verification can raise a score as well as lower it, so a creature whose
+    # coarse score is low could otherwise fall outside the top and lose its
+    # verified score, making the generation's best fitness drop.
+    for creature in evaluated:
+        if creature.changed_by_mutation:
+            continue
+        cached = cache.get(genotype_key(creature.genotype))
+        if cached is not None:
+            creature.result = cached
+            verified.add(id(creature))
+    evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
     simulations = 0
     for _ in range(max_rounds):
         pending = [

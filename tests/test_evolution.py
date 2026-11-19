@@ -450,3 +450,39 @@ def test_evolve_rejects_invalid_verification_options(options, message, capsys):
     with pytest.raises(SystemExit):
         evolve_cli.parse_args(options)
     assert message in capsys.readouterr().err
+
+
+def test_verify_leading_creatures_keeps_cached_score_of_unchanged_elite(monkeypatch):
+    # The previous best verifies higher (2.0) than its coarse score (1.0);
+    # two new creatures verify between those values and fill the top two.
+    fine = {"new_a": 1.8, "new_b": 1.7}
+    executor = _verification_setup(monkeypatch, fine)
+    from helpers import FakeEvaluationResult
+
+    cache = {"elite": FakeEvaluationResult(fitness=2.0)}
+    evaluated = [
+        make_creature("new_a", 1.6, changed_by_mutation=True),
+        make_creature("new_b", 1.5, changed_by_mutation=True),
+        make_creature("elite", 1.0, changed_by_mutation=False),
+    ]
+
+    evolution.verify_leading_creatures(evaluated, object(), executor, 2, cache)
+
+    assert evaluated[0].genotype == "elite"
+    assert evaluated[0].fitness == 2.0
+    assert executor.calls == [["new_a"]]  # the elite came from the cache
+
+
+def test_verify_leading_creatures_does_not_look_up_mutated_creatures(monkeypatch):
+    executor = _verification_setup(monkeypatch, {"a": 0.5})
+    from helpers import FakeEvaluationResult
+
+    keys = []
+    monkeypatch.setattr(evolution, "genotype_key", lambda genotype: keys.append(genotype) or genotype)
+    cache = {"a": FakeEvaluationResult(fitness=9.0)}
+    evaluated = [make_creature("a", 1.0, changed_by_mutation=True)]
+
+    evolution.verify_leading_creatures(evaluated, object(), executor, 0, cache)
+
+    assert keys == []
+    assert evaluated[0].fitness == 1.0
