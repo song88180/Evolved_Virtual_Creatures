@@ -3,6 +3,7 @@
 Layout::
 
     config.json                         save_run_config
+    run_info.txt                        save_run_info
     latest_best_genotype.json           save_generation_checkpoint
     best_genotype.json                  save_generation_checkpoint
     best_metrics.json                   save_generation_checkpoint
@@ -29,6 +30,11 @@ GENERATION_HISTORY_DIR = "generation_bests"
 def save_run_config(run_dir: Path, options: dict[str, Any]) -> None:
     """Write the run's command-line options to ``config.json`` for reproducibility."""
     _write_json(run_dir / "config.json", options)
+
+
+def save_run_info(run_dir: Path, header: str) -> None:
+    """Write the settings summary printed at the start of the run to ``run_info.txt``."""
+    (run_dir / "run_info.txt").write_text(header + "\n")
 
 
 def save_generation_checkpoint(

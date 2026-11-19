@@ -2,6 +2,7 @@
 
 import argparse
 import random
+import json
 import re
 import subprocess
 import sys
@@ -891,3 +892,53 @@ def test_cli_reports_config_errors_with_option_names(argv, message, capsys):
     with pytest.raises(SystemExit, match="2"):
         cli.parse_args(argv)
     assert message in capsys.readouterr().err
+
+
+def test_evolve_title_defaults_to_none_and_is_accepted(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["evolve.py"])
+    assert evolve_cli.parse_args().title is None
+    monkeypatch.setattr(sys, "argv", ["evolve.py", "--title", "my run"])
+    assert evolve_cli.parse_args().title == "my run"
+
+
+def test_evolve_prints_run_header_and_saves_run_info(tmp_path, capsys):
+    run_dir = tmp_path / "run"
+    args = evolve_cli.parse_args(
+        [
+            "--task", "walking_x",
+            "--population-size", "2",
+            "--generations", "0",
+            "--elite-count", "1",
+            "--threads", "1",
+            "--max-volume", "0.5",
+            "--title", "header test",
+            "--seed", "7",
+            "--output-dir", str(run_dir),
+        ]
+    )
+    evolve_cli.validate(args)
+    evolve_cli.run(args)
+
+    header = capsys.readouterr().out.split("gen=0000")[0]
+    assert header.index("Control mode") < header.index("Seed genotype")
+    assert header.index("Random seed") < header.index("Task") < header.index("Title")
+    assert "Task                 : walking_x" in header
+    assert "Title                : header test" in header
+    assert "Random seed          : 7\n" in header
+    assert "0.5 *" in header
+    assert "Target dir" not in header and "Result fields" not in header
+    assert "friction" not in header and "Files" not in header
+    assert "Start floor contact" in header
+    assert (run_dir / "run_info.txt").read_text().strip() == header.strip()
+    assert json.loads((run_dir / "config.json").read_text())["title"] == "header test"
+
+
+def test_evolve_default_title_matches_run_name_format(tmp_path):
+    args = evolve_cli.parse_args(
+        ["--generations", "0", "--population-size", "2", "--elite-count", "1",
+         "--threads", "1", "--output-dir", str(tmp_path / "r")]
+    )
+    evolve_cli.run(args)
+    import re
+    assert re.fullmatch(r"swimming_x_\d{8}_\d{6}", args.title)
+    assert isinstance(args.seed, int)

@@ -26,7 +26,11 @@ from ..evolution import (
 from ..genes import CONTROL_MODES
 from ..genotype import Genotype
 from ..genotype_io import convert_control_mode, load_genotype_from_json
-from ..run_artifacts import save_generation_checkpoint, save_run_config
+from ..run_artifacts import (
+    save_generation_checkpoint,
+    save_run_config,
+    save_run_info,
+)
 from .args import (
     DEFAULT_GENOTYPE_PATH,
     HelpFormatter,
@@ -39,6 +43,7 @@ from .args import (
     validate_task_options,
     validate_mutation_arguments,
 )
+from .run_header import format_run_header
 
 NAME = "evolve"
 DEFAULT_RUNS_DIR = Path("runs")
@@ -130,6 +135,11 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
         type=int,
         default=3,
         help="Mutations used to seed initial variants around the input genotype.",
+    )
+    group.add_argument(
+        "--title",
+        default=None,
+        help="Title of this evolution run. (default: <task>_<timestamp>)",
     )
     group.add_argument(
         "--seed",
@@ -234,14 +244,24 @@ def run(args: argparse.Namespace) -> None:
     """Run the full evolutionary loop and write results to the run directory."""
     from . import user_options
 
-    rng = random.Random(args.seed)
-    run_dir = args.output_dir or _default_run_dir(args.task)
+    started = datetime.now()
+    run_name = _default_run_name(args.task)
+    title = args.title or run_name
+    run_dir = args.output_dir or DEFAULT_RUNS_DIR / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Fix the seed up front so config.json and the header record it even
+    # when it was drawn at random.
+    if args.seed is None:
+        args.seed = random.SystemRandom().randrange(2**32)
+    args.title = title
+    rng = random.Random(args.seed)
 
     # Snapshot CLI settings so each run can be reproduced from config.json.
     save_run_config(run_dir, user_options(args))
 
     seed_genotype = load_genotype_from_json(args.genotype)
+    loaded_control_mode = seed_genotype.control_mode
     seed_genotype = _resolve_seed_control_mode(
         seed_genotype, args.control_mode, args.override_control_mode
     )
@@ -266,13 +286,18 @@ def run(args: argparse.Namespace) -> None:
     previous_best_fitness: float | None = None
     metrics_path = run_dir / "metrics.jsonl"
 
-    print(f"Run directory: {run_dir}")
-    print(
-        "Evolving "
-        f"{args.population_size} creatures for {args.generations} generation(s)."
+    header = format_run_header(
+        args,
+        definition,
+        run_dir=run_dir,
+        title=title,
+        seed_control_mode=seed_genotype.control_mode,
+        loaded_control_mode=loaded_control_mode,
+        started=started,
+        worker_count=args.threads,
     )
-
-    print(f"Evaluation worker processes: {args.threads}")
+    save_run_info(run_dir, header)
+    print(header)
 
     with (
         ProcessPoolExecutor(max_workers=args.threads) as executor,
@@ -441,7 +466,11 @@ def _should_save_generation_history(
     return not latest_best_only and generation % save_genotype_every_n == 0
 
 
+def _default_run_name(task: str) -> str:
+    """Return ``<task>_<timestamp>``, the default run directory name and title."""
+    return f"{task}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
 def _default_run_dir(task: str) -> Path:
     """Return a task-specific timestamped directory under ``runs/``."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return DEFAULT_RUNS_DIR / f"{task}_{timestamp}"
+    return DEFAULT_RUNS_DIR / _default_run_name(task)

@@ -32,6 +32,7 @@ Use this map to choose files before broad searches:
 - `evc3d/cli/__init__.py`: the `evc3d` command entry point (`evc3d <command>`, also `python -m evc3d`); subcommand registration, parsing, and usage-error handling.
 - `evc3d/cli/args.py`: option groups shared by subcommands (genotype, environment, scoring, mutation). Environment and scoring values are validated by `EnvironmentFamily` and `EvaluationConfig` themselves (`evolution_tasks/config.py`); `validate_task_options` rewords their errors with option names. When adding a task option, add it here, name the option after its config field and add the field to `CONFIG_FIELD_OPTIONS` (or `ENVIRONMENT_FIELD_OPTIONS`) in `config.py`, and put any value rule in the config's `__post_init__`.
 - `evc3d/cli/evolve.py`: `evc3d evolve`, population-based evolution and run artifacts.
+- `evc3d/cli/run_header.py`: the settings summary `evc3d evolve` prints at start and saves as `run_info.txt`.
 - `evc3d/cli/evaluate.py`: `evc3d evaluate`, scoring one genotype and printing metrics.
 - `evc3d/cli/mutate.py`: `evc3d mutate`, writing a randomly mutated copy of a genotype.
 - `evc3d/cli/build.py`: `evc3d build`, writing the MuJoCo XML scene for a genotype.

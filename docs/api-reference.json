@@ -1887,9 +1887,37 @@
     },
     "Exceptions": {}
   },
+  "evc3d.cli.run_header": {
+    "Overview": {
+      "Purpose": "The settings summary `evc3d evolve` prints before generation zero and saves as run_info.txt: seed genotype, control mode, seed, task, title, environment, scoring, evolution, and output settings, with `*` marking values that differ from the task default.",
+      "Main_Use_Cases": [
+        "Show the resolved task and configuration at the start of a run"
+      ],
+      "Related_Modules": ["evc3d.cli", "evc3d.run_artifacts", "evc3d.evolution_tasks.shared"]
+    },
+    "Classes": {},
+    "Functions": {
+      "format_run_header": {
+        "Signature": "format_run_header(args: argparse.Namespace, definition: TaskDefinition, *, run_dir: Path, title: str, seed_control_mode: str, loaded_control_mode: str, started: datetime, worker_count: int) -> str",
+        "Purpose": "Return the multi-line run summary for the resolved task and options.",
+        "Parameters": {
+          "args": {"Type": "argparse.Namespace", "Default": "required", "Description": "Parsed `evc3d evolve` options."},
+          "definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task definition with CLI overrides applied."},
+          "run_dir": {"Type": "Path", "Default": "required", "Description": "Run output directory."},
+          "title": {"Type": "str", "Default": "required", "Description": "Run title."},
+          "seed_control_mode": {"Type": "str", "Default": "required", "Description": "Control mode of the seed genotype used for the run."},
+          "loaded_control_mode": {"Type": "str", "Default": "required", "Description": "Control mode of the seed genotype as loaded, before any conversion."},
+          "started": {"Type": "datetime", "Default": "required", "Description": "Run start time."},
+          "worker_count": {"Type": "int", "Default": "required", "Description": "Number of evaluation worker processes."}
+        },
+        "Returns": {"Type": "str", "Description": "The header text, without a trailing newline."},
+        "Raises": []
+      }
+    }
+  },
   "evc3d.run_artifacts": {
     "Overview": {
-      "Purpose": "Run output for `evc3d evolve`: writes config.json, the latest and all-time best genotypes, best_metrics.json, best_creature.xml, and optional generation_bests/generation_NNNN.json checkpoints into the run directory.",
+      "Purpose": "Run output for `evc3d evolve`: writes config.json, run_info.txt, the latest and all-time best genotypes, best_metrics.json, best_creature.xml, and optional generation_bests/generation_NNNN.json checkpoints into the run directory.",
       "Main_Use_Cases": [
         "Save a run configuration for reproducibility",
         "Persist each generation's best creature and the all-time best"
@@ -1906,6 +1934,16 @@
           "options": {"Type": "dict[str, Any]", "Default": "required", "Description": "Parsed options to record (see evc3d.cli.user_options)."}
         },
         "Returns": {"Type": "None", "Description": "Nothing; writes config.json."},
+        "Raises": []
+      },
+      "save_run_info": {
+        "Signature": "save_run_info(run_dir: Path, header: str) -> None",
+        "Purpose": "Write the settings summary printed at the start of the run to run_info.txt.",
+        "Parameters": {
+          "run_dir": {"Type": "Path", "Default": "required", "Description": "Run output directory."},
+          "header": {"Type": "str", "Default": "required", "Description": "Header text from evc3d.cli.run_header.format_run_header."}
+        },
+        "Returns": {"Type": "None", "Description": "Nothing; writes run_info.txt."},
         "Raises": []
       },
       "save_generation_checkpoint": {
