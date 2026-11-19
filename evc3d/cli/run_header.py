@@ -58,7 +58,11 @@ def format_run_header(
         "",
         _section("Environment"),
         _row("Gravity (z)", env("gravity")),
-        _row("Timestep", f"{env('timestep')} s"),
+        _row(
+            "Timestep",
+            f"{env('timestep')} s   physics substeps {env('physics_substeps')}"
+            f"   integrator {env('integrator')}",
+        ),
         _row(
             "Fluid",
             f"density={env('fluid_density')}  viscosity={env('fluid_viscosity')}  "

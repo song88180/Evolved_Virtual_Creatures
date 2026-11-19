@@ -15,7 +15,11 @@ from pathlib import Path
 import re
 
 from ..evolution_tasks import task_definition, task_names
-from ..evolution_tasks.config import CONFIG_FIELD_OPTIONS, ENVIRONMENT_FIELD_OPTIONS
+from ..evolution_tasks.config import (
+    CONFIG_FIELD_OPTIONS,
+    ENVIRONMENT_FIELD_OPTIONS,
+    INTEGRATORS,
+)
 from ..evolution_tasks.shared import TaskDefinition
 from ..genotype import Genotype
 
@@ -94,6 +98,28 @@ def add_environment_arguments(
         help=(
             "Five MuJoCo fluid coefficients used by creature geoms. "
             "(default: task environment default)"
+        ),
+    )
+    group.add_argument(
+        "--physics-substeps",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Physics steps per control step: MuJoCo advances timestep/N "
+            "(e.g. 5 gives dt=0.002 for the 0.01 s task timestep) while "
+            "controllers still update every timestep. (default: task "
+            "environment default, 1)"
+        ),
+    )
+    group.add_argument(
+        "--integrator",
+        choices=INTEGRATORS,
+        default=None,
+        help=(
+            "MuJoCo integrator. RK4 is accurate but can diverge on very light "
+            "links; implicitfast is stable. (default: task environment "
+            "default, Euler)"
         ),
     )
     group.add_argument(

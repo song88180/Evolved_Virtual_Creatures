@@ -109,7 +109,14 @@ CONFIG_FIELD_OPTIONS = (
     "disallow_collision",
     "fitness_gain_fraction",
 )
-ENVIRONMENT_FIELD_OPTIONS = ("fluid_density", "fluid_viscosity", "fluid_shape", "fluid_coef")
+ENVIRONMENT_FIELD_OPTIONS = (
+    "fluid_density",
+    "fluid_viscosity",
+    "fluid_shape",
+    "fluid_coef",
+    "physics_substeps",
+    "integrator",
+)
 
 
 # Upper limits where +inf is a meaningful "no limit"; every other float config

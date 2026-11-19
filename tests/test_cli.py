@@ -942,3 +942,46 @@ def test_evolve_default_title_matches_run_name_format(tmp_path):
     import re
     assert re.fullmatch(r"swimming_x_\d{8}_\d{6}", args.title)
     assert isinstance(args.seed, int)
+
+
+@pytest.mark.parametrize("module", [evaluate, evolve_cli])
+def test_physics_substeps_and_integrator_options_set_the_environment(monkeypatch, module):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [module.__file__, "--task", "swimming_away", "--physics-substeps", "5", "--integrator", "RK4"],
+    )
+    environment = resolve_task_definition(module.parse_args()).environment
+
+    assert environment.physics_substeps == 5
+    assert environment.integrator == "RK4"
+    assert environment.timestep == pytest.approx(0.01)
+
+
+def test_physics_options_default_to_task_environment(monkeypatch):
+    monkeypatch.setattr(sys, "argv", [evaluate.__file__, "--task", "swimming_away"])
+    args = evaluate.parse_args()
+
+    assert args.physics_substeps is None and args.integrator is None
+    environment = resolve_task_definition(args).environment
+    assert environment.physics_substeps == 1
+    assert environment.integrator == "Euler"
+
+
+def test_physics_substeps_option_rejects_zero(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys, "argv", [evaluate.__file__, "--task", "swimming_away", "--physics-substeps", "0"]
+    )
+    with pytest.raises(SystemExit):
+        evaluate.parse_args()
+    assert "--physics-substeps" in capsys.readouterr().err
+
+
+def test_view_accepts_physics_options():
+    args = cli.parse_args(
+        ["view", "--task", "swimming_away", "--physics-substeps", "5", "--integrator", "implicitfast"]
+    )
+    environment = resolve_task_definition(args).environment
+
+    assert environment.physics_substeps == 5
+    assert environment.integrator == "implicitfast"
