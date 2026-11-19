@@ -1433,6 +1433,8 @@
             "floor_conaffinity": {"Type": "int", "Default": "0", "Description": "Floor conaffinity."},
             "initial_root_position": {"Type": "Sequence[float]", "Default": "(0.0, 0.0, 0.6)", "Description": "Spawn position of the root body."},
             "initial_floor_clearance": {"Type": "float | None", "Default": "None", "Description": "Lift the creature to this clearance above the floor at start (None to skip)."},
+            "integrator": {"Type": "str", "Default": "\"Euler\"", "Description": "MuJoCo integrator: Euler (MuJoCo default, semi-implicit), RK4, implicit, or implicitfast."},
+            "physics_substeps": {"Type": "int", "Default": "1", "Description": "MuJoCo steps per control step; the model timestep is timestep / physics_substeps while controllers still update once per timestep."},
             "supports_scheduled_gravity": {"Type": "bool", "Default": "False", "Description": "Whether evolve --gradual-gravity-change is allowed."},
             "initialization_callback": {"Type": "Callable | None", "Default": "None", "Description": "Optional task-specific placement callback (model, data, config) -> failure or None."}
           },
@@ -1859,6 +1861,29 @@
           "topology_mutation_rate_min": {"Type": "float", "Default": "0.05", "Description": "Minimum independent selection rate for each topology mutation operator."}
         },
         "Returns": {"Type": "tuple[list[Genotype], list[bool]]", "Description": "Next generation's genotypes and a parallel list of changed_by_mutation flags."},
+        "Raises": []
+      },
+      "verify_leading_creatures": {
+        "Signature": "verify_leading_creatures(evaluated: list[EvaluatedCreature], verification_definition: TaskDefinition, executor: Executor, top_count: int, cache: dict[str, EvaluationResult], max_rounds: int = 20) -> int",
+        "Purpose": "Re-score the top_count best creatures with finer verification physics, replacing their results and re-sorting evaluated in place, until the top_count best are all verified. Blocks creatures that only score well through integration error.",
+        "Parameters": {
+          "evaluated": {"Type": "list[EvaluatedCreature]", "Default": "required", "Description": "Evaluated creatures of the current generation, sorted by fitness (best first); re-sorted in place."},
+          "verification_definition": {"Type": "TaskDefinition", "Default": "required", "Description": "Task definition with the verification physics (for example more physics_substeps and RK4)."},
+          "executor": {"Type": "Executor", "Default": "required", "Description": "Executor used to run verification simulations."},
+          "top_count": {"Type": "int", "Default": "required", "Description": "How many of the best creatures must carry verified scores."},
+          "cache": {"Type": "dict[str, EvaluationResult]", "Default": "required", "Description": "Verification results by genotype_key, kept by the caller across generations; clear it when the verification physics changes."},
+          "max_rounds": {"Type": "int", "Default": "20", "Description": "Maximum verify-and-re-sort rounds."}
+        },
+        "Returns": {"Type": "int", "Description": "Number of verification simulations run (cache hits excluded)."},
+        "Raises": []
+      },
+      "genotype_key": {
+        "Signature": "genotype_key(genotype: Genotype) -> str",
+        "Purpose": "Return a stable SHA-256 digest of a genotype's serialized content.",
+        "Parameters": {
+          "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to digest."}
+        },
+        "Returns": {"Type": "str", "Description": "Hex digest."},
         "Raises": []
       },
       "tournament_select": {

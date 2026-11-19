@@ -14,6 +14,9 @@ from dataclasses import dataclass, fields
 from typing import Callable, Sequence
 
 
+INTEGRATORS = ("Euler", "RK4", "implicit", "implicitfast")
+
+
 @dataclass(frozen=True)
 class EnvironmentFamily:
     """Declarative MuJoCo physics and initial placement for one task."""
@@ -37,6 +40,12 @@ class EnvironmentFamily:
     floor_conaffinity: int = 0
     initial_root_position: Sequence[float] = (0.0, 0.0, 0.6)
     initial_floor_clearance: float | None = None
+    # MuJoCo integrator name; "Euler" is MuJoCo's default (semi-implicit).
+    integrator: str = "Euler"
+    # Physics steps per control step: MuJoCo advances ``timestep /
+    # physics_substeps`` at a time while controllers still update once per
+    # ``timestep``, so finer physics does not change the control rate.
+    physics_substeps: int = 1
     supports_scheduled_gravity: bool = False
     initialization_callback: Callable | None = None
 
@@ -45,6 +54,10 @@ class EnvironmentFamily:
             raise ValueError("environment name must be a non-empty identifier")
         if self.timestep <= 0.0:
             raise ValueError("environment timestep must be positive")
+        if self.integrator not in INTEGRATORS:
+            raise ValueError(f"integrator must be one of {', '.join(INTEGRATORS)}")
+        if self.physics_substeps < 1:
+            raise ValueError("physics_substeps must be at least 1")
         if self.fluid_density is not None and self.fluid_density < 0.0:
             raise ValueError("fluid_density must be non-negative")
         if self.fluid_viscosity is not None and self.fluid_viscosity < 0.0:

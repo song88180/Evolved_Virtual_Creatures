@@ -11,8 +11,10 @@ import contextlib
 import copy
 from concurrent.futures import Executor
 from dataclasses import asdict, dataclass
+import hashlib
 import io
 from itertools import repeat
+import json
 import math
 import os
 import random
@@ -93,6 +95,63 @@ def _evaluate_creature(
     except Exception as error:
         result = definition.failed_task_callback(definition.config, str(error))
     return EvaluatedCreature(genotype=genotype, result=result)
+
+
+def verify_leading_creatures(
+    evaluated: list[EvaluatedCreature],
+    verification_definition: TaskDefinition,
+    executor: Executor,
+    top_count: int,
+    cache: dict[str, EvaluationResult],
+    max_rounds: int = 20,
+) -> int:
+    """Re-score the leading creatures with ``verification_definition``.
+
+    Coarse physics can reward motion that only integration error makes
+    effective. ``evaluated`` must be sorted best first. Each round re-scores
+    every not-yet-verified creature among the ``top_count`` best with the
+    (normally finer) verification physics, replaces its result, and re-sorts
+    ``evaluated`` in place; rounds repeat until the ``top_count`` best are all
+    verified, or ``max_rounds`` is reached. Elites and tournament winners
+    therefore come from verified scores. ``cache`` maps genotype keys to
+    verification results so creatures copied unchanged between generations are
+    not re-simulated; the caller owns it and must clear it if the
+    verification physics changes. Returns the number of simulations run.
+    """
+    verified: set[int] = set()
+    simulations = 0
+    for _ in range(max_rounds):
+        pending = [
+            creature for creature in evaluated[:top_count] if id(creature) not in verified
+        ]
+        if not pending:
+            break
+        keys = [genotype_key(creature.genotype) for creature in pending]
+        missing = {
+            key: creature.genotype
+            for key, creature in zip(keys, pending)
+            if key not in cache
+        }
+        if missing:
+            results = executor.map(
+                _evaluate_creature,
+                list(missing.values()),
+                repeat(verification_definition),
+            )
+            for key, scored in zip(missing, results):
+                cache[key] = scored.result
+            simulations += len(missing)
+        for key, creature in zip(keys, pending):
+            creature.result = cache[key]
+            verified.add(id(creature))
+        evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
+    return simulations
+
+
+def genotype_key(genotype: Genotype) -> str:
+    """Return a stable digest of a genotype's serialized content."""
+    serialized = json.dumps(genotype_to_dict(genotype), sort_keys=True)
+    return hashlib.sha256(serialized.encode()).hexdigest()
 
 
 def default_thread_count() -> int:

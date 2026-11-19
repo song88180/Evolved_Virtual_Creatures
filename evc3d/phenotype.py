@@ -123,7 +123,14 @@ class PhenotypeBuilder:
         option.set("gravity", f"0 0 {self.environment.gravity:g}")
         option.set("density", f"{self.environment.fluid_density or 0:g}")
         option.set("viscosity", f"{self.environment.fluid_viscosity or 0:g}")
-        option.set("timestep", str(self.environment.timestep))
+        physics_substeps = self.environment.physics_substeps
+        timestep = self.environment.timestep
+        option.set(
+            "timestep",
+            str(timestep if physics_substeps == 1 else timestep / physics_substeps),
+        )
+        if self.environment.integrator != "Euler":
+            option.set("integrator", self.environment.integrator)
 
         self.add_assets()
         self.add_defaults()

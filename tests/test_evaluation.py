@@ -1858,3 +1858,52 @@ def test_rollout_reports_every_measurable_metric_for_a_plain_task():
     assert {"vertical_drift_speed", "height_loss", "first_ground_contact_time"} <= set(metrics)
     assert metrics["first_ground_contact_time"] is None
     assert "mean_upright_error" not in metrics  # needs a root body name
+
+
+def test_physics_substeps_keep_control_rate_and_divide_the_timestep(monkeypatch):
+    from evc3d import evaluation as evaluation_module
+
+    definition = task_definition("swimming_away")
+    genotype = load_genotype_from_json(GENOTYPE_PATH)
+    config = SwimmingAwayEvaluationConfig(episode_seconds=0.1)
+    calls = []
+    real_apply = evaluation_module.apply_controller
+
+    def counting_apply(model, data, controllers):
+        calls.append(round(float(data.time), 9))
+        real_apply(model, data, controllers)
+
+    monkeypatch.setattr(evaluation_module, "apply_controller", counting_apply)
+    fine_environment = dataclasses.replace(
+        definition.environment, physics_substeps=4, integrator="RK4"
+    )
+    result = evaluate_task(genotype, definition, config, fine_environment)
+
+    assert not result.build_failed
+    assert len(calls) == 10  # once per 0.01 s control step, not per 0.0025 s substep
+    assert calls[:3] == pytest.approx([0.0, 0.01, 0.02])
+    model = mujoco.MjModel.from_xml_string(
+        PhenotypeBuilder(genotype, dataclasses.replace(definition, environment=fine_environment)).build()
+    )
+    assert model.opt.timestep == pytest.approx(0.0025)
+    assert model.opt.integrator == mujoco.mjtIntegrator.mjINT_RK4
+
+
+def test_default_environment_keeps_euler_and_original_timestep():
+    definition = task_definition("swimming_away")
+    xml_root = ET.fromstring(
+        PhenotypeBuilder(load_genotype_from_json(GENOTYPE_PATH), definition).build()
+    )
+    option = xml_root.find("option")
+    assert option.get("timestep") == "0.01"
+    assert option.get("integrator") is None
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"integrator": "Verlet"}, {"physics_substeps": 0}]
+)
+def test_environment_rejects_bad_integration_settings(overrides):
+    from evc3d.evolution_tasks.config import EnvironmentFamily
+
+    with pytest.raises(ValueError):
+        EnvironmentFamily(**overrides)

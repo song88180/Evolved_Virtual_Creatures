@@ -124,6 +124,7 @@ def format_run_header(
             f"Initial : {args.initial_mutations}",
         ),
         _row("Workers", f"{worker_count} processes"),
+        _row("Verification", _verification_policy(args)),
         "",
         _section("Output"),
         _row("Checkpoints", _checkpoint_policy(args)),
@@ -131,6 +132,16 @@ def format_run_header(
         RULE,
     ]
     return "\n".join(lines)
+
+
+def _verification_policy(args: argparse.Namespace) -> str:
+    verify_top = getattr(args, "verify_top", 0)
+    if not verify_top:
+        return "off"
+    return (
+        f"top {verify_top} re-scored with {args.verify_integrator}, "
+        f"{args.verify_substeps} substeps per control step"
+    )
 
 
 def _task_specific_fields(config: Any) -> list[str]:

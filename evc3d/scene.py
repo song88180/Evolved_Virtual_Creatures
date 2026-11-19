@@ -104,16 +104,24 @@ def prepare_scene(
 
 
 def step_scene(scene: Scene, definition: TaskDefinition) -> str | None:
-    """Apply the controller and advance one step; return a failure reason, if any."""
+    """Apply the controller and advance one control step; return a failure reason, if any.
+
+    A control step is ``environment.physics_substeps`` MuJoCo steps, matching
+    how the scored rollout updates controllers.
+    """
     config = definition.config
-    previous_time = float(scene.data.time)
     apply_controller(scene.model, scene.data, scene.controllers)
-    mujoco.mj_step(scene.model, scene.data)
-    if config.disallow_collision and has_nonparent_self_collision(
-        scene.model, scene.data
-    ):
-        return DISALLOWED_COLLISION_REASON
-    return simulation_failure_reason(scene.data, previous_time, config)
+    for _ in range(definition.environment.physics_substeps):
+        previous_time = float(scene.data.time)
+        mujoco.mj_step(scene.model, scene.data)
+        if config.disallow_collision and has_nonparent_self_collision(
+            scene.model, scene.data
+        ):
+            return DISALLOWED_COLLISION_REASON
+        failure = simulation_failure_reason(scene.data, previous_time, config)
+        if failure is not None:
+            return failure
+    return None
 
 
 def track_root(camera: mujoco.MjvCamera, scene: Scene) -> None:

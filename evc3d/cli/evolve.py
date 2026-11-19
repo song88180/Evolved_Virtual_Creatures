@@ -13,7 +13,7 @@ import sys
 from typing import Sequence
 
 from ..evolution_tasks import task_definition
-from ..evolution_tasks.config import EnvironmentFamily
+from ..evolution_tasks.config import INTEGRATORS, EnvironmentFamily
 from ..evolution import (
     EvaluatedCreature,
     best_of,
@@ -22,6 +22,7 @@ from ..evolution import (
     generation_summary,
     initial_population,
     next_population_with_mutation_flags,
+    verify_leading_creatures,
 )
 from ..genes import CONTROL_MODES
 from ..genotype import Genotype
@@ -137,6 +138,31 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
         help="Mutations used to seed initial variants around the input genotype.",
     )
     group.add_argument(
+        "--verify-top",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Each generation, re-score the N best creatures with finer physics "
+            "(--verify-substeps, --verify-integrator) and rank them by that "
+            "score, repeating until the N best are all verified. Blocks "
+            "creatures that only score well because of integration error. "
+            "0 disables."
+        ),
+    )
+    group.add_argument(
+        "--verify-substeps",
+        type=int,
+        default=5,
+        help="Physics steps per control step when verifying (see --verify-top).",
+    )
+    group.add_argument(
+        "--verify-integrator",
+        choices=INTEGRATORS,
+        default="RK4",
+        help="MuJoCo integrator used when verifying (see --verify-top).",
+    )
+    group.add_argument(
         "--title",
         default=None,
         help="Title of this evolution run. (default: <task>_<timestamp>)",
@@ -212,6 +238,10 @@ def validate(args: argparse.Namespace) -> None:
         raise ValueError("--max-mutations must be >= --min-mutations >= 0")
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
+    if not 0 <= args.verify_top <= args.population_size:
+        raise ValueError("--verify-top must be between 0 and population size")
+    if args.verify_substeps < 1:
+        raise ValueError("--verify-substeps must be at least 1")
     validate_mutation_arguments(args)
     validate_task_options(args)
     if (
@@ -285,6 +315,8 @@ def run(args: argparse.Namespace) -> None:
     # Best fitness of the previous generation; baseline for --record-mutant-type.
     previous_best_fitness: float | None = None
     metrics_path = run_dir / "metrics.jsonl"
+    # Verification results by genotype key, for --verify-top.
+    verification_cache: dict = {}
 
     header = format_run_header(
         args,
@@ -315,6 +347,22 @@ def run(args: argparse.Namespace) -> None:
                 changed_by_mutation=changed_by_mutation,
             )
             evaluated.sort(key=lambda creature: creature.fitness, reverse=True)
+            verification_simulations = None
+            if args.verify_top > 0:
+                if args.gradual_gravity_change is not None:
+                    verification_cache.clear()  # physics changes every generation
+                verification_simulations = verify_leading_creatures(
+                    evaluated,
+                    replace(
+                        definition,
+                        environment=_verification_environment(
+                            generation_environment, args
+                        ),
+                    ),
+                    executor,
+                    args.verify_top,
+                    verification_cache,
+                )
             best = evaluated[0]
             new_best = best_of(best_so_far, best)
             if new_best is not best_so_far:
@@ -328,6 +376,8 @@ def run(args: argparse.Namespace) -> None:
                 record_mutant_types=args.record_mutant_type,
                 mutant_baseline_fitness=previous_best_fitness,
             )
+            if verification_simulations is not None:
+                summary["verification_simulations"] = verification_simulations
             metrics_file.write(json.dumps(summary) + "\n")
             metrics_file.flush()
             save_generation_checkpoint(
@@ -380,6 +430,8 @@ def _format_generation_progress(
         f"failures={summary['build_failures']} "
         f"disqualified={summary['disqualifications']}"
     )
+    if "verification_simulations" in summary:
+        progress += f" verified={summary['verification_simulations']}"
     if "fitter_mutants" in summary:
         progress += (
             f" fitter={summary['fitter_mutants']}"
@@ -427,6 +479,18 @@ def _environment_for_generation(
         args.gradual_gravity_change, generation, args.generations
     )
     return replace(environment, gravity=gravity)
+
+
+def _verification_environment(
+    environment: EnvironmentFamily,
+    args: argparse.Namespace,
+) -> EnvironmentFamily:
+    """Return ``environment`` with the finer physics used by --verify-top."""
+    return replace(
+        environment,
+        physics_substeps=environment.physics_substeps * args.verify_substeps,
+        integrator=args.verify_integrator,
+    )
 
 
 def _resolve_seed_control_mode(

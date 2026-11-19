@@ -101,6 +101,7 @@ def evaluate_task(
         config,
         policy,
         root_body_name=(builder.root_body_name if policy.track_root_upright else None),
+        physics_substeps=environment.physics_substeps,
     )
     if isinstance(controlled_metrics, str):
         return failed(controlled_metrics)
@@ -114,6 +115,7 @@ def evaluate_task(
             config,
             policy,
             apply_controls=False,
+            physics_substeps=environment.physics_substeps,
         )
         if isinstance(passive_metrics, str):
             return failed(passive_metrics)
@@ -245,8 +247,12 @@ def _run_episode(
     policy: task_shared.RolloutPolicy = task_shared.RolloutPolicy(),
     root_body_name: str | None = None,
     apply_controls: bool = True,
+    physics_substeps: int = 1,
 ):
     """Simulate one episode and return its metrics, or a failure reason string.
+
+    Controllers update every ``physics_substeps`` MuJoCo steps (one control
+    step; see ``EnvironmentFamily.physics_substeps``).
 
     The metrics cover everything the rollout can measure (distances, speeds,
     energy, drift, height loss, first floor contact); each task's result type
@@ -274,13 +280,15 @@ def _run_episode(
     sample_count = 0
 
     max_steps = max(1, math.ceil(config.episode_seconds / model.opt.timestep))
-    for _ in range(max_steps):
+    for step in range(max_steps):
         if data.time >= config.episode_seconds:
             break
-        if apply_controls:
-            apply_controller(model, data, builder.actuator_controllers)
-        else:
-            data.ctrl[actuator_ids] = 0.0
+        if step % physics_substeps == 0:
+            # Controllers update once per control step, whatever the substeps.
+            if apply_controls:
+                apply_controller(model, data, builder.actuator_controllers)
+            else:
+                data.ctrl[actuator_ids] = 0.0
         ctrl = data.ctrl.copy()
         mujoco.mj_step(model, data)
         if (

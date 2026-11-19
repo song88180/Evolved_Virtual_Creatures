@@ -340,3 +340,113 @@ def test_population_helpers_forward_root_mutation_setting(monkeypatch):
     )
 
     assert settings == [False, False]
+
+
+class _SerialExecutor:
+    def __init__(self):
+        self.calls = []
+
+    def map(self, function, *iterables):
+        items = list(zip(*iterables))
+        self.calls.append([item[0] for item in items])
+        return [function(*item) for item in items]
+
+
+def _verification_setup(monkeypatch, fine_fitness):
+    from helpers import FakeEvaluationResult
+
+    monkeypatch.setattr(evolution, "genotype_key", lambda genotype: genotype)
+    monkeypatch.setattr(
+        evolution,
+        "_evaluate_creature",
+        lambda genotype, _definition: evolution.EvaluatedCreature(
+            genotype, FakeEvaluationResult(fitness=fine_fitness[genotype])
+        ),
+    )
+    return _SerialExecutor()
+
+
+def test_verify_leading_creatures_reranks_until_top_scores_are_verified(monkeypatch):
+    # "cheat" scores best on coarse physics but poorly once verified.
+    fine = {"cheat": -1.0, "a": 2.5, "b": 1.5, "c": 0.5}
+    executor = _verification_setup(monkeypatch, fine)
+    evaluated = [
+        make_creature("cheat", 9.0),
+        make_creature("a", 3.0),
+        make_creature("b", 2.0),
+        make_creature("c", 1.0),
+    ]
+    cache = {}
+
+    simulations = evolution.verify_leading_creatures(
+        evaluated, object(), executor, top_count=2, cache=cache
+    )
+
+    assert [creature.genotype for creature in evaluated] == ["a", "b", "c", "cheat"]
+    assert [creature.fitness for creature in evaluated[:2]] == [2.5, 1.5]
+    assert evaluated[2].fitness == 1.0  # outside the top two: coarse score kept
+    assert executor.calls == [["cheat", "a"], ["b"]]
+    assert simulations == 3
+    assert set(cache) == {"cheat", "a", "b"}
+
+
+def test_verify_leading_creatures_reuses_cached_results(monkeypatch):
+    fine = {"a": 2.5, "b": 1.5}
+    executor = _verification_setup(monkeypatch, fine)
+    cache = {}
+    evolution.verify_leading_creatures(
+        [make_creature("a", 3.0), make_creature("b", 2.0)], object(), executor, 2, cache
+    )
+    executor.calls.clear()
+
+    again = [make_creature("a", 3.0), make_creature("b", 2.0)]
+    simulations = evolution.verify_leading_creatures(again, object(), executor, 2, cache)
+
+    assert simulations == 0
+    assert executor.calls == []
+    assert [creature.fitness for creature in again] == [2.5, 1.5]
+
+
+def test_verify_leading_creatures_with_zero_top_count_changes_nothing(monkeypatch):
+    executor = _verification_setup(monkeypatch, {})
+    evaluated = [make_creature("a", 3.0)]
+
+    assert evolution.verify_leading_creatures(evaluated, object(), executor, 0, {}) == 0
+    assert evaluated[0].fitness == 3.0
+
+
+def test_genotype_key_is_stable_and_content_based():
+    from evc3d.genotype_io import load_genotype_from_json
+
+    first = load_genotype_from_json("examples/example_genotype.json")
+    second = load_genotype_from_json("examples/example_genotype.json")
+    assert evolution.genotype_key(first) == evolution.genotype_key(second)
+    connection = next(iter(second.connections.values()))
+    connection.motor_gear += 1.0
+    assert evolution.genotype_key(first) != evolution.genotype_key(second)
+
+
+def test_verification_environment_multiplies_substeps_and_sets_integrator():
+    import argparse
+
+    environment = task_definition("swimming_away").environment
+    args = argparse.Namespace(verify_substeps=5, verify_integrator="RK4")
+    verified = evolve_cli._verification_environment(environment, args)
+
+    assert verified.physics_substeps == 5
+    assert verified.integrator == "RK4"
+    assert verified.timestep == environment.timestep
+
+
+@pytest.mark.parametrize(
+    "options, message",
+    [
+        (["--verify-top", "-1"], "--verify-top"),
+        (["--population-size", "3", "--elite-count", "1", "--verify-top", "4"], "--verify-top"),
+        (["--verify-substeps", "0"], "--verify-substeps"),
+    ],
+)
+def test_evolve_rejects_invalid_verification_options(options, message, capsys):
+    with pytest.raises(SystemExit):
+        evolve_cli.parse_args(options)
+    assert message in capsys.readouterr().err
