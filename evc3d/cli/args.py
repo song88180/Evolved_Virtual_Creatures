@@ -53,8 +53,13 @@ def add_genotype_argument(parser: argparse.ArgumentParser, help: str) -> None:
 def add_environment_arguments(
     parser: argparse.ArgumentParser,
     task_help: str,
+    physics_substeps_default: int | None = None,
 ) -> None:
-    """Options that define the simulated world and the generated phenotype."""
+    """Options that define the simulated world and the generated phenotype.
+
+    ``physics_substeps_default`` sets the subcommand's --physics-substeps
+    default; ``None`` keeps the task environment's value.
+    """
     group = parser.add_argument_group("environment")
     group.add_argument(
         "--task",
@@ -103,13 +108,17 @@ def add_environment_arguments(
     group.add_argument(
         "--physics-substeps",
         type=int,
-        default=None,
+        default=physics_substeps_default,
         metavar="N",
         help=(
             "Physics steps per control step: MuJoCo advances timestep/N "
-            "(e.g. 5 gives dt=0.002 for the 0.01 s task timestep) while "
-            "controllers still update every timestep. (default: task "
-            "environment default, 1)"
+            "(e.g. 4 gives dt=0.0025 for the 0.01 s task timestep) while "
+            "controllers still update every timestep. "
+            + (
+                "(default: task environment default, 1)"
+                if physics_substeps_default is None
+                else f"(default: {physics_substeps_default})"
+            )
         ),
     )
     group.add_argument(

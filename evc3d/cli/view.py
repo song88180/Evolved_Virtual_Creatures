@@ -17,6 +17,9 @@ from .args import (
 )
 
 NAME = "view"
+# RK4 with 4 substeps (dt=0.0025) was the cheapest verification setting that
+# matched dt=0.0001 physics; view uses the same step count by default.
+DEFAULT_VIEW_PHYSICS_SUBSTEPS = 4
 _DEFAULT_MP4_SENTINEL = Path("__task_default_mp4__")
 
 # MP4-only options and their defaults; given without --mp4 they are an error.
@@ -41,7 +44,13 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
         formatter_class=HelpFormatter,
     )
     add_genotype_argument(parser, "Genotype JSON path.")
-    add_environment_arguments(parser, "Task whose environment the creature is shown in.")
+    # Watch creatures with the finer physics evolve --verify-top scores them
+    # with, so integration-error motion is not mistaken for real swimming.
+    add_environment_arguments(
+        parser,
+        "Task whose environment the creature is shown in.",
+        physics_substeps_default=DEFAULT_VIEW_PHYSICS_SUBSTEPS,
+    )
 
     group = parser.add_argument_group("display")
     group.add_argument(

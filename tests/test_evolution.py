@@ -486,3 +486,20 @@ def test_verify_leading_creatures_does_not_look_up_mutated_creatures(monkeypatch
 
     assert keys == []
     assert evaluated[0].fitness == 1.0
+
+
+def test_bare_verify_top_uses_elite_count():
+    args = evolve_cli.parse_args(["--elite-count", "7", "--verify-top"])
+
+    assert args.verify_top == 7
+
+
+def test_bare_verify_top_before_another_option_uses_elite_count():
+    args = evolve_cli.parse_args(["--verify-top", "--elite-count", "12"])
+
+    assert args.verify_top == 12
+
+
+def test_verify_top_number_and_default_are_unchanged():
+    assert evolve_cli.parse_args(["--verify-top", "3"]).verify_top == 3
+    assert evolve_cli.parse_args([]).verify_top == 0

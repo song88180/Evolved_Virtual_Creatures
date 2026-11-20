@@ -985,3 +985,34 @@ def test_view_accepts_physics_options():
 
     assert environment.physics_substeps == 5
     assert environment.integrator == "implicitfast"
+
+
+def test_view_defaults_to_four_physics_substeps():
+    args = cli.parse_args(["view", "--task", "swimming_away"])
+    environment = resolve_task_definition(args).environment
+
+    assert args.physics_substeps == 4
+    assert environment.physics_substeps == 4
+    assert environment.integrator == "Euler"
+    assert environment.timestep == pytest.approx(0.01)
+
+
+def test_view_physics_substeps_can_be_set_back_to_one():
+    args = cli.parse_args(["view", "--task", "swimming_away", "--physics-substeps", "1"])
+
+    assert resolve_task_definition(args).environment.physics_substeps == 1
+
+
+@pytest.mark.parametrize("command", ["evaluate", "build"])
+def test_other_commands_keep_task_physics_substeps(command):
+    args = cli.parse_args([command, "--task", "swimming_away"])
+
+    assert args.physics_substeps is None
+    assert resolve_task_definition(args).environment.physics_substeps == 1
+
+
+def test_evolve_verifies_with_four_substeps_by_default():
+    args = cli.parse_args(["evolve", "--task", "swimming_away"])
+
+    assert args.verify_substeps == 4
+    assert args.physics_substeps is None

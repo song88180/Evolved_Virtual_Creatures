@@ -48,6 +48,10 @@ from .run_header import format_run_header
 
 NAME = "evolve"
 DEFAULT_RUNS_DIR = Path("runs")
+# Physics steps per control step for --verify-top. With RK4, 4 (dt=0.0025)
+# was the cheapest setting that rated every known fake swimmer at its
+# dt=0.0001 speed; 3 diverges on many otherwise-stable creatures.
+DEFAULT_VERIFY_SUBSTEPS = 4
 
 __all__ = ["DEFAULT_GENOTYPE_PATH", "load_genotype_from_json", "parse_args", "run"]
 
@@ -140,6 +144,8 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
     group.add_argument(
         "--verify-top",
         type=int,
+        nargs="?",
+        const=None,
         default=0,
         metavar="N",
         help=(
@@ -147,13 +153,13 @@ def add_parser(subparsers) -> argparse.ArgumentParser:
             "(--verify-substeps, --verify-integrator) and rank them by that "
             "score, repeating until the N best are all verified. Blocks "
             "creatures that only score well because of integration error. "
-            "0 disables."
+            "Without N, verifies --elite-count creatures. 0 disables."
         ),
     )
     group.add_argument(
         "--verify-substeps",
         type=int,
-        default=5,
+        default=DEFAULT_VERIFY_SUBSTEPS,
         help="Physics steps per control step when verifying (see --verify-top).",
     )
     group.add_argument(
@@ -238,6 +244,9 @@ def validate(args: argparse.Namespace) -> None:
         raise ValueError("--max-mutations must be >= --min-mutations >= 0")
     if args.initial_mutations < 0:
         raise ValueError("--initial-mutations must be non-negative")
+    if args.verify_top is None:
+        # Bare --verify-top: verify exactly the creatures kept as elites.
+        args.verify_top = args.elite_count
     if not 0 <= args.verify_top <= args.population_size:
         raise ValueError("--verify-top must be between 0 and population size")
     if args.verify_substeps < 1:

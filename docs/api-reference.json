@@ -1048,11 +1048,12 @@
     },
     "Functions": {
       "add_environment_arguments": {
-        "Signature": "add_environment_arguments(parser: argparse.ArgumentParser, task_help: str) -> None",
+        "Signature": "add_environment_arguments(parser: argparse.ArgumentParser, task_help: str, physics_substeps_default: int | None = None) -> None",
         "Purpose": "Options that define the simulated world and the generated phenotype.",
         "Parameters": {
           "parser": {"Type": "argparse.ArgumentParser", "Default": "required", "Description": "argparse parser or subcommand parser to add options to."},
-          "task_help": {"Type": "str", "Default": "required", "Description": "Help text for --task in this subcommand."}
+          "task_help": {"Type": "str", "Default": "required", "Description": "Help text for --task in this subcommand."},
+          "physics_substeps_default": {"Type": "int | None", "Default": "None", "Description": "Default for --physics-substeps in this subcommand; None keeps the task environment's value."}
         },
         "Returns": {"Type": "None", "Description": "Nothing; adds the 'environment' group."},
         "Raises": []
