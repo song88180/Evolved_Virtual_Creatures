@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Set
 
+from .brain_genes import BrainNeuron, coerce_neurons
 from .genes import CONTROL_MODES, ConnectionGene, NodeGene
 from .mutation import GenotypeMutationMixin
 
@@ -18,6 +19,9 @@ class Genotype(GenotypeMutationMixin):
     # sine controllers; each joint multiplies it by its connection's control_freq.
     global_control_freq: float = 1.0
     control_mode: str = "neural"
+    # Graph control mode only: neurons shared by the whole creature, built once
+    # (not per body part) so they can coordinate distant parts.
+    global_neurons: List[BrainNeuron] = field(default_factory=list)
     archived_connections: Dict[str, ConnectionGene] = field(default_factory=dict)
     archived_nodes: Dict[str, NodeGene] = field(default_factory=dict)
     _next_mutation_index: Dict[str, int] = field(
@@ -36,6 +40,7 @@ class Genotype(GenotypeMutationMixin):
     )
 
     def __post_init__(self):
+        self.global_neurons = coerce_neurons(self.global_neurons)
         if isinstance(self.archived_nodes, list):
             self.archived_nodes = {node.name: node for node in self.archived_nodes}
         if isinstance(self.archived_connections, list):

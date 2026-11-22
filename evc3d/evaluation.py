@@ -19,6 +19,7 @@ import numpy as np
 from .control import (
     actuator_ids_for_controllers,
     apply_controller,
+    create_brain_runtime,
 )
 from .evolution_tasks import config as task_config
 from .evolution_tasks import shared as task_shared
@@ -261,6 +262,12 @@ def _run_episode(
     a walking creature dropping too low) return a reason string instead.
     """
     actuator_ids = actuator_ids_for_controllers(model, builder.actuator_controllers)
+    # Neuron state starts fresh for every episode, including the passive one.
+    brain = (
+        create_brain_runtime(model, builder.brain_spec, physics_substeps)
+        if apply_controls
+        else None
+    )
     target_direction = _normalized_target_direction(config.target_direction)
     mujoco.mj_forward(model, data)
     initial_center_of_mass = _creature_center_of_mass(model, data)
@@ -286,7 +293,7 @@ def _run_episode(
         if step % physics_substeps == 0:
             # Controllers update once per control step, whatever the substeps.
             if apply_controls:
-                apply_controller(model, data, builder.actuator_controllers)
+                apply_controller(model, data, builder.actuator_controllers, brain)
             else:
                 data.ctrl[actuator_ids] = 0.0
         ctrl = data.ctrl.copy()

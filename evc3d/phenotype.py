@@ -4,11 +4,13 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 import xml.etree.ElementTree as ET
 
+from .brain_compile import BrainInstance, compile_brain
 from .constants import FACE_NORMALS
 from .evolution_tasks.shared import TaskDefinition
 from .controller_spec import (
     BALL_NEURAL_AXES,
     ActuatorController,
+    BrainSpec,
     normalized_neural_parameters,
 )
 from .genes import (
@@ -60,6 +62,10 @@ class PhenotypeBuilder:
         self.actuator_xml: Optional[ET.Element] = None
         self.actuator_controllers: List[ActuatorController] = []
         self.control_orders: Dict[Tuple[int, ...], int] = {}
+        # Graph control mode: one record per body part, and the compiled brain.
+        self.brain_instances: List[BrainInstance] = []
+        self.brain_spec: Optional[BrainSpec] = None
+        self._brain_stack: List[int] = []
         # MuJoCo name of the creature's root body; set by build().
         self.root_body_name: Optional[str] = None
 
@@ -79,6 +85,9 @@ class PhenotypeBuilder:
         GenotypeGraphAnalyzer(self.genotype, self.max_body_count).validate()
         self.actuator_controllers = []
         self.control_orders = {}
+        self.brain_instances = []
+        self.brain_spec = None
+        self._brain_stack = []
         self.mujoco_xml = ET.Element("mujoco", model="genotype_creature")
         self.configure_model()
 
@@ -108,6 +117,9 @@ class PhenotypeBuilder:
             reflection=IDENTITY_REFLECTION,
             logical_path=(),
         )
+
+        if self.genotype.control_mode == "graph":
+            self.brain_spec = compile_brain(self.genotype, self.brain_instances)
 
         ET.indent(self.mujoco_xml, space="  ")
         return ET.tostring(self.mujoco_xml, encoding="unicode")
@@ -239,6 +251,7 @@ class PhenotypeBuilder:
         Then recursively add children according to connections.
         """
         node_depth = current_depths.get(node.name, 0) + 1
+        self.register_brain_instance(parent_xml, node, incoming_conn)
 
         self.add_joint(
             parent_xml,
@@ -252,6 +265,7 @@ class PhenotypeBuilder:
         self.add_geom(parent_xml, node, effective_size, geom_center)
 
         next_depths = self.next_depths(current_depths, node.name, node_depth)
+        self._brain_stack.append(len(self.brain_instances) - 1)
         self.add_children(
             parent_xml,
             node,
@@ -262,6 +276,28 @@ class PhenotypeBuilder:
             reflection,
             logical_path,
         )
+        self._brain_stack.pop()
+
+    def register_brain_instance(
+        self,
+        body_xml: ET.Element,
+        node: NodeGene,
+        incoming_conn: Optional[ConnectionGene],
+    ) -> None:
+        """Record this body part for the graph brain (the part just created)."""
+        parent = self._brain_stack[-1] if self._brain_stack else None
+        instance = BrainInstance(
+            node_name=node.name,
+            body_name=body_xml.get("name", ""),
+            connection_name=incoming_conn.name if incoming_conn else None,
+            parent=parent,
+        )
+        index = len(self.brain_instances)
+        self.brain_instances.append(instance)
+        if parent is not None and incoming_conn is not None:
+            self.brain_instances[parent].children.setdefault(
+                incoming_conn.name, []
+            ).append(index)
 
     def add_joint(
         self,
@@ -301,6 +337,9 @@ class PhenotypeBuilder:
         logical_path: Tuple[int, ...],
     ):
         joint_name = self.new_joint_name(node.name)
+        instance = self.brain_instances[-1]
+        instance.joint_name = joint_name
+        instance.joint_type = node.joint_type
         joint = ET.SubElement(parent_xml, "joint")
         joint.set("type", node.joint_type)
         joint.set("name", joint_name)
@@ -315,7 +354,7 @@ class PhenotypeBuilder:
         control_mode = self.genotype.control_mode
         if node.joint_type == "slide":
             joint.set("range", "-0.5 0.5")
-        elif node.joint_type == "hinge" and control_mode == "neural":
+        elif node.joint_type == "hinge" and control_mode in {"neural", "graph"}:
             joint.set("range", "-90 90")
         else:
             joint.set("range", "0 45")
@@ -366,7 +405,7 @@ class PhenotypeBuilder:
         motor_names = []
         motor_axes = (
             neural_output_axes or BALL_NEURAL_AXES
-            if joint_type == "ball" and control_mode == "neural"
+            if joint_type == "ball" and control_mode in {"neural", "graph"}
             else (joint_axis,)
         )
         for motor_axis in motor_axes:
@@ -384,6 +423,10 @@ class PhenotypeBuilder:
                 motor.set("gear", str(motor_gear))
             motor.set("ctrlrange", vec_to_str(ctrlrange))
             motor_names.append(motor_name)
+
+        instance = self.brain_instances[-1]
+        instance.motor_names = tuple(motor_names)
+        instance.ctrlrange = tuple(ctrlrange)
 
         neural_w1: tuple[tuple[float, ...], ...] = ()
         neural_b1: tuple[float, ...] = ()

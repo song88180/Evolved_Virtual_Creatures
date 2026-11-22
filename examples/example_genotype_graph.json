@@ -1,0 +1,62 @@
+{
+  "root": "body",
+  "global_control_freq": 1.0,
+  "control_mode": "graph",
+  "global_neurons": [
+    {
+      "name": "clock",
+      "function": "oscillate-wave",
+      "inputs": [
+        {"source": null, "weight": 8.0},
+        {"source": null, "weight": 0.0},
+        {"source": null, "weight": 0.0}
+      ]
+    }
+  ],
+  "nodes": {
+    "body": {
+      "size": [0.25, 0.15, 0.1],
+      "joint_type": "free",
+      "recursive_limit": 1,
+      "child_connections": ["leg_connection"],
+      "shape": "box"
+    },
+    "leg": {
+      "size": [0.2, 0.04, 0.04],
+      "joint_type": "hinge",
+      "recursive_limit": 1,
+      "child_connections": [],
+      "shape": "capsule",
+      "brain": {
+        "neurons": [
+          {
+            "name": "n0",
+            "function": "sum",
+            "inputs": [
+              {"source": "global:clock", "weight": 1.0},
+              {"source": "self:angle0", "weight": -0.5},
+              {"source": null, "weight": 0.0}
+            ]
+          }
+        ],
+        "effectors": [{"source": "self:n0", "weight": 1.0}]
+      }
+    }
+  },
+  "connections": {
+    "leg_connection": {
+      "child": "leg",
+      "axis": [0.0, 1.0, 0.0],
+      "parent_face": "-z",
+      "surface_uv": [0.0, 0.6],
+      "child_surface_uv": [0.0, 0.0],
+      "symmetry": ["xz", "yz"],
+      "scale": 1.0,
+      "terminal_only": false,
+      "motor_enabled": true,
+      "motor_gear": 40.0,
+      "ctrlrange": [-1.0, 1.0],
+      "orientation": [0.0, 90.0, 0.0]
+    }
+  }
+}

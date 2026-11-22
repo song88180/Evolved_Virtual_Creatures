@@ -79,7 +79,7 @@
       "NodeGene": {
         "Purpose": "Describes one reusable body-part type in the genotype graph, including the optional root-body orientation.",
         "Constructor": {
-          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = hinge, recursive_limit: int = 1, child_connections: List[str] = <factory>, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = box) -> None",
+          "Signature": "NodeGene(name: str, size: Tuple[float, float, float], joint_type: str = hinge, recursive_limit: int = 1, child_connections: List[str] = <factory>, orientation: Tuple[float, float, float] = (0.0, 0.0, 0.0), shape: str = box, brain: BrainGene = <factory>) -> None",
           "Parameters": {
             "name": {"Type": "str", "Default": "required", "Description": "Symbolic node name."},
             "size": {"Type": "Tuple[float, float, float]", "Default": "required", "Description": "Local bounding half extents for generated geometry. Capsules and cylinders use local X as the main axis and normalize Y/Z to the same circular radius."},
@@ -87,7 +87,8 @@
             "recursive_limit": {"Type": "int", "Default": "1", "Description": "Maximum number of this node type along one recursive expansion path."},
             "child_connections": {"Type": "List[str]", "Default": "field(default_factory=...)", "Description": "Ordered connection-gene names expanded beneath generated bodies of this type."},
             "orientation": {"Type": "Tuple[float, float, float]", "Default": "(0.0, 0.0, 0.0)", "Description": "Euler orientation in degrees. Only the root node orientation is used as the root body world-relative orientation."},
-            "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."}
+            "shape": {"Type": "str", "Default": "\"box\"", "Description": "Body geometry shape: \"box\", \"ellipsoid\", \"capsule\", or \"cylinder\"."},
+            "brain": {"Type": "BrainGene", "Default": "field(default_factory=...)", "Description": "Graph control mode only: this part's local neurons and joint effectors (a dict is accepted and converted)."}
           },
           "Raises": []
         },
@@ -98,7 +99,8 @@
           "joint_type": {"Type": "str", "Description": "Generated joint type."},
           "recursive_limit": {"Type": "int", "Description": "Expansion limit for recursive graphs."},
           "child_connections": {"Type": "List[str]", "Description": "Outgoing connection-gene names."},
-          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees; used for the generated root body when this node is the genotype root."}
+          "orientation": {"Type": "Tuple[float, float, float]", "Description": "Euler orientation in degrees; used for the generated root body when this node is the genotype root."},
+          "brain": {"Type": "BrainGene", "Description": "Graph-mode neurons and effectors of this part."}
         },
         "Methods": {},
         "Example": "node = NodeGene(name=\"body\", size=(0.15, 0.08, 0.06), joint_type=\"free\", orientation=(0.0, 0.0, 15.0), shape=\"ellipsoid\")"
@@ -220,13 +222,14 @@
       "Genotype": {
         "Purpose": "Stores a genotype graph recipe plus archived genetic material for mutation reuse.",
         "Constructor": {
-          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], connections: Dict[str, ConnectionGene] = <factory>, global_control_freq: float = 1.0, control_mode: str = neural, archived_connections: Dict[str, ConnectionGene] = <factory>, archived_nodes: Dict[str, NodeGene] = <factory>) -> None",
+          "Signature": "Genotype(root: str, nodes: Dict[str, NodeGene], connections: Dict[str, ConnectionGene] = <factory>, global_control_freq: float = 1.0, control_mode: str = neural, global_neurons: List[BrainNeuron] = <factory>, archived_connections: Dict[str, ConnectionGene] = <factory>, archived_nodes: Dict[str, NodeGene] = <factory>) -> None",
           "Parameters": {
             "root": {"Type": "str", "Default": "required", "Description": "Name of the node where phenotype expansion begins."},
             "nodes": {"Type": "Dict[str, NodeGene]", "Default": "required", "Description": "Active node genes keyed by node name."},
             "connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=...)", "Description": "Active connection genes keyed by connection name."},
             "global_control_freq": {"Type": "float", "Default": "1.0", "Description": "Sine mode only. Base angular frequency in rad/s (not Hz) shared by all sine controllers; each joint's angular frequency is global_control_freq × its connection's control_freq."},
-            "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural or sine."},
+            "control_mode": {"Type": "str", "Default": "\"neural\"", "Description": "Global controller family for the genotype: neural, sine or graph."},
+            "global_neurons": {"Type": "List[BrainNeuron]", "Default": "field(default_factory=...)", "Description": "Graph mode only: neurons shared by the whole creature, built once rather than per body part (dicts are accepted)."},
             "archived_connections": {"Type": "Dict[str, ConnectionGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named connection genes retained as mutation templates."},
             "archived_nodes": {"Type": "Dict[str, NodeGene]", "Default": "field(default_factory=dict)", "Description": "Inactive named node genes retained as mutation templates."}
           },
@@ -486,7 +489,7 @@
         "Purpose": "Return a copy of `genotype` switched to `control_mode`.",
         "Parameters": {
           "genotype": {"Type": "Genotype", "Default": "required", "Description": "Genotype to build, evaluate, or mutate."},
-          "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural or sine."}
+          "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural, sine or graph."}
         },
         "Returns": {"Type": "Genotype", "Description": "Converted copy; the input is unchanged."},
         "Raises": []
@@ -592,7 +595,7 @@
             "motor_names": {"Type": "tuple[str, ...]", "Default": "required", "Description": "Generated MuJoCo motor names for this joint, one per actuated axis."},
             "joint_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo joint name the motors act on."},
             "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: hinge, slide, or ball."},
-            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family copied from the genotype: neural or sine."},
+            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family copied from the genotype: neural, sine or graph."},
             "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Default": "required", "Description": "Control range for each motor, in motor_names order."},
             "neural_w1": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural hidden-layer weights (16 x input size). Used only in neural mode."},
             "neural_b1": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural hidden-layer biases. Used only in neural mode."},
@@ -608,7 +611,7 @@
           "motor_names": {"Type": "tuple[str, ...]", "Description": "Generated motor names driven by this controller."},
           "joint_name": {"Type": "str", "Description": "Controlled joint name."},
           "joint_type": {"Type": "str", "Description": "hinge, slide, or ball."},
-          "control_mode": {"Type": "str", "Description": "neural or sine."},
+          "control_mode": {"Type": "str", "Description": "neural, sine or graph."},
           "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Description": "Per-motor control ranges."}
         },
         "Methods": {},
@@ -1147,15 +1150,90 @@
   },
   "evc3d.control": {
     "Overview": {
-      "Purpose": "Applies actuator controllers to a running MuJoCo simulation: apply_controller is the single entry point that writes sine or neural motor commands each step. The controller record and sizes live in evc3d.controller_spec.",
+      "Purpose": "Applies actuator controllers to a running MuJoCo simulation: apply_controller is the single entry point that writes sine, neural, or graph-brain motor commands each step (graph mode runs BrainRuntime). The controller record and sizes live in evc3d.controller_spec.",
       "Main_Use_Cases": [
         "Drive a creature's motors each step",
         "Look up the MuJoCo actuator IDs of all controllers"
       ],
       "Related_Modules": ["evc3d.controller_spec", "evc3d.phenotype", "evc3d.scene", "evc3d.evaluation"]
     },
-    "Classes": {},
+    "Classes": {
+      "BrainRuntime": {
+        "Purpose": "Runs a compiled graph brain each control step: reads sensors, runs two brain steps (so signals cross several neurons with less delay), then writes effector controls scaled to each motor's ctrlrange. Holds all neuron state, so create a new one per episode.",
+        "Constructor": {
+          "Signature": "BrainRuntime(model: 'mujoco.MjModel', spec: 'BrainSpec', control_dt: 'float')",
+          "Parameters": {
+            "model": {
+              "Type": "mujoco.MjModel",
+              "Default": "required",
+              "Description": "Compiled MuJoCo model."
+            },
+            "spec": {
+              "Type": "BrainSpec",
+              "Default": "required",
+              "Description": "Compiled brain."
+            },
+            "control_dt": {
+              "Type": "float",
+              "Default": "required",
+              "Description": "Seconds per control step; each brain step is half of it."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {},
+        "Methods": {
+          "step": {
+            "Signature": "step(model: 'mujoco.MjModel', data: 'mujoco.MjData') -> 'None'",
+            "Purpose": "Read joint-angle and contact sensors, run the brain steps, and write effector controls into data.ctrl.",
+            "Parameters": {
+              "model": {
+                "Type": "mujoco.MjModel",
+                "Default": "required",
+                "Description": "Compiled MuJoCo model."
+              },
+              "data": {
+                "Type": "mujoco.MjData",
+                "Default": "required",
+                "Description": "MuJoCo simulation state."
+              }
+            },
+            "Returns": {
+              "Type": "None",
+              "Description": "Nothing; mutates data.ctrl."
+            },
+            "Raises": []
+          }
+        }
+      }
+    },
     "Functions": {
+      "create_brain_runtime": {
+        "Signature": "create_brain_runtime(model: 'mujoco.MjModel', spec: 'BrainSpec | None', physics_substeps: 'int' = 1) -> \"'BrainRuntime | None'\"",
+        "Purpose": "Return a fresh brain runtime for one episode, or None when there is no graph brain. The brain updates once per control step of physics_substeps MuJoCo steps.",
+        "Parameters": {
+          "model": {
+            "Type": "mujoco.MjModel",
+            "Default": "required",
+            "Description": "Compiled MuJoCo model."
+          },
+          "spec": {
+            "Type": "BrainSpec | None",
+            "Default": "required",
+            "Description": "PhenotypeBuilder.brain_spec, or None."
+          },
+          "physics_substeps": {
+            "Type": "int",
+            "Default": "1",
+            "Description": "MuJoCo steps per control step."
+          }
+        },
+        "Returns": {
+          "Type": "'BrainRuntime | None'",
+          "Description": "A BrainRuntime or None."
+        },
+        "Raises": []
+      },
       "actuator_ids_for_controllers": {
         "Signature": "actuator_ids_for_controllers(model: mujoco.MjModel, actuator_controllers: list[ActuatorController]) -> list[int]",
         "Purpose": "Flat list of MuJoCo actuator IDs for all controllers' motors, in controller order.",
@@ -1167,12 +1245,13 @@
         "Raises": []
       },
       "apply_controller": {
-        "Signature": "apply_controller(model: mujoco.MjModel, data: mujoco.MjData, actuator_controllers: list[ActuatorController]) -> None",
-        "Purpose": "Write this step's control values for every controller (sine or neural) into data.ctrl.",
+        "Signature": "apply_controller(model: mujoco.MjModel, data: mujoco.MjData, actuator_controllers: list[ActuatorController], brain: 'BrainRuntime | None' = None) -> None",
+        "Purpose": "Write this step's control values into data.ctrl: per-joint sine or neural controllers, and, in graph mode, the whole brain at once (graph controllers are skipped in the per-joint loop).",
         "Parameters": {
           "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
           "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
-          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."}
+          "actuator_controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."},
+          "brain": {"Type": "'BrainRuntime | None'", "Default": "None", "Description": "Fresh graph-brain runtime for this episode (from create_brain_runtime), or None."}
         },
         "Returns": {"Type": "None", "Description": "Nothing; mutates data.ctrl."},
         "Raises": []
@@ -1182,7 +1261,7 @@
   },
   "evc3d.controller_spec": {
     "Overview": {
-      "Purpose": "Controller specifications without the MuJoCo runtime: controller sizes (NEURAL_HIDDEN_SIZE, NEURAL_INPUT_DIMS, NEURAL_OUTPUT_DIMS, BALL_NEURAL_AXES), the ActuatorController record built by PhenotypeBuilder, and neural-weight helpers. Genotype loading and mutation depend only on this module, so they do not import MuJoCo or NumPy.",
+      "Purpose": "Controller specifications without the MuJoCo runtime: controller sizes (NEURAL_HIDDEN_SIZE, NEURAL_INPUT_DIMS, NEURAL_OUTPUT_DIMS, BALL_NEURAL_AXES), the ActuatorController record built by PhenotypeBuilder, and neural-weight helpers, and the compiled graph-brain records (BrainSpec, NeuronSpec, EffectorSpec, SensorSpec). Genotype loading and mutation depend only on this module, so they do not import MuJoCo or NumPy.",
       "Main_Use_Cases": [
         "Size or validate neural controller weights for a joint type",
         "Read or write genotypes without the simulator installed"
@@ -1190,6 +1269,189 @@
       "Related_Modules": ["evc3d.control", "evc3d.mutation", "evc3d.genotype_io", "evc3d.phenotype"]
     },
     "Classes": {
+      "SensorSpec": {
+        "Purpose": "A sensor the compiled brain reads: a joint-angle sensor (one degree of freedom of a joint) or a contact sensor (one face of a body).",
+        "Constructor": {
+          "Signature": "SensorSpec(kind: 'str', joint_name: 'str' = '', joint_type: 'str' = '', index: 'int' = 0, body_name: 'str' = '', face: 'str' = '') -> None -> None",
+          "Parameters": {
+            "kind": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "angle or contact."
+            },
+            "joint_name": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "Angle sensors: MuJoCo joint name."
+            },
+            "joint_type": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "Angle sensors: hinge, slide or ball."
+            },
+            "index": {
+              "Type": "int",
+              "Default": "0",
+              "Description": "Angle sensors: degree-of-freedom index."
+            },
+            "body_name": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "Contact sensors: MuJoCo body name."
+            },
+            "face": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "Contact sensors: +x, -x, +y, -y, +z or -z."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "kind": {
+            "Type": "str",
+            "Description": "angle or contact."
+          },
+          "joint_name": {
+            "Type": "str",
+            "Description": "Angle sensors: MuJoCo joint name."
+          },
+          "joint_type": {
+            "Type": "str",
+            "Description": "Angle sensors: hinge, slide or ball."
+          },
+          "index": {
+            "Type": "int",
+            "Description": "Angle sensors: degree-of-freedom index."
+          },
+          "body_name": {
+            "Type": "str",
+            "Description": "Contact sensors: MuJoCo body name."
+          },
+          "face": {
+            "Type": "str",
+            "Description": "Contact sensors: +x, -x, +y, -y, +z or -z."
+          }
+        },
+        "Methods": {}
+      },
+      "NeuronSpec": {
+        "Purpose": "A compiled neuron: function name and three (signal slot, weight) inputs; slot -1 means the constant weight.",
+        "Constructor": {
+          "Signature": "NeuronSpec(function: 'str', inputs: 'tuple[tuple[int, float], ...]') -> None -> None",
+          "Parameters": {
+            "function": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "Neuron function name."
+            },
+            "inputs": {
+              "Type": "tuple[tuple[int, float], ...]",
+              "Default": "required",
+              "Description": "Three (slot, weight) pairs."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "function": {
+            "Type": "str",
+            "Description": "Neuron function name."
+          },
+          "inputs": {
+            "Type": "tuple[tuple[int, float], ...]",
+            "Description": "Three (slot, weight) pairs."
+          }
+        },
+        "Methods": {}
+      },
+      "EffectorSpec": {
+        "Purpose": "A compiled effector driving one motor from a signal slot (-1 means the constant weight).",
+        "Constructor": {
+          "Signature": "EffectorSpec(motor_name: 'str', slot: 'int', weight: 'float', ctrlrange: 'tuple[float, float]') -> None -> None",
+          "Parameters": {
+            "motor_name": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "MuJoCo motor name."
+            },
+            "slot": {
+              "Type": "int",
+              "Default": "required",
+              "Description": "Signal slot or -1."
+            },
+            "weight": {
+              "Type": "float",
+              "Default": "required",
+              "Description": "Output weight."
+            },
+            "ctrlrange": {
+              "Type": "tuple[float, float]",
+              "Default": "required",
+              "Description": "Motor control range."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "motor_name": {
+            "Type": "str",
+            "Description": "MuJoCo motor name."
+          },
+          "slot": {
+            "Type": "int",
+            "Description": "Signal slot or -1."
+          },
+          "weight": {
+            "Type": "float",
+            "Description": "Output weight."
+          },
+          "ctrlrange": {
+            "Type": "tuple[float, float]",
+            "Description": "Motor control range."
+          }
+        },
+        "Methods": {}
+      },
+      "BrainSpec": {
+        "Purpose": "The flattened graph brain: neurons, the sensors they use, and effectors. Signal slots 0..len(neurons)-1 are neuron outputs and the following slots are sensors.",
+        "Constructor": {
+          "Signature": "BrainSpec(neurons: 'tuple[NeuronSpec, ...]' = (), sensors: 'tuple[SensorSpec, ...]' = (), effectors: 'tuple[EffectorSpec, ...]' = ()) -> None -> None",
+          "Parameters": {
+            "neurons": {
+              "Type": "tuple[NeuronSpec, ...]",
+              "Default": "()",
+              "Description": "Compiled neurons."
+            },
+            "sensors": {
+              "Type": "tuple[SensorSpec, ...]",
+              "Default": "()",
+              "Description": "Sensors in slot order after the neurons."
+            },
+            "effectors": {
+              "Type": "tuple[EffectorSpec, ...]",
+              "Default": "()",
+              "Description": "Compiled effectors."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "neurons": {
+            "Type": "tuple[NeuronSpec, ...]",
+            "Description": "Compiled neurons."
+          },
+          "sensors": {
+            "Type": "tuple[SensorSpec, ...]",
+            "Description": "Sensors in slot order after the neurons."
+          },
+          "effectors": {
+            "Type": "tuple[EffectorSpec, ...]",
+            "Description": "Compiled effectors."
+          }
+        },
+        "Methods": {}
+      },
       "ActuatorController": {
         "Purpose": "ActuatorController(motor_names: 'tuple[str, ...]', joint_name: 'str', joint_type: 'str', control_mode: 'str', ctrlranges: 'tuple[tuple[float, float], ...]', neural_w1: 'tuple[tuple[float, ...], ...]' = (), neural_b1: 'tuple[float, ...]' = (), neural_w2: 'tuple[tuple[float, ...], ...]' = (), neural_b2: 'tuple[float, ...]' = (), amp: 'float' = 0.0, freq: 'float' = 0.0, phase: 'float' = 0.0)",
         "Constructor": {
@@ -1198,7 +1460,7 @@
             "motor_names": {"Type": "tuple[str, ...]", "Default": "required", "Description": "Generated MuJoCo motor names for this joint, one per actuated axis."},
             "joint_name": {"Type": "str", "Default": "required", "Description": "Generated MuJoCo joint name."},
             "joint_type": {"Type": "str", "Default": "required", "Description": "Joint type: free, fixed, hinge, slide, or ball."},
-            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural or sine."},
+            "control_mode": {"Type": "str", "Default": "required", "Description": "Controller family: neural, sine or graph."},
             "ctrlranges": {"Type": "tuple[tuple[float, float], ...]", "Default": "required", "Description": "Control range for each motor, in motor_names order."},
             "neural_w1": {"Type": "tuple[tuple[float, ...], ...]", "Default": "()", "Description": "Neural hidden-layer weight matrix."},
             "neural_b1": {"Type": "tuple[float, ...]", "Default": "()", "Description": "Neural hidden-layer biases."},
@@ -2012,15 +2274,16 @@
     },
     "Classes": {
       "Scene": {
-        "Purpose": "Scene(model: 'mujoco.MjModel', data: 'mujoco.MjData', controllers: 'list[ActuatorController]', root_body_id: 'int', floor_geom_id: 'int')",
+        "Purpose": "Scene(model: 'mujoco.MjModel', data: 'mujoco.MjData', controllers: 'list[ActuatorController]', root_body_id: 'int', floor_geom_id: 'int', brain: 'BrainRuntime | None' = None)",
         "Constructor": {
-          "Signature": "Scene(model: mujoco.MjModel, data: mujoco.MjData, controllers: list[ActuatorController], root_body_id: int, floor_geom_id: int) -> None",
+          "Signature": "Scene(model: mujoco.MjModel, data: mujoco.MjData, controllers: list[ActuatorController], root_body_id: int, floor_geom_id: int, brain: BrainRuntime | None = None) -> None",
           "Parameters": {
             "model": {"Type": "mujoco.MjModel", "Default": "required", "Description": "Compiled MuJoCo model."},
             "data": {"Type": "mujoco.MjData", "Default": "required", "Description": "MuJoCo simulation state for the model."},
             "controllers": {"Type": "list[ActuatorController]", "Default": "required", "Description": "Controllers recorded by PhenotypeBuilder.build()."},
             "root_body_id": {"Type": "int", "Default": "required", "Description": "MuJoCo body ID of the creature's root."},
-            "floor_geom_id": {"Type": "int", "Default": "required", "Description": "MuJoCo geom ID of the floor, or -1."}
+            "floor_geom_id": {"Type": "int", "Default": "required", "Description": "MuJoCo geom ID of the floor, or -1."},
+            "brain": {"Type": "BrainRuntime | None", "Default": "None", "Description": "Graph-mode brain state for this scene, or None."}
           },
           "Raises": []
         },
@@ -2428,6 +2691,629 @@
         "Purpose": "Frozen task-specific result dataclass for flying_away fitness and diagnostics.",
         "Constructor": {"Signature": "FlyingAwayEvaluationResult(...)"},
         "Attributes": {},
+        "Methods": {}
+      }
+    },
+    "Functions": {},
+    "Exceptions": {}
+  },
+  "evc3d.brain_functions": {
+    "Overview": {
+      "Purpose": "The 23 neuron functions of the graph brain (Sims 1994): sum, product, divide, sum-threshold, greater-than, sign-of, min, max, abs, if, interpolate, sin, cos, atan, log, expt, sigmoid, integrate, differentiate, smooth, memory, oscillate-wave, oscillate-saw. MuJoCo-free. Also defines NEURON_FUNCTIONS, NEURON_ARITY, STATELESS_FUNCTIONS, MAX_INPUTS and SIGNAL_LIMIT.",
+      "Main_Use_Cases": [
+        "Evaluate one brain step of a neuron",
+        "Look up a function's input count",
+        "Create fresh private state for stateful neurons"
+      ],
+      "Related_Modules": [
+        "evc3d.brain_genes",
+        "evc3d.control",
+        "evc3d.mutation.brain"
+      ]
+    },
+    "Classes": {},
+    "Functions": {
+      "clamp_signal": {
+        "Signature": "clamp_signal(value: 'float') -> 'float'",
+        "Purpose": "Limit a signal to +/-SIGNAL_LIMIT; NaN becomes 0.",
+        "Parameters": {
+          "value": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "Signal value."
+          }
+        },
+        "Returns": {
+          "Type": "float",
+          "Description": "The clamped, finite value."
+        },
+        "Raises": []
+      },
+      "initial_state": {
+        "Signature": "initial_state(function: 'str') -> 'List[float]'",
+        "Purpose": "Fresh private state for a function: empty for stateless functions, otherwise integrator, smoother, memory value, oscillator phase, or (previous input, has-previous flag) for differentiate.",
+        "Parameters": {
+          "function": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Neuron function name."
+          }
+        },
+        "Returns": {
+          "Type": "List[float]",
+          "Description": "A new state list."
+        },
+        "Raises": []
+      },
+      "evaluate_neuron": {
+        "Signature": "evaluate_neuron(function: 'str', x0: 'float', x1: 'float', x2: 'float', state: 'List[float]', dt: 'float') -> 'float'",
+        "Purpose": "Compute one brain step of a neuron from its already weighted inputs and update its state in place. Results are finite and bounded by SIGNAL_LIMIT.",
+        "Parameters": {
+          "function": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Neuron function name."
+          },
+          "x0": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "First weighted input."
+          },
+          "x1": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "Second weighted input."
+          },
+          "x2": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "Third weighted input."
+          },
+          "state": {
+            "Type": "List[float]",
+            "Default": "required",
+            "Description": "The neuron's private state from initial_state; mutated in place."
+          },
+          "dt": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "Brain step duration in seconds."
+          }
+        },
+        "Returns": {
+          "Type": "float",
+          "Description": "The neuron output."
+        },
+        "Raises": [
+          "ValueError: unknown function name."
+        ]
+      },
+      "evaluate_inputs": {
+        "Signature": "evaluate_inputs(function: 'str', inputs: 'Sequence[float]', state: 'List[float]', dt: 'float') -> 'float'",
+        "Purpose": "evaluate_neuron with an input sequence, padded with zeros to three inputs.",
+        "Parameters": {
+          "function": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Neuron function name."
+          },
+          "inputs": {
+            "Type": "Sequence[float]",
+            "Default": "required",
+            "Description": "Weighted input values."
+          },
+          "state": {
+            "Type": "List[float]",
+            "Default": "required",
+            "Description": "The neuron's private state; mutated in place."
+          },
+          "dt": {
+            "Type": "float",
+            "Default": "required",
+            "Description": "Brain step duration in seconds."
+          }
+        },
+        "Returns": {
+          "Type": "float",
+          "Description": "The neuron output."
+        },
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.brain_genes": {
+    "Overview": {
+      "Purpose": "Genes of the graph brain: BrainInput, BrainEffector, BrainNeuron and BrainGene, plus signal-source strings of the form '<scope>:<item>' (scope self, parent, child:<connection>, global, root or node:<node>; item a neuron name such as n3, a joint-angle sensor angle0, or a contact sensor contact+x). Each NodeGene owns a BrainGene copied into every instance of the part; Genotype.global_neurons are instantiated once. Unresolvable sources read as 0 and an input with no source is the constant equal to its weight.",
+      "Main_Use_Cases": [
+        "Describe a part's local neurons and joint effectors",
+        "Parse and build source strings",
+        "Count controllable joint degrees of freedom"
+      ],
+      "Related_Modules": [
+        "evc3d.genes",
+        "evc3d.brain_compile",
+        "evc3d.brain_functions",
+        "evc3d.mutation.brain"
+      ]
+    },
+    "Classes": {
+      "ParsedSource": {
+        "Purpose": "A validated source string split into its parts.",
+        "Constructor": {
+          "Signature": "ParsedSource(scope: 'str', scope_arg: 'Optional[str]', kind: 'str', item: 'str') -> None -> None",
+          "Parameters": {
+            "scope": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "self, parent, child, global, root or node."
+            },
+            "scope_arg": {
+              "Type": "Optional[str]",
+              "Default": "required",
+              "Description": "Connection name (child) or node name (node), else None."
+            },
+            "kind": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "neuron, angle or contact."
+            },
+            "item": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "Neuron name, DOF index as text, or face name."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "scope": {
+            "Type": "str",
+            "Description": "self, parent, child, global, root or node."
+          },
+          "scope_arg": {
+            "Type": "Optional[str]",
+            "Description": "Connection name (child) or node name (node), else None."
+          },
+          "kind": {
+            "Type": "str",
+            "Description": "neuron, angle or contact."
+          },
+          "item": {
+            "Type": "str",
+            "Description": "Neuron name, DOF index as text, or face name."
+          }
+        },
+        "Methods": {}
+      },
+      "BrainInput": {
+        "Purpose": "One neuron input: weight * signal(source), or the constant weight when source is None.",
+        "Constructor": {
+          "Signature": "BrainInput(source: 'Optional[str]' = None, weight: 'float' = 0.0) -> None -> None",
+          "Parameters": {
+            "source": {
+              "Type": "Optional[str]",
+              "Default": "None",
+              "Description": "Source string or None for a constant."
+            },
+            "weight": {
+              "Type": "float",
+              "Default": "0.0",
+              "Description": "Finite input weight (also the value of a constant input)."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "source": {
+            "Type": "Optional[str]",
+            "Description": "Source string or None for a constant."
+          },
+          "weight": {
+            "Type": "float",
+            "Description": "Finite input weight (also the value of a constant input)."
+          }
+        },
+        "Methods": {}
+      },
+      "BrainEffector": {
+        "Purpose": "Drives one joint degree of freedom with weight * signal(source).",
+        "Constructor": {
+          "Signature": "BrainEffector(source: 'Optional[str]' = None, weight: 'float' = 0.0) -> None -> None",
+          "Parameters": {
+            "source": {
+              "Type": "Optional[str]",
+              "Default": "None",
+              "Description": "Source string or None for a constant."
+            },
+            "weight": {
+              "Type": "float",
+              "Default": "0.0",
+              "Description": "Finite output weight."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "source": {
+            "Type": "Optional[str]",
+            "Description": "Source string or None for a constant."
+          },
+          "weight": {
+            "Type": "float",
+            "Description": "Finite output weight."
+          }
+        },
+        "Methods": {}
+      },
+      "BrainNeuron": {
+        "Purpose": "A function node with three weighted inputs (extras beyond the function's arity are ignored).",
+        "Constructor": {
+          "Signature": "BrainNeuron(name: 'str', function: 'str' = 'sum', inputs: 'List[BrainInput]' = <factory>) -> None -> None",
+          "Parameters": {
+            "name": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "Neuron name, unique within its part; not starting with angle or contact."
+            },
+            "function": {
+              "Type": "str",
+              "Default": "\"sum\"",
+              "Description": "One of NEURON_FUNCTIONS."
+            },
+            "inputs": {
+              "Type": "List[BrainInput]",
+              "Default": "field(default_factory=...)",
+              "Description": "Up to three BrainInput objects (padded to three; dicts are accepted)."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "name": {
+            "Type": "str",
+            "Description": "Neuron name, unique within its part; not starting with angle or contact."
+          },
+          "function": {
+            "Type": "str",
+            "Description": "One of NEURON_FUNCTIONS."
+          },
+          "inputs": {
+            "Type": "List[BrainInput]",
+            "Description": "Up to three BrainInput objects (padded to three; dicts are accepted)."
+          }
+        },
+        "Methods": {}
+      },
+      "BrainGene": {
+        "Purpose": "The local neurons and joint effectors owned by one body-part gene.",
+        "Constructor": {
+          "Signature": "BrainGene(neurons: 'List[BrainNeuron]' = <factory>, effectors: 'List[BrainEffector]' = <factory>) -> None -> None",
+          "Parameters": {
+            "neurons": {
+              "Type": "List[BrainNeuron]",
+              "Default": "field(default_factory=...)",
+              "Description": "Local neurons with unique names."
+            },
+            "effectors": {
+              "Type": "List[BrainEffector]",
+              "Default": "field(default_factory=...)",
+              "Description": "One effector per joint degree of freedom."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "neurons": {
+            "Type": "List[BrainNeuron]",
+            "Description": "Local neurons with unique names."
+          },
+          "effectors": {
+            "Type": "List[BrainEffector]",
+            "Description": "One effector per joint degree of freedom."
+          }
+        },
+        "Methods": {
+          "neuron_named": {
+            "Signature": "neuron_named(name: 'str') -> 'Optional[BrainNeuron]'",
+            "Purpose": "Find a local neuron by name.",
+            "Parameters": {
+              "name": {
+                "Type": "str",
+                "Default": "required",
+                "Description": "Neuron name."
+              }
+            },
+            "Returns": {
+              "Type": "Optional[BrainNeuron]",
+              "Description": "The neuron, or None."
+            },
+            "Raises": []
+          },
+          "new_neuron_name": {
+            "Signature": "new_neuron_name() -> 'str'",
+            "Purpose": "Return an unused n<k> neuron name.",
+            "Parameters": {},
+            "Returns": {
+              "Type": "str",
+              "Description": "A new name."
+            },
+            "Raises": []
+          }
+        }
+      }
+    },
+    "Functions": {
+      "parse_source": {
+        "Signature": "parse_source(source: 'str') -> 'ParsedSource'",
+        "Purpose": "Parse and validate a source string.",
+        "Parameters": {
+          "source": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Source string such as self:n0 or child:leg_connection:angle0."
+          }
+        },
+        "Returns": {
+          "Type": "ParsedSource",
+          "Description": "The parsed source."
+        },
+        "Raises": [
+          "ValueError: malformed source."
+        ]
+      },
+      "format_source": {
+        "Signature": "format_source(scope: 'str', item: 'str', scope_arg: 'Optional[str]' = None) -> 'str'",
+        "Purpose": "Build a source string; the inverse of parse_source.",
+        "Parameters": {
+          "scope": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Source scope."
+          },
+          "item": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Neuron name or sensor item."
+          },
+          "scope_arg": {
+            "Type": "Optional[str]",
+            "Default": "None",
+            "Description": "Connection or node name for child and node scopes."
+          }
+        },
+        "Returns": {
+          "Type": "str",
+          "Description": "The source string."
+        },
+        "Raises": []
+      },
+      "next_neuron_name": {
+        "Signature": "next_neuron_name(neurons: 'List[BrainNeuron]') -> 'str'",
+        "Purpose": "Return an unused n<k> name for a list of neurons.",
+        "Parameters": {
+          "neurons": {
+            "Type": "List[BrainNeuron]",
+            "Default": "required",
+            "Description": "Existing neurons."
+          }
+        },
+        "Returns": {
+          "Type": "str",
+          "Description": "A new neuron name."
+        },
+        "Raises": []
+      },
+      "coerce_neurons": {
+        "Signature": "coerce_neurons(neurons: 'List[Any]') -> 'List[BrainNeuron]'",
+        "Purpose": "Turn dict entries (from JSON) into BrainNeuron objects and check names are unique.",
+        "Parameters": {
+          "neurons": {
+            "Type": "List[Any]",
+            "Default": "required",
+            "Description": "Neurons or dicts."
+          }
+        },
+        "Returns": {
+          "Type": "List[BrainNeuron]",
+          "Description": "A list of BrainNeuron."
+        },
+        "Raises": [
+          "ValueError: duplicate names."
+        ]
+      },
+      "joint_dofs": {
+        "Signature": "joint_dofs(joint_type: 'str') -> 'int'",
+        "Purpose": "Number of controllable degrees of freedom of a joint type: hinge 1, slide 1, ball 3, otherwise 0.",
+        "Parameters": {
+          "joint_type": {
+            "Type": "str",
+            "Default": "required",
+            "Description": "Joint type."
+          }
+        },
+        "Returns": {
+          "Type": "int",
+          "Description": "Degrees of freedom."
+        },
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.brain_compile": {
+    "Overview": {
+      "Purpose": "Compiles a genotype's nested brain into a flat BrainSpec (MuJoCo-free). PhenotypeBuilder records one BrainInstance per generated body part; compile_brain gives each instance its own copy of its part's neurons, resolves every source string to a signal slot, and returns what control.BrainRuntime runs.",
+      "Main_Use_Cases": [
+        "Flatten graph brains for simulation",
+        "Inspect how sources resolve for a built creature"
+      ],
+      "Related_Modules": [
+        "evc3d.brain_genes",
+        "evc3d.controller_spec",
+        "evc3d.phenotype",
+        "evc3d.control"
+      ]
+    },
+    "Classes": {
+      "BrainInstance": {
+        "Purpose": "One generated body part as the brain compiler sees it.",
+        "Constructor": {
+          "Signature": "BrainInstance(node_name: 'str', body_name: 'str', connection_name: 'Optional[str]', parent: 'Optional[int]', children: 'Dict[str, List[int]]' = <factory>, joint_name: 'str' = '', joint_type: 'str' = '', motor_names: 'Tuple[str, ...]' = (), ctrlrange: 'Tuple[float, float]' = (-1.0, 1.0)) -> None -> None",
+          "Parameters": {
+            "node_name": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "Node gene the part came from."
+            },
+            "body_name": {
+              "Type": "str",
+              "Default": "required",
+              "Description": "MuJoCo body name."
+            },
+            "connection_name": {
+              "Type": "Optional[str]",
+              "Default": "required",
+              "Description": "Incoming connection name, None for the root."
+            },
+            "parent": {
+              "Type": "Optional[int]",
+              "Default": "required",
+              "Description": "Index of the parent instance, None for the root."
+            },
+            "children": {
+              "Type": "Dict[str, List[int]]",
+              "Default": "field(default_factory=...)",
+              "Description": "Child instance indexes keyed by connection name."
+            },
+            "joint_name": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "MuJoCo joint name, empty if none."
+            },
+            "joint_type": {
+              "Type": "str",
+              "Default": "\"\"",
+              "Description": "Articulated joint type, empty if none."
+            },
+            "motor_names": {
+              "Type": "Tuple[str, ...]",
+              "Default": "()",
+              "Description": "Motor names, one per controlled degree of freedom."
+            },
+            "ctrlrange": {
+              "Type": "Tuple[float, float]",
+              "Default": "(-1.0, 1.0)",
+              "Description": "Control range of the joint's motors."
+            }
+          },
+          "Raises": []
+        },
+        "Attributes": {
+          "node_name": {
+            "Type": "str",
+            "Description": "Node gene the part came from."
+          },
+          "body_name": {
+            "Type": "str",
+            "Description": "MuJoCo body name."
+          },
+          "connection_name": {
+            "Type": "Optional[str]",
+            "Description": "Incoming connection name, None for the root."
+          },
+          "parent": {
+            "Type": "Optional[int]",
+            "Description": "Index of the parent instance, None for the root."
+          },
+          "children": {
+            "Type": "Dict[str, List[int]]",
+            "Description": "Child instance indexes keyed by connection name."
+          },
+          "joint_name": {
+            "Type": "str",
+            "Description": "MuJoCo joint name, empty if none."
+          },
+          "joint_type": {
+            "Type": "str",
+            "Description": "Articulated joint type, empty if none."
+          },
+          "motor_names": {
+            "Type": "Tuple[str, ...]",
+            "Description": "Motor names, one per controlled degree of freedom."
+          },
+          "ctrlrange": {
+            "Type": "Tuple[float, float]",
+            "Description": "Control range of the joint's motors."
+          }
+        },
+        "Methods": {}
+      }
+    },
+    "Functions": {
+      "compile_brain": {
+        "Signature": "compile_brain(genotype: 'Genotype', instances: 'List[BrainInstance]') -> 'BrainSpec'",
+        "Purpose": "Flatten the genotype's brains over the recorded instances into a BrainSpec. Unresolved sources compile to a constant 0.",
+        "Parameters": {
+          "genotype": {
+            "Type": "Genotype",
+            "Default": "required",
+            "Description": "Genotype whose control_mode is graph."
+          },
+          "instances": {
+            "Type": "List[BrainInstance]",
+            "Default": "required",
+            "Description": "BrainInstance records in build order."
+          }
+        },
+        "Returns": {
+          "Type": "BrainSpec",
+          "Description": "The compiled brain."
+        },
+        "Raises": []
+      }
+    },
+    "Exceptions": {}
+  },
+  "evc3d.mutation.brain": {
+    "Overview": {
+      "Purpose": "Graph brain mutation, following Sims' directed-graph procedure adapted to the parameter-pool mutation: neuron functions, weights and input sources mutate, a random neuron can be added (and wired in at once), parts' effector lists are seeded and resized to their joints, and neurons no effector depends on are garbage collected. Brain mutations run after body mutations in a batch.",
+      "Main_Use_Cases": [
+        "Mutate graph brains through Genotype.mutation",
+        "Seed random oscillator brains for new or converted creatures"
+      ],
+      "Related_Modules": [
+        "evc3d.mutation",
+        "evc3d.mutation.selection",
+        "evc3d.brain_genes"
+      ]
+    },
+    "Classes": {
+      "BrainMutationMixin": {
+        "Purpose": "Graph brain part of GenotypeMutationMixin.",
+        "Constructor": {},
+        "Attributes": {
+          "BRAIN_MUTATION_PREFIX": {
+            "Type": "str",
+            "Description": "Prefix of every brain parameter-path type."
+          },
+          "MIN_BRAIN_WEIGHT_MUTATION_STD": {
+            "Type": "ClassVar[float]",
+            "Description": "Minimum standard deviation of brain weight mutations."
+          },
+          "BRAIN_NEGATE_PROBABILITY": {
+            "Type": "ClassVar[float]",
+            "Description": "Chance a weight mutation negates the weight."
+          },
+          "BRAIN_CONSTANT_PROBABILITY": {
+            "Type": "ClassVar[float]",
+            "Description": "Chance a re-pointed input becomes a constant."
+          },
+          "BRAIN_OSCILLATOR_FREQ_RANGE": {
+            "Type": "ClassVar[Tuple[float, float]]",
+            "Description": "Angular frequency range in rad/s of new oscillators."
+          }
+        },
         "Methods": {}
       }
     },

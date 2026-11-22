@@ -42,6 +42,9 @@ class MutationSelectionMixin(MutationSettings):
         previous_allow_slide_joint = getattr(
             self, "_allow_slide_joint_for_mutation", False
         )
+        graph_mode = self.control_mode == "graph"
+        if graph_mode:
+            self._seed_graph_brains(random_source)
         mutable_parameters = self._collect_mutable_parameters(
             allow_topology_mutations=allow_topology_mutations,
             allow_root_mutation=allow_root_mutation,
@@ -78,6 +81,10 @@ class MutationSelectionMixin(MutationSettings):
                 allow_topology_mutations,
             )
 
+        # Brain mutations go last: valid input sources depend on the body.
+        selected_parameters.sort(
+            key=lambda parameter: parameter[0].startswith(self.BRAIN_MUTATION_PREFIX)
+        )
         self._allow_slide_joint_for_mutation = allow_slide_joint
         try:
             print(f"Applying {len(selected_parameters)} genotype mutation(s):")
@@ -92,6 +99,12 @@ class MutationSelectionMixin(MutationSettings):
                 prune_description = self._prune_disconnected_nodes()
                 if prune_description:
                     print(f"  - {prune_description}")
+            if graph_mode:
+                # New or retyped parts need effectors; then drop dead neurons.
+                self._seed_graph_brains(random_source)
+                garbage_description = self._collect_brain_garbage()
+                if garbage_description:
+                    print(f"  - {garbage_description}")
         finally:
             self._allow_slide_joint_for_mutation = previous_allow_slide_joint
 
@@ -143,6 +156,8 @@ class MutationSelectionMixin(MutationSettings):
         mutable_parameters: List[Tuple[Any, ...]] = []
         if sine_mode:
             mutable_parameters.append(("genotype", "global_control_freq"))
+        if self.control_mode == "graph":
+            mutable_parameters.extend(self._brain_parameter_paths())
         if allow_topology_mutations:
             mutable_parameters.extend((
                 ("connection_addition",),

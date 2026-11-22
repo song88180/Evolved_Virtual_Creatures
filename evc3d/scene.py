@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 import mujoco
 
-from .control import apply_controller
+from .control import BrainRuntime, apply_controller, create_brain_runtime
 from .controller_spec import ActuatorController
 from .evolution_tasks.shared import DISALLOWED_COLLISION_REASON, TaskDefinition
 from .genotype import Genotype
@@ -49,6 +49,7 @@ class Scene:
     controllers: list[ActuatorController]
     root_body_id: int
     floor_geom_id: int
+    brain: BrainRuntime | None = None
 
 
 def prepare_scene(
@@ -100,7 +101,17 @@ def prepare_scene(
     root_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, root_body_name)
     if root_body_id < 0:
         raise SceneBuildError(f"{root_body_name!r} was not found.")
-    return Scene(model, data, builder.actuator_controllers, root_body_id, floor_geom_id)
+    brain = create_brain_runtime(
+        model, builder.brain_spec, environment.physics_substeps
+    )
+    return Scene(
+        model,
+        data,
+        builder.actuator_controllers,
+        root_body_id,
+        floor_geom_id,
+        brain,
+    )
 
 
 def step_scene(scene: Scene, definition: TaskDefinition) -> str | None:
@@ -110,7 +121,7 @@ def step_scene(scene: Scene, definition: TaskDefinition) -> str | None:
     how the scored rollout updates controllers.
     """
     config = definition.config
-    apply_controller(scene.model, scene.data, scene.controllers)
+    apply_controller(scene.model, scene.data, scene.controllers, scene.brain)
     for _ in range(definition.environment.physics_substeps):
         previous_time = float(scene.data.time)
         mujoco.mj_step(scene.model, scene.data)

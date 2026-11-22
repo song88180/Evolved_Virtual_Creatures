@@ -24,9 +24,10 @@ The code is split by responsibility:
 - `evc3d/genes.py`: `NodeGene` and `ConnectionGene` dataclasses plus validation helpers for attachment faces, symmetry, and orientation.
 - `evc3d/genotype.py`: top-level `Genotype` dataclass that combines active genes, archived genes, and mutation behavior.
 - `evc3d/genotype_io.py`: JSON genotype loading, old-schema migration, and serialization.
-- `evc3d/mutation/`: in-place mutation operators, split by subsystem (choosing targets, field values, neural weights, topology, gene bookkeeping) and combined into the `GenotypeMutationMixin` that `Genotype` inherits.
-- `evc3d/controller_spec.py`: controller sizes, the `ActuatorController` record, and neural-weight helpers, with no MuJoCo dependency, so genotype code can run without the simulator.
-- `evc3d/control.py`: applies sine or neural controllers to a running MuJoCo simulation each step.
+- `evc3d/mutation/`: in-place mutation operators, split by subsystem (choosing targets, field values, neural weights, graph brain, topology, gene bookkeeping) and combined into the `GenotypeMutationMixin` that `Genotype` inherits.
+- `evc3d/controller_spec.py`: controller sizes, the `ActuatorController` record, neural-weight helpers, and the compiled `BrainSpec`, with no MuJoCo dependency, so genotype code can run without the simulator.
+- `evc3d/brain_functions.py`, `evc3d/brain_genes.py`, `evc3d/brain_compile.py`: the graph brain's 23 neuron functions, its genes (neurons, effectors, source strings), and the compiler that flattens a genotype's nested brain into a `BrainSpec`.
+- `evc3d/control.py`: applies sine, neural, or graph controllers to a running MuJoCo simulation each step (`BrainRuntime` runs the graph brain).
 - `evc3d/evolution.py`: population helpers for evolution: evaluate a population, select elites and tournament winners, mutate children, and summarize generations.
 - `evc3d/run_artifacts.py`: the files `evc3d evolve` writes into a run directory (including `run_info.txt`, the settings summary built by `evc3d/cli/run_header.py`).
 - `evc3d/graph_analysis.py`: graph validation and node-count checks.
@@ -83,7 +84,7 @@ Different nodes may reference the same connection name, intentionally sharing on
 
 ### `Genotype`
 
-`Genotype` wraps the full creature recipe. `root` names the starting node, while `nodes` and `connections` are name-keyed active gene maps. Archived genes use the same map shape. `control_mode` selects the global controller family for the whole simulation: `"neural"` or `"sine"`.
+`Genotype` wraps the full creature recipe. `root` names the starting node, while `nodes` and `connections` are name-keyed active gene maps. Archived genes use the same map shape. `control_mode` selects the global controller family for the whole simulation: `"neural"`, `"sine"`, or `"graph"`.
 
 ### Genotype Mutation
 
@@ -366,6 +367,7 @@ evc3d view --genotype mutated.json --task walking_x          # watch it (window,
 During simulation, `control.apply_controller()` is the single entry point that writes motor commands each step. It looks up each controller's own motors by name, so a ball joint's three motors are all driven by that joint's controller:
 
 - **Neural** (`control_mode = "neural"`, the default): a two-layer network per joint reads the joint's position and velocity plus the root body's orientation and velocity, and outputs one command per motor. The weights come from the connection gene, so they evolve with the body.
+- **Graph** (`control_mode = "graph"`): a Sims-style nested dataflow graph. `PhenotypeBuilder` records one `BrainInstance` per generated body part and `brain_compile.compile_brain` flattens the nested brain into one `BrainSpec`: every instance gets its own copy of its node gene's neurons, and `parent`/`child`/`global` sources are resolved to signal slots (unresolved sources read 0). Each episode creates a fresh `control.BrainRuntime` (`create_brain_runtime`), which reads the angle and contact sensors, runs two brain steps, and writes the effector outputs to `data.ctrl`. `apply_controller` skips graph controllers in its per-joint loop because the brain drives all of them together.
 - **Sine** (`control_mode = "sine"`): each joint's motors follow `amp * sin(freq * t + phase)`, where `freq` is an angular frequency in rad/s: the genotype's `global_control_freq` times the connection's `control_freq` multiplier.
 
 Evaluation (`evaluation.evaluate_task`) and viewing (`evc3d view`, via `scene.py`) build, place, and settle the creature the same way, so what you watch starts exactly like what was scored.

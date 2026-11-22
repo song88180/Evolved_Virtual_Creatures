@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import math
 from typing import List, Tuple
 
+from .brain_genes import BrainGene
 from .constants import FACE_NORMALS
 
 
@@ -16,7 +17,7 @@ BODY_SHAPES = ("box", "ellipsoid", "capsule", "cylinder")
 ROUND_BODY_SHAPES = ("capsule", "cylinder")
 MIN_BODY_SIZE = 0.01
 MAX_BODY_SIZE = 1.0
-CONTROL_MODES = ("neural", "sine")
+CONTROL_MODES = ("neural", "sine", "graph")
 IDENTITY_ORIENTATION = (0.0, 0.0, 0.0)
 FACE_ALIGNED_ORIENTATIONS = {
     "+x": (0.0, 0.0, 0.0),
@@ -220,8 +221,12 @@ class NodeGene:
     child_connections: List[str] = field(default_factory=list)
     orientation: Tuple[float, float, float] = IDENTITY_ORIENTATION
     shape: str = "box"
+    # Graph control mode only: this part's local neurons and joint effectors.
+    brain: BrainGene = field(default_factory=BrainGene)
 
     def __post_init__(self):
+        if isinstance(self.brain, dict):
+            self.brain = BrainGene(**self.brain)
         if self.shape not in BODY_SHAPES:
             valid_shapes = ", ".join(BODY_SHAPES)
             raise ValueError(

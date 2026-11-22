@@ -77,7 +77,7 @@ Options are grouped by purpose in each command's `--help`: *environment* (task, 
 
 `evc3d evolve` creates an initial population from a seed genotype, mutates and evaluates the population, selects fitter creatures, and repeats this process for the requested number of generations.
 
-The controller family for the run comes from the seed genotype's top-level `control_mode`. `neural` uses an evolved two-layer neural network that reacts to simulation observations, while `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase. If `--control-mode` is given and differs from the seed's mode, the run stops with an error. Add `--override-control-mode` to convert the seed instead: the old controller's parameters are discarded and the new controller starts motionless (zero neural weights, or zero sine amplitude).
+The controller family for the run comes from the seed genotype's top-level `control_mode`. `neural` uses an evolved two-layer neural network that reacts to simulation observations, `sine` uses evolved open-loop oscillations defined by amplitude, frequency, and phase, and `graph` uses a Sims-style nested graph brain of sensors, function neurons, and effectors (see "Graph brain" below). If `--control-mode` is given and differs from the seed's mode, the run stops with an error. Add `--override-control-mode` to convert the seed instead: the old controller's parameters are discarded and the new controller starts motionless (zero neural weights, zero sine amplitude, or an empty graph brain).
 
 Its main inputs are:
 
@@ -85,7 +85,7 @@ Its main inputs are:
 | --- | --- |
 | `--task` | Locomotion task used to calculate fitness. Defaults to `swimming_x`. |
 | `--genotype` | Seed genotype JSON file. Defaults to `examples/example_genotype.json`. |
-| `--control-mode` | Optional controller family for the run: observation-driven `neural` or open-loop `sine`. Defaults to the seed genotype's `control_mode`; a mismatch is an error unless `--override-control-mode` is set. |
+| `--control-mode` | Optional controller family for the run: observation-driven `neural`, open-loop `sine`, or Sims-style `graph`. Defaults to the seed genotype's `control_mode`; a mismatch is an error unless `--override-control-mode` is set. |
 | `--override-control-mode` | Convert the seed genotype to `--control-mode` when the two differ. Requires `--control-mode`. |
 | `--population-size` | Number of creatures evaluated in each generation. |
 | `--generations` | Number of evolutionary generations after generation zero. |
@@ -218,9 +218,10 @@ The top-level fields are:
 | Field | Description |
 | --- | --- |
 | `root` | Name of the node where phenotype expansion begins. |
-| `control_mode` | Required global controller family: `neural` or `sine`. |
+| `control_mode` | Required global controller family: `neural`, `sine`, or `graph`. |
 | `global_control_freq` | Sine mode only. Base **angular** frequency in radians per second (not hertz), shared by all sine controllers. Defaults to `1.0`. |
-| `nodes` | Name-keyed map of active node genes. |
+| `global_neurons` | Graph mode only. Optional list of neurons shared by the whole creature (see "Graph brain"). |
+| `nodes` | Name-keyed map of active node genes. Graph mode adds a per-node `brain` of local `neurons` and `effectors`. |
 | `connections` | Name-keyed map of active connection genes. |
 | `archived_nodes` | Optional map of inactive node genes retained by topology mutation. |
 | `archived_connections` | Optional map of inactive connection genes retained by topology mutation. |
@@ -319,3 +320,16 @@ The generated document includes:
 Phenotype XML is generated output, not the genetic material mutated during evolution. To continue an evolutionary run or reproduce a creature under another task, use its genotype JSON. Use the XML when inspecting or loading the already-expanded MuJoCo model.
 
 `evc3d build` writes `generated_creature.xml` by default, while `evc3d evolve` writes the current all-time winner to `best_creature.xml` inside the run directory.
+
+## Graph brain (`control_mode = "graph"`)
+
+The graph mode follows Sims' 1994 virtual creatures (SIGGRAPH and ALIFE IV): the brain is a nested dataflow graph, not a layered network.
+
+- **Sensors** are implicit. Every part has one joint-angle sensor per joint degree of freedom (`angle0`..`angle2`; a ball joint reports its rotation vector) and six contact sensors (`contact+x` .. `contact-z`, +1 when touched, -1 otherwise, self-contact included). Photosensors are not implemented.
+- **Neurons** compute one of 23 functions (`sum`, `product`, `divide`, `sum-threshold`, `greater-than`, `sign-of`, `min`, `max`, `abs`, `if`, `interpolate`, `sin`, `cos`, `atan`, `log`, `expt`, `sigmoid`, `integrate`, `differentiate`, `smooth`, `memory`, `oscillate-wave`, `oscillate-saw`) of up to three weighted inputs. An input names a source (`self:n0`, `parent:angle0`, `child:<connection>:contact-z`, `global:clock`, ...) or is a constant equal to its weight. Sources that do not exist when a creature is built read as 0.
+- **Effectors** drive one joint degree of freedom each: `weight * signal`, clamped to [-1, 1] and scaled to the connection's `ctrlrange`.
+- **Nesting.** Each node gene has a `brain` of local neurons and effectors, copied into every instance of that part. Top-level `global_neurons` are built once. Local neurons can read their parent and child parts; global neurons can read any part by node name.
+- **Timing.** The brain runs 2 steps per control step, and stateful neurons (integrators, oscillators, memory) reset at the start of every episode.
+- **Mutation.** Weights, input sources, neuron functions, and neuron additions mutate like any other parameter, after the body mutations of the same batch. A new neuron is wired into one existing consumer immediately. Neurons no effector can reach are garbage collected after each mutation. The first mutation gives every articulated part a random oscillator driving its effectors, so a fresh creature moves.
+
+`examples/example_genotype_graph.json` is a small hand-written walker/swimmer. `--control-mode graph --override-control-mode` converts any other seed to an empty (motionless) graph brain.

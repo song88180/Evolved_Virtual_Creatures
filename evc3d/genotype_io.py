@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 import warnings
 
+from .brain_genes import BrainGene
 from .controller_spec import BALL_NEURAL_AXES, zero_neural_parameters
 from .genes import (
     CONTROL_MODES,
@@ -165,6 +166,7 @@ def load_genotype_from_json(path: str | Path) -> Genotype:
         connections=connection_map(data["connections"]),
         global_control_freq=data.get("global_control_freq", 1.0),
         control_mode=control_mode,
+        global_neurons=list(data.get("global_neurons", [])),
         archived_nodes=archived_nodes,
         archived_connections=connection_map(data.get("archived_connections", {})),
     )
@@ -175,8 +177,9 @@ def convert_control_mode(genotype: Genotype, control_mode: str) -> Genotype:
     """Return a copy of ``genotype`` switched to ``control_mode``.
 
     Sine parameters are reset to inert values (zero amplitude). Neural
-    parameters are cleared, or zero-initialized when converting to neural, so the
-    converted creature starts motionless. Active and archived connections are both
+    parameters are cleared, or zero-initialized when converting to neural, and
+    graph brains are emptied when converting to graph, so the converted
+    creature starts motionless. Active and archived connections are both
     converted; the input genotype is not modified.
     """
     control_mode = _validated_control_mode(control_mode)
@@ -185,6 +188,11 @@ def convert_control_mode(genotype: Genotype, control_mode: str) -> Genotype:
         return converted
     converted.control_mode = control_mode
     converted.global_control_freq = INERT_GLOBAL_CONTROL_FREQ
+    if control_mode == "graph":
+        # Brains start empty (motionless); the first mutation seeds them.
+        converted.global_neurons = []
+        for node in (*converted.nodes.values(), *converted.archived_nodes.values()):
+            node.brain = BrainGene()
     all_nodes = {**converted.archived_nodes, **converted.nodes}
     for connections in (converted.connections, converted.archived_connections):
         for connection in connections.values():
@@ -220,6 +228,7 @@ def genotype_to_dict(genotype: Genotype) -> Dict[str, Any]:
         "root": genotype.root,
         "global_control_freq": genotype.global_control_freq,
         "control_mode": genotype.control_mode,
+        "global_neurons": [asdict(neuron) for neuron in genotype.global_neurons],
         "nodes": {name: _gene_to_dict(node) for name, node in genotype.nodes.items()},
         "connections": {
             name: _gene_to_dict(connection)

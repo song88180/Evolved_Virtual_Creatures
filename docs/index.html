@@ -107,7 +107,10 @@ conda run -n mujoco --no-capture-output evc3d view --task walking_x --mp4 walker
           <p>
             Genotypes are compact graph recipes. A root node names the starting
             body part, <code>control_mode</code> selects the global simulation
-            controller family, and nodes reference reusable, top-level named
+            controller family (<code>neural</code>, <code>sine</code>, or the
+            Sims-style <code>graph</code> brain of sensors, function neurons,
+            and effectors stored in each node's <code>brain</code> and in
+            top-level <code>global_neurons</code>), and nodes reference reusable, top-level named
             connection genes. Recursive connections are bounded by each node's
             <code>recursive_limit</code>.
           </p>

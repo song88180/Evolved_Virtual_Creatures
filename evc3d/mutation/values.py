@@ -31,6 +31,8 @@ class ValueMutationMixin(MutationSettings):
         random_source: random.Random,
     ) -> str:
         parameter_type = parameter_path[0]
+        if parameter_type.startswith(self.BRAIN_MUTATION_PREFIX):
+            return self._mutate_brain_parameter(parameter_path, random_source)
         if (
             parameter_type
             in {

@@ -21,6 +21,13 @@ class MutationSettings:
     MIN_PHASE_MUTATION_STD: ClassVar[float] = 0.05
     MIN_NEURAL_WEIGHT_MUTATION_STD: ClassVar[float] = 0.05
     NEURAL_INITIALIZATION_STD: ClassVar[float] = 0.05
+    # Graph brain: weight mutation floor, chance a weight mutation negates it,
+    # chance a re-pointed input becomes a constant, and the angular frequency
+    # range (rad/s) of freshly created oscillators.
+    MIN_BRAIN_WEIGHT_MUTATION_STD: ClassVar[float] = 0.05
+    BRAIN_NEGATE_PROBABILITY: ClassVar[float] = 0.1
+    BRAIN_CONSTANT_PROBABILITY: ClassVar[float] = 0.15
+    BRAIN_OSCILLATOR_FREQ_RANGE: ClassVar[Tuple[float, float]] = (2.0, 14.0)
     HARMONIC_CONTROL_FREQS: ClassVar[Tuple[float, ...]] = (
         0.5,
         1.0,

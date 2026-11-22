@@ -115,3 +115,44 @@ def _normalize_vector(
     if any(not math.isfinite(value) for value in normalized):
         raise ValueError(f"{field_name} values must be finite")
     return normalized
+
+
+# -----------------------------
+# Graph brain (compiled form)
+# -----------------------------
+#
+# ``brain_compile.compile_brain`` flattens the nested genotype brain into a
+# ``BrainSpec``. All signals live in one vector: slots ``0..len(neurons)-1``
+# are neuron outputs and the following slots are sensors. An input slot of
+# ``-1`` means "constant": the input's value is its weight.
+
+
+@dataclass(frozen=True)
+class SensorSpec:
+    kind: str  # "angle" or "contact"
+    joint_name: str = ""  # angle sensors
+    joint_type: str = ""
+    index: int = 0  # angle sensors: joint degree of freedom
+    body_name: str = ""  # contact sensors
+    face: str = ""
+
+
+@dataclass(frozen=True)
+class NeuronSpec:
+    function: str
+    inputs: tuple[tuple[int, float], ...]  # (slot or -1, weight), 3 entries
+
+
+@dataclass(frozen=True)
+class EffectorSpec:
+    motor_name: str
+    slot: int
+    weight: float
+    ctrlrange: tuple[float, float]
+
+
+@dataclass(frozen=True)
+class BrainSpec:
+    neurons: tuple[NeuronSpec, ...] = ()
+    sensors: tuple[SensorSpec, ...] = ()
+    effectors: tuple[EffectorSpec, ...] = ()

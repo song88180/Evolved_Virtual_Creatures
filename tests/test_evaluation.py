@@ -653,6 +653,7 @@ def test_controlled_episode_can_measure_horizontal_origin_distance():
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     data = mujoco.MjData(model)
     data.qvel[:3] = (3.0, 4.0, 12.0)
@@ -694,6 +695,7 @@ def test_controlled_episode_reports_drift_speeds(monkeypatch):
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     centers = iter([np.array((0.0, 0.0, 0.0)), np.array((0.0, 8.0, 12.0))])
     monkeypatch.setattr(
@@ -733,6 +735,7 @@ def test_controlled_episode_initializes_center_of_mass_before_scoring():
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     metrics = _run_episode(
         model,
@@ -766,6 +769,7 @@ def test_controlled_episode_uses_center_of_mass_for_distance(monkeypatch):
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     centers = iter([
         np.array((1.0, 2.0, 3.0)),
@@ -821,6 +825,7 @@ def test_controlled_episode_penalizes_center_of_mass_height_loss(monkeypatch):
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     centers = iter([np.array((0.0, 0.0, 2.0)), np.array((0.0, 0.0, 1.25))])
     monkeypatch.setattr(
@@ -863,6 +868,7 @@ def test_controlled_episode_rejects_large_center_of_mass_drop(monkeypatch):
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     centers = iter([np.array((0.0, 0.0, 2.0)), np.array((0.0, 0.0, 0.9))])
     monkeypatch.setattr(
@@ -1072,6 +1078,7 @@ def test_flying_precontact_speed_uses_center_of_mass(monkeypatch):
 
     class Builder:
         actuator_controllers = []
+        brain_spec = None
 
     centers = iter([
         np.array((0.0, 0.0, 10.0)),
@@ -1869,9 +1876,9 @@ def test_physics_substeps_keep_control_rate_and_divide_the_timestep(monkeypatch)
     calls = []
     real_apply = evaluation_module.apply_controller
 
-    def counting_apply(model, data, controllers):
+    def counting_apply(model, data, controllers, brain=None):
         calls.append(round(float(data.time), 9))
-        real_apply(model, data, controllers)
+        real_apply(model, data, controllers, brain)
 
     monkeypatch.setattr(evaluation_module, "apply_controller", counting_apply)
     fine_environment = dataclasses.replace(
